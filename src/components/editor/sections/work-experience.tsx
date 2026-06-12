@@ -20,7 +20,7 @@ interface Props {
 export function WorkExperienceSection({ section, onUpdate }: Props) {
   const t = useTranslations('editor.fields');
   const content = section.content as WorkExperienceContent;
-  const items = content.items || [];
+  const items = Array.isArray(content.items) ? content.items : [];
 
   const addItem = () => {
     const newItem: WorkExperienceItem = {

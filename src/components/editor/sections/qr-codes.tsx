@@ -29,7 +29,7 @@ interface Props {
 export function QrCodesSection({ section, onUpdate }: Props) {
   const t = useTranslations('editor.fields');
   const content = section.content as QrCodesContent;
-  const items = content.items || [];
+  const items = Array.isArray(content.items) ? content.items : [];
   const { currentResume } = useResumeStore();
   const [invalidIds, setInvalidIds] = useState<Set<string>>(new Set());
 

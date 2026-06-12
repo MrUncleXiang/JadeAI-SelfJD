@@ -17,7 +17,7 @@ interface Props {
 export function SkillsSection({ section, onUpdate }: Props) {
   const t = useTranslations('editor.fields');
   const content = section.content as SkillsContent;
-  const categories = content.categories || [];
+  const categories = Array.isArray(content.categories) ? content.categories : [];
 
   const addCategory = () => {
     const newCategory: SkillCategory = {

@@ -18,7 +18,7 @@ interface Props {
 export function CustomSection({ section, onUpdate }: Props) {
   const t = useTranslations('editor.fields');
   const content = section.content as CustomContent;
-  const items = content.items || [];
+  const items = Array.isArray(content.items) ? content.items : [];
 
   const addItem = () => {
     const newItem: CustomItem = { id: generateId(), title: '', description: '' };

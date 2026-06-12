@@ -20,7 +20,7 @@ interface Props {
 export function GitHubSection({ section, onUpdate }: Props) {
   const t = useTranslations('editor.fields');
   const content = section.content as GitHubContent;
-  const items = content.items || [];
+  const items = Array.isArray(content.items) ? content.items : [];
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // Keep a ref to always access the latest items, avoiding stale closures in setTimeout

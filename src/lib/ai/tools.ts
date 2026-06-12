@@ -64,6 +64,32 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
           return { success: false, error: `Invalid value: ${actualField} cannot be null or undefined` };
         }
 
+        // List fields (items/categories) MUST end up as arrays, or the editor crashes on
+        // `items.map is not a function` and the bad data is persisted (issue #69).
+        if (actualField === 'items' || actualField === 'categories') {
+          // Recover double-encoded JSON: the AI sometimes JSON-stringifies the value twice,
+          // so a single JSON.parse above leaves us with a string that is itself JSON.
+          let depth = 0;
+          while (typeof parsedValue === 'string' && depth < 3) {
+            try {
+              parsedValue = JSON.parse(parsedValue);
+            } catch {
+              break;
+            }
+            depth++;
+          }
+          // Unwrap an object that wraps the list, e.g. { items: [...] } / { categories: [...] }.
+          if (parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue)) {
+            const wrapper = parsedValue as Record<string, unknown>;
+            const inner = wrapper[actualField] ?? wrapper.items ?? wrapper.categories;
+            if (Array.isArray(inner)) parsedValue = inner;
+          }
+          // Anything that is still not an array is rejected — never write it to the DB.
+          if (!Array.isArray(parsedValue)) {
+            return { success: false, error: `Invalid value: ${actualField} must be an array` };
+          }
+        }
+
         // Ensure items/categories always have id fields
         if (Array.isArray(parsedValue)) {
           parsedValue = (parsedValue as any[]).map((item) =>
