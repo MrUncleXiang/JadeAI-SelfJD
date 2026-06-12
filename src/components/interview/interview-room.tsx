@@ -8,6 +8,7 @@ import { useInterviewStore } from '@/stores/interview-store';
 import { useInterviewChat } from '@/hooks/use-interview-chat';
 import { useSettingsStore } from '@/stores/settings-store';
 import { INIT_TRIGGER } from '@/lib/interview/constants';
+import { isRoundViewOnly } from '@/lib/interview/round-status';
 import { ProgressBar } from './progress-bar';
 import { InterviewerBanner } from './interviewer-banner';
 import { MessageList } from './message-list';
@@ -36,14 +37,14 @@ interface InterviewRoomProps {
 export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps) {
   const t = useTranslations('interview.room');
   const router = useRouter();
-  const { rounds, currentRoundIndex, setCurrentRoundIndex, advanceToNextRound, setIsGeneratingReport } =
+  const { rounds, currentRoundIndex, setCurrentRoundIndex, advanceToNextRound, setIsGeneratingReport, status: sessionStatus } =
     useInterviewStore();
   const [showTransition, setShowTransition] = useState(false);
   const [isViewingHistory, setIsViewingHistory] = useState(false);
 
   const currentRound = rounds[currentRoundIndex];
   const interviewerConfig = currentRound?.interviewerConfig as InterviewerConfig;
-  const isRoundDone = currentRound?.status === 'completed' || currentRound?.status === 'skipped';
+  const isRoundDone = isRoundViewOnly(currentRound?.status, sessionStatus);
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, resetMessages, sendMessage, setMessages } =
     useInterviewChat({
@@ -75,6 +76,15 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
     ) {
       sentInitRef.current = currentRound.id;
       sendMessage({ text: INIT_TRIGGER });
+    }
+  }, [currentRound?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-set viewing history if round is already done
+  useEffect(() => {
+    if (currentRound && isRoundDone) {
+      setIsViewingHistory(true);
+      setShowTransition(false);
+      loadedRef.current = true;
     }
   }, [currentRound?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -116,13 +126,14 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
       setMessages([]);
     }
 
-    const isDone = targetRound.status === 'completed' || targetRound.status === 'skipped';
+    const isDone = isRoundViewOnly(targetRound.status, sessionStatus);
     setIsViewingHistory(isDone);
+    if (isDone) setShowTransition(false);
 
     // Reset init refs
     loadedRef.current = true;
     sentInitRef.current = targetRound.id;
-  }, [rounds, sessionId, setCurrentRoundIndex, setMessages]);
+  }, [rounds, sessionId, sessionStatus, setCurrentRoundIndex, setMessages]);
 
   const handleNextRound = useCallback(() => {
     setShowTransition(false);
@@ -161,7 +172,7 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
 
   const isLastRound = currentRoundIndex >= rounds.length - 1;
 
-  if (showTransition) {
+  if (showTransition && !isViewingHistory) {
     const nextRound = rounds[currentRoundIndex + 1];
     return (
       <div className="mx-auto max-w-4xl space-y-4">
