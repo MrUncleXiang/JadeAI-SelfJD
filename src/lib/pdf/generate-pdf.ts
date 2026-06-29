@@ -1,4 +1,5 @@
-import puppeteer, { type Page } from 'puppeteer-core';
+﻿import puppeteer, { type Page } from 'puppeteer-core';
+import { accessSync } from 'fs';
 
 // A4 dimensions in CSS pixels at 96 DPI
 const A4_WIDTH_PX = 794;   // 210mm
@@ -33,23 +34,32 @@ async function getBrowser() {
 
   // Dev: use local Chrome/Chromium
   const candidates = [
+    process.env['PROGRAMFILES'] ? `${process.env['PROGRAMFILES']}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env['PROGRAMFILES(X86)'] ? `${process.env['PROGRAMFILES(X86)']}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env['PROGRAMFILES'] ? `${process.env['PROGRAMFILES']}\\Microsoft\\Edge\\Application\\msedge.exe` : null,
+    process.env['PROGRAMFILES(X86)'] ? `${process.env['PROGRAMFILES(X86)']}\\Microsoft\\Edge\\Application\\msedge.exe` : null,
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Microsoft\\Edge\\Application\\msedge.exe` : null,
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/usr/bin/google-chrome',
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
-  ];
+  ].filter((path): path is string => Boolean(path));
 
   for (const path of candidates) {
     try {
-      const { accessSync } = await import('fs');
       accessSync(path);
-      return puppeteer.launch({ executablePath: path, headless: true });
+      return puppeteer.launch({
+        executablePath: path,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+        headless: true,
+      });
     } catch {
       continue;
     }
   }
 
-  throw new Error('No Chrome/Chromium found. Install Google Chrome or set CHROME_PATH.');
+  throw new Error('No Chrome/Chromium found. Install Google Chrome or Microsoft Edge, or set CHROME_PATH.');
 }
 
 // ─── Shrink state for iterative fitting ───────────────────────
