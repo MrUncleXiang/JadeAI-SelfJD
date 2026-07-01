@@ -93,26 +93,40 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
       });
   }, [hydrated, settingsProvider, settingsBaseURL, settingsApiKey, settingsModel]);
 
-  // Fetch sessions on mount
+  // Fetch sessions for resumeId; reset state synchronously first so stale
+  // sessionsLoaded/activeSessionId can't leak a pendingAiMessage to the wrong resume.
   useEffect(() => {
+    setSessionsLoaded(false);
+    setActiveSessionId(undefined);
+    setSessions([]);
+    setInitialMessages(undefined);
+    resetPagination();
+
+    let cancelled = false;
     const headers = getHeaders();
     fetch(`/api/ai/chat/sessions?resumeId=${resumeId}`, { headers })
       .then((res) => res.json())
       .then(async (data: { sessions: ChatSession[] }) => {
+        if (cancelled) return;
         if (data.sessions.length > 0) {
           setSessions(data.sessions);
           const mostRecent = data.sessions[0];
           setActiveSessionId(mostRecent.id);
           const msgs = await loadInitial(mostRecent.id);
+          if (cancelled) return;
           setInitialMessages(msgs);
-        } else {
+        } else if (!cancelled) {
           await createNewSession(true);
         }
-        setSessionsLoaded(true);
+        if (!cancelled) setSessionsLoaded(true);
       })
       .catch(() => {
-        setSessionsLoaded(true);
+        if (!cancelled) setSessionsLoaded(true);
       });
+
+    return () => {
+      cancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeId]);
 

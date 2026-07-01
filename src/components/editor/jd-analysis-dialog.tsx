@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
+import { useRouter } from '@/i18n/routing';
 import {
   Loader2, RotateCcw, Target, ShieldCheck, Lightbulb, AlertTriangle,
-  Wand2, Trash2, FileSearch, ArrowUp, ArrowDown, Minus, ChevronLeft,
+  Wand2, Copy, Trash2, FileSearch, ArrowUp, ArrowDown, Minus, ChevronLeft,
   Briefcase, ChevronDown,
 } from 'lucide-react';
 import {
@@ -30,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useEditorStore } from '@/stores/editor-store';
 import { getAIHeaders } from '@/stores/settings-store';
+import { setPendingOptimizeMessage } from '@/lib/pending-optimize';
 
 interface JdAnalysisResult {
   overallScore: number;
@@ -266,11 +269,13 @@ function JdAnalysisResultView({ result, jobDescription, t }: { result: JdAnalysi
 export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDialogProps) {
   const t = useTranslations('jdAnalysis');
   const ct = useTranslations('common');
+  const router = useRouter();
   const { setShowAiChat, setPendingAiMessage } = useEditorStore();
   const [jobDescription, setJobDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<JdAnalysisResult | null>(null);
   const [error, setError] = useState('');
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   // History state
   const [activeTab, setActiveTab] = useState<string>('new');
@@ -357,24 +362,55 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
     }, 200);
   };
 
-  const handleOptimize = () => {
-    if (!result) return;
+  const buildOptimizeMessage = (r: JdAnalysisResult) => {
     const parts: string[] = [];
-    if (result.missingKeywords.length > 0) {
-      parts.push(`缺失关键词：${result.missingKeywords.join('、')}`);
+    if (r.missingKeywords.length > 0) {
+      parts.push(`缺失关键词：${r.missingKeywords.join('、')}`);
     }
-    if (result.suggestions.length > 0) {
-      const list = result.suggestions
+    if (r.suggestions.length > 0) {
+      const list = r.suggestions
         .map((s, i) => `${i + 1}. [${s.section}] "${s.current}" → "${s.suggested}"`)
         .join('\n');
       parts.push(`优化建议：\n${list}`);
     }
-    const message = `请根据以下 JD 匹配分析结果优化简历，使其更匹配目标职位：\n\n${parts.join('\n\n')}\n\n请使用工具直接修改对应的简历模块内容，尽量自然地融入缺失关键词。`;
+    return `请根据以下 JD 匹配分析结果优化简历，使其更匹配目标职位：\n\n${parts.join('\n\n')}\n\n请使用工具直接修改对应的简历模块内容，尽量自然地融入缺失关键词。`;
+  };
+
+  const handleOptimize = () => {
+    if (!result) return;
+    const message = buildOptimizeMessage(result);
     onOpenChange(false);
     setTimeout(() => {
       setPendingAiMessage(message);
       setShowAiChat(true);
     }, 300);
+  };
+
+  const handleOptimizeCopy = async () => {
+    if (!result || isDuplicating) return;
+    const message = buildOptimizeMessage(result);
+    setIsDuplicating(true);
+    try {
+      const res = await fetch(`/api/resume/${resumeId}/duplicate`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to duplicate resume');
+      const duplicated = await res.json();
+      setPendingOptimizeMessage(duplicated.id, message);
+      onOpenChange(false);
+      setTimeout(() => {
+        setResult(null);
+        setJobDescription('');
+        setError('');
+        setActiveTab('new');
+      }, 200);
+      router.push(`/editor/${duplicated.id}`);
+    } catch {
+      toast.error(t('copyOptimizeError'));
+    } finally {
+      setIsDuplicating(false);
+    }
   };
 
   const handleDeleteHistory = async (id: string) => {
@@ -470,10 +506,25 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
                     {t('analyzeAgain')}
                   </Button>
                   {(result.suggestions.length > 0 || result.missingKeywords.length > 0) && (
-                    <Button onClick={handleOptimize} className="cursor-pointer gap-1.5 bg-brand hover:bg-brand-hover">
-                      <Wand2 className="h-3.5 w-3.5" />
-                      {t('optimize')}
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={handleOptimizeCopy}
+                        disabled={isDuplicating}
+                        className="cursor-pointer gap-1.5"
+                      >
+                        {isDuplicating ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                        {t('optimizeCopy')}
+                      </Button>
+                      <Button onClick={handleOptimize} className="cursor-pointer gap-1.5 bg-brand hover:bg-brand-hover">
+                        <Wand2 className="h-3.5 w-3.5" />
+                        {t('optimize')}
+                      </Button>
+                    </>
                   )}
                 </div>
               </>

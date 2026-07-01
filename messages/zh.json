@@ -348,6 +348,8 @@
     "currentState": "当前",
     "suggestedChange": "建议",
     "optimize": "一键优化",
+    "optimizeCopy": "复制优化",
+    "copyOptimizeError": "复制简历失败，请重试",
     "pasteJd": "粘贴职位描述以开始分析",
     "noResults": "暂无分析结果",
     "newAnalysis": "新分析",

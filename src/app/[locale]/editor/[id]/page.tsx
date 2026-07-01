@@ -27,6 +27,7 @@ import { useEditorStore } from '@/stores/editor-store';
 import { useUIStore } from '@/stores/ui-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
+import { takePendingOptimizeMessage } from '@/lib/pending-optimize';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +45,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const { resume, sections, updateSection, addSection, removeSection, reorderSections } = useEditor(id);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { showThemeEditor, mobileActiveTab } = useEditorStore();
+  const { showThemeEditor, mobileActiveTab, setPendingAiMessage, setShowAiChat } = useEditorStore();
   const { activeModal, openModal, closeModal } = useUIStore();
   const { hydrate, _hydrated } = useSettingsStore();
   const startTour = useTourStore((s) => s.startTour);
@@ -78,6 +79,17 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     const timer = setTimeout(() => startTour('editor', EDITOR_TOUR_STEPS.length), 1000);
     return () => clearTimeout(timer);
   }, [resume, startTour]);
+
+  // Consume a copy-optimize message handed off via pending-optimize.ts (gated
+  // on resume.id === id so it runs after useEditor's cleanup for the old id).
+  useEffect(() => {
+    if (!resume || resume.id !== id) return;
+    const message = takePendingOptimizeMessage(id);
+    if (message) {
+      setPendingAiMessage(message);
+      setShowAiChat(true);
+    }
+  }, [resume, id, setPendingAiMessage, setShowAiChat]);
 
   if (fpLoading || !resume) {
     return (
