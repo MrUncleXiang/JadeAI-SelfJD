@@ -8,7 +8,7 @@
 - 上游仓库：`LingyiChen-AI/JadeAI`
 - 上游版本：`v0.4.1`
 - 上游提交：`ca38294960e4b6f8a1ba66d0106059fcf97c323c`
-- 本地开发分支：`codex/phase-1-auth-foundation`
+- 本地开发分支：`codex/phase-2-llm-profiles`
 - 生产安装 `/home/ubuntu/apps/JadeAI` 不在本次开发中直接修改
 
 ## 产品与需求
@@ -21,6 +21,7 @@
 - [总体架构](architecture/overview.md)
 - [数据模型](architecture/data-model.md)
 - [认证与账号](architecture/auth.md)
+- [用户级 LLM 档案](architecture/llm-profiles.md)
 - [GitHub 同步](architecture/github-sync.md)
 - [AI 简历变更协议](architecture/ai-resume-patch.md)
 - [JD 导入与定向简历](architecture/jd-ingestion.md)

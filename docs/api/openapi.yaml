@@ -358,7 +358,7 @@ paths:
       tags: [LLM]
       operationId: listLlmProfiles
       x-requirement-id: LLM-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       responses:
         '200':
           description: User-owned profiles
@@ -372,13 +372,13 @@ paths:
       tags: [LLM]
       operationId: createLlmProfile
       x-requirement-id: LLM-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LlmProfileInput'
+              $ref: '#/components/schemas/LlmProfileCreateInput'
       responses:
         '201':
           description: Created without returning plaintext key
@@ -388,13 +388,15 @@ paths:
                 $ref: '#/components/schemas/LlmProfile'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
   /api/llm-profiles/{profileId}:
     patch:
       tags: [LLM]
       operationId: updateLlmProfile
       x-requirement-id: LLM-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ProfileId'
       requestBody:
@@ -416,12 +418,65 @@ paths:
       tags: [LLM]
       operationId: deleteLlmProfile
       x-requirement-id: LLM-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ProfileId'
       responses:
         '204':
           description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/llm-bindings:
+    get:
+      tags: [LLM]
+      operationId: listLlmFeatureBindings
+      x-requirement-id: LLM-004
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: User-owned default profile bindings by feature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmFeatureBindings'
+
+  /api/llm-bindings/{feature}:
+    put:
+      tags: [LLM]
+      operationId: setLlmFeatureBinding
+      x-requirement-id: LLM-004
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/LlmFeature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [profileId]
+              properties:
+                profileId:
+                  type: [string, 'null']
+                  format: uuid
+      responses:
+        '200':
+          description: Binding updated; null removes the binding
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [feature, profileId]
+                properties:
+                  feature:
+                    type: string
+                    enum: [resume, jd, vision, interview]
+                  profileId:
+                    type: [string, 'null']
+                    format: uuid
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -891,6 +946,13 @@ components:
       schema:
         type: string
         format: uuid
+    LlmFeature:
+      name: feature
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [resume, jd, vision, interview]
     RepositoryId:
       name: repositoryId
       in: path
@@ -1142,10 +1204,10 @@ components:
           type: [string, 'null']
           format: date-time
 
-    LlmProfileInput:
+    LlmProfileCreateInput:
       type: object
       additionalProperties: false
-      required: [name, provider, baseUrl, modelName]
+      required: [name, provider, baseUrl, modelName, apiKey]
       properties:
         name:
           type: string
@@ -1163,12 +1225,39 @@ components:
           maxLength: 200
         apiKey:
           type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+
+    LlmProfileInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+          enum: [openai-compatible, anthropic, gemini]
+        baseUrl:
+          type: string
+          format: uri
+        modelName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        apiKey:
+          type: string
+          minLength: 1
+          maxLength: 8192
           writeOnly: true
 
     LlmProfile:
       type: object
       additionalProperties: false
-      required: [id, name, provider, baseUrl, modelName, hasApiKey, status]
+      required: [id, name, provider, baseUrl, modelName, hasApiKey, status, capabilities, lastTestedAt, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1189,6 +1278,33 @@ components:
           enum: [active, invalid, disabled, untested]
         capabilities:
           $ref: '#/components/schemas/LlmCapabilities'
+        lastTestedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+
+    LlmFeatureBindings:
+      type: object
+      additionalProperties: false
+      required: [resume, jd, vision, interview]
+      properties:
+        resume:
+          type: [string, 'null']
+          format: uuid
+        jd:
+          type: [string, 'null']
+          format: uuid
+        vision:
+          type: [string, 'null']
+          format: uuid
+        interview:
+          type: [string, 'null']
+          format: uuid
 
     LlmCapabilities:
       type: object

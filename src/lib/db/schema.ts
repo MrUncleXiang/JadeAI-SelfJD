@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const users = sqliteTable('users', {
@@ -100,6 +100,44 @@ export const auditEvents = sqliteTable('audit_events', {
 }, (table) => [
   index('audit_events_actor_idx').on(table.actorUserId),
   index('audit_events_created_at_idx').on(table.createdAt),
+]);
+
+export const llmProfiles = sqliteTable('llm_profiles', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  provider: text('provider', {
+    enum: ['openai-compatible', 'anthropic', 'gemini'],
+  }).notNull(),
+  baseUrl: text('base_url').notNull(),
+  modelName: text('model_name').notNull(),
+  encryptedApiKey: text('encrypted_api_key').notNull(),
+  keyIv: text('key_iv').notNull(),
+  keyTag: text('key_tag').notNull(),
+  keyVersion: integer('key_version').notNull(),
+  capabilities: text('capabilities', { mode: 'json' }).notNull().default('{}'),
+  status: text('status', {
+    enum: ['active', 'invalid', 'disabled', 'untested'],
+  }).notNull().default('untested'),
+  lastTestedAt: integer('last_tested_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  index('llm_profiles_user_id_idx').on(table.userId),
+]);
+
+export const llmFeatureBindings = sqliteTable('llm_feature_bindings', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  feature: text('feature', {
+    enum: ['resume', 'jd', 'vision', 'interview'],
+  }).notNull(),
+  llmProfileId: text('llm_profile_id').notNull().references(() => llmProfiles.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  uniqueIndex('llm_feature_bindings_user_feature_uq').on(table.userId, table.feature),
+  index('llm_feature_bindings_profile_id_idx').on(table.llmProfileId),
 ]);
 
 export const resumes = sqliteTable('resumes', {

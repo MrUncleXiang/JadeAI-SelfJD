@@ -116,6 +116,17 @@ Gate：所有现有测试和 Phase 1 安全测试通过。
 
 Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 
+当前进度（2026-07-16）：
+
+- [x] SQLite/PostgreSQL `llm_profiles`、`llm_feature_bindings` 前向迁移。
+- [x] 版本化 AES-256-GCM Keyring、随机 IV、AAD 租户绑定和轮换单测。
+- [x] 租户化档案 CRUD、Feature Binding API、安全 DTO、审计与集成测试。
+- [x] 保存阶段 HTTPS、DNS/IP 分类、精确 Origin/CIDR Allowlist 门禁及单测。
+- [ ] 服务端 Provider Resolver、实际请求/重定向复检和业务 Route 去除 `x-api-key`。
+- [ ] JSON/Tool/Vision 能力探测、超时/并发/错误分类。
+- [ ] 设置页多档案管理、Feature 选择、旧浏览器 Key 迁移后清除。
+- [ ] Playwright、安全扫描和 PostgreSQL 全链路 Gate；完成后才能将 LLM-001 至 LLM-005 标记为 automated。
+
 ## 6. Phase 3：ResumePatch、Diff 和版本
 
 关联：RES-003、AI-001 至 AI-004。

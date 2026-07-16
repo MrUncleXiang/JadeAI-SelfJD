@@ -43,6 +43,13 @@
       "when": 1784198867279,
       "tag": "0005_silly_zaladane",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784207773147,
+      "tag": "0006_friendly_hammerhead",
+      "breakpoints": true
     }
   ]
 }

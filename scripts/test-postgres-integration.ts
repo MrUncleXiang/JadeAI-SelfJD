@@ -126,9 +126,18 @@ async function main(): Promise<void> {
   }
 
   const { authService } = await import('../src/lib/auth/service');
+  const { authRepository } = await import('../src/lib/db/repositories/auth.repository');
+  const { llmProfileRepository } = await import('../src/lib/db/repositories/llm-profile.repository');
+  const { decryptLlmApiKey } = await import('../src/lib/llm/encryption');
+  const { llmProfileService } = await import('../src/lib/llm/service');
   const { adapter } = await import('../src/lib/db');
   const originalPassword = 'Correct-Horse-Battery-2026!';
   const replacementPassword = 'Different-Correct-Horse-2026!';
+  process.env.LLM_ENCRYPTION_KEYS = JSON.stringify({
+    1: 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=',
+  });
+  process.env.LLM_ENCRYPTION_ACTIVE_KEY_VERSION = '1';
+  process.env.LLM_BASE_URL_ALLOWLIST = '';
 
   try {
     const bootstrapResults = await Promise.allSettled([
@@ -167,6 +176,42 @@ async function main(): Promise<void> {
     assert.equal(actor?.userId, admin.id);
     assert.equal(actor?.role, 'admin');
 
+    assert(actor);
+    const profileKey = 'postgres-llm-secret-key';
+    const profile = await llmProfileService.createProfile(actor, {
+      name: 'PostgreSQL profile',
+      provider: 'openai-compatible',
+      baseUrl: 'https://8.8.8.8/v1',
+      modelName: 'integration-model',
+      apiKey: profileKey,
+    });
+    assert.notEqual(profile.encryptedApiKey, profileKey);
+    assert.equal(decryptLlmApiKey({
+      ciphertext: profile.encryptedApiKey,
+      iv: profile.keyIv,
+      tag: profile.keyTag,
+      keyVersion: profile.keyVersion,
+    }, { userId: admin.id, profileId: profile.id }), profileKey);
+    await llmProfileService.setBinding(actor, 'resume', profile.id);
+    assert.equal((await llmProfileService.listBindings(actor)).resume, profile.id);
+
+    await authRepository.setRegistrationMode('open', admin.id);
+    const otherRegistration = await authService.register({
+      username: 'postgres-llm-other',
+      password: originalPassword,
+    }, { requestId: 'postgres-llm-other-register' });
+    const otherActor = await authService.resolveSession(
+      otherRegistration.token,
+      'postgres-llm-other-resolve',
+    );
+    assert(otherActor);
+    assert.equal((await llmProfileService.listProfiles(otherActor)).length, 0);
+    await assert.rejects(
+      llmProfileService.updateProfile(otherActor, profile.id, { name: 'cross-tenant' }),
+      (error: unknown) => (error as { code?: string }).code === 'PROFILE_NOT_FOUND',
+    );
+    assert.equal(await llmProfileRepository.findOwnedById(otherActor.userId, profile.id), null);
+
     await authService.changePassword(admin.id, originalPassword, replacementPassword);
     assert.equal(
       await authService.resolveSession(login.token, 'postgres-integration-revoked'),
@@ -177,7 +222,7 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write(
-    'PostgreSQL integration acceptance passed: legacy migration, login, and session revocation.\n',
+    'PostgreSQL integration acceptance passed: legacy migration, auth lifecycle, encrypted LLM profile, binding, and tenant isolation.\n',
   );
 }
 

@@ -71,7 +71,7 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 | encrypted_api_key | AES-GCM 密文 |
 | key_iv/key_tag/key_version | 解密元数据 |
 | capabilities | JSON：json、tools、vision 等探测结果 |
-| status | active、invalid、disabled |
+| status | active、invalid、disabled、untested |
 | last_tested_at | 最近测试 |
 
 ### `llm_feature_bindings`

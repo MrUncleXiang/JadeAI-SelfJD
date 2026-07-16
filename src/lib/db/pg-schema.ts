@@ -3,7 +3,7 @@
  * Used ONLY by drizzle-kit for PG migration generation.
  * Runtime code still imports table objects from schema.ts.
  */
-import { index, integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 const epochNow = sql`extract(epoch from now())::integer`;
@@ -107,6 +107,38 @@ export const auditEvents = pgTable('audit_events', {
 }, (table) => [
   index('audit_events_actor_idx').on(table.actorUserId),
   index('audit_events_created_at_idx').on(table.createdAt),
+]);
+
+export const llmProfiles = pgTable('llm_profiles', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  provider: text('provider').notNull(),
+  baseUrl: text('base_url').notNull(),
+  modelName: text('model_name').notNull(),
+  encryptedApiKey: text('encrypted_api_key').notNull(),
+  keyIv: text('key_iv').notNull(),
+  keyTag: text('key_tag').notNull(),
+  keyVersion: integer('key_version').notNull(),
+  capabilities: text('capabilities').notNull().default('{}'),
+  status: text('status').notNull().default('untested'),
+  lastTestedAt: integer('last_tested_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('llm_profiles_user_id_idx').on(table.userId),
+]);
+
+export const llmFeatureBindings = pgTable('llm_feature_bindings', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  feature: text('feature').notNull(),
+  llmProfileId: text('llm_profile_id').notNull().references(() => llmProfiles.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('llm_feature_bindings_user_feature_uq').on(table.userId, table.feature),
+  index('llm_feature_bindings_profile_id_idx').on(table.llmProfileId),
 ]);
 
 export const resumes = pgTable('resumes', {
