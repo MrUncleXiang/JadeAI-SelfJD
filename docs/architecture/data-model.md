@@ -1,0 +1,247 @@
+# 数据模型
+
+## 1. 原则
+
+- PostgreSQL 是生产事实源。
+- UUID 作为业务主键；外部系统 ID 使用独立字段并建立唯一约束。
+- 所有用户数据显式保存 `user_id`，避免仅通过多级 Join 推断租户。
+- 原始来源快照不可变；解析结果通过版本和状态演进。
+- 机密字段不放入通用 JSON；使用专用加密列。
+- 时间统一使用带时区时间戳。
+- 删除用户资源先进入可恢复状态，真正物理删除由单独任务执行。
+
+## 2. 身份与管理
+
+### `users`
+
+| 字段 | 说明 |
+|---|---|
+| id | 用户 ID |
+| username | 唯一登录名，规范化后唯一 |
+| email | 可选，规范化后唯一 |
+| display_name | 展示名 |
+| avatar_url | 头像 |
+| role | `admin` 或 `user` |
+| status | `active`、`disabled`、`pending` |
+| token_version | 密码修改、禁用时递增 |
+| last_login_at | 最近登录 |
+| created_at/updated_at/deleted_at | 生命周期 |
+
+### `password_credentials`
+
+- `user_id` 唯一外键。
+- `password_hash`。
+- `password_changed_at`。
+- 不保存可逆密码或密码提示。
+
+### `auth_identities`
+
+- `user_id`。
+- `provider_type`，如 `google`、`github-login`。
+- `provider_subject`。
+- `verified_at` 和最小必要元数据。
+- `(provider_type, provider_subject)` 唯一。
+
+GitHub 登录身份不等于 GitHub App 安装授权。
+
+### `sessions`
+
+- 随机不透明 Session Token 的哈希。
+- `user_id`、`token_version`、到期时间、最近使用时间。
+- 可选设备名称、IP 前缀和 User-Agent 摘要。
+
+### 其他
+
+- `invitations`：邀请码哈希、使用次数、到期和创建者。
+- `verification_tokens`：邮箱验证、密码重置等一次性 Token 哈希。
+- `system_settings`：注册开关等非秘密设置。
+- `audit_events`：操作者、动作、目标、结果、请求关联 ID 和脱敏元数据。
+
+## 3. LLM
+
+### `llm_profiles`
+
+| 字段 | 说明 |
+|---|---|
+| id/user_id | 档案及所属用户 |
+| name | 用户自定义名称 |
+| provider | OpenAI-compatible、Anthropic、Gemini 等 |
+| base_url | 规范化地址 |
+| model_name | 模型 |
+| encrypted_api_key | AES-GCM 密文 |
+| key_iv/key_tag/key_version | 解密元数据 |
+| capabilities | JSON：json、tools、vision 等探测结果 |
+| status | active、invalid、disabled |
+| last_tested_at | 最近测试 |
+
+### `llm_feature_bindings`
+
+- `user_id`。
+- `feature`：`resume`、`jd`、`vision`、`interview`。
+- `llm_profile_id`。
+- 每个用户每种 Feature 唯一。
+
+业务日志仅记录档案 ID、Provider、Model、耗时和 Token 统计，不记录 API Key。
+
+## 4. 来源与同步
+
+### `source_connections`
+
+来源连接的统一父记录：
+
+- `id/user_id`。
+- `type`，首期仅 `github`。
+- `status`、`last_synced_at`、`last_error_code`。
+
+### `github_installations`
+
+- `source_connection_id`。
+- GitHub `installation_id`、Account ID 和 Account Login。
+- 安装权限摘要。
+- 不保存 installation access token。
+
+### `source_repositories`
+
+- `user_id/source_connection_id`。
+- 外部不可变 Repository ID、`full_name`、默认分支。
+- 是否被用户选中、同步路径策略、最近 HEAD SHA。
+- `(source_connection_id, external_repository_id)` 唯一。
+
+### `source_snapshots`
+
+- `user_id/source_repository_id`。
+- Commit SHA、Tree SHA、父快照、创建时间。
+- 同仓库同 Commit SHA 唯一。
+- 状态：pending、processing、ready、failed。
+
+### `source_documents`
+
+- `user_id/source_snapshot_id`。
+- 路径、Git Blob SHA、内容哈希、MIME、大小。
+- 对象存储位置或受控文本内容。
+- 解析状态、解析器 ID 和解析器版本。
+- `(source_snapshot_id, path)` 唯一。
+
+### `sync_jobs` 和 `webhook_deliveries`
+
+- Job 保存类型、状态、尝试次数、幂等键、错误代码和时间。
+- Webhook Delivery ID 唯一，保存事件类型、验签结果和处理状态。
+- 载荷只保留完成处理所需字段，完整载荷按保留策略删除。
+
+## 5. 职业知识库
+
+### `career_facts`
+
+| 字段 | 说明 |
+|---|---|
+| id/user_id | 事实及所属用户 |
+| fact_type | profile、employment、project、skill、education、certificate、achievement |
+| canonical_key | 去重和合并键 |
+| title/summary | 人可读内容 |
+| structured_data | 按 fact_type 校验的 JSON |
+| status | draft、approved、rejected、superseded |
+| confidence | 0 至 1，仅用于提示，不代替审核 |
+| supersedes_fact_id | 新版本指向旧事实 |
+| created_by | import、ai、user |
+| approved_by/approved_at | 审核记录 |
+
+### `career_fact_evidence`
+
+- `career_fact_id`。
+- `source_document_id` 或用户输入来源。
+- Commit SHA、路径、行区间或 JSON Pointer。
+- 引用内容哈希和简短证据摘要。
+- 解析器版本。
+
+同一个事实可有多个证据，同一证据可支撑多个事实。
+
+### `fact_review_events`
+
+记录编辑前后、批准、拒绝、合并和失效操作。事实审核不可通过覆盖原记录来抹除历史。
+
+## 6. 简历与变更
+
+保留 `resumes` 和 `resume_sections` 的基本概念，并新增：
+
+### `resume_versions`
+
+- `user_id/resume_id`。
+- 单调递增 `version_number`。
+- 完整规范化快照或内容寻址对象。
+- 来源：manual、ai-change-set、restore、import。
+- 创建者和创建时间。
+
+### `resume_change_sets`
+
+- `user_id/resume_id/base_version_id`。
+- 状态：proposed、validated、stale、partially_applied、applied、rejected、failed。
+- LLM Profile、Model、Prompt 模板版本和请求关联 ID。
+- 摘要、警告和验证结果。
+
+### `resume_change_operations`
+
+- `change_set_id`、稳定 Operation ID 和排序。
+- 操作类型、目标 Section/Item、前置哈希、值。
+- Evidence IDs、JD Requirement IDs、理由和置信度。
+- 是否被用户选中、应用结果和错误码。
+
+### `resume_fact_links`
+
+记录正式简历字段或 Item 与职业事实的关系。导出时不显示内部证据，但用于追踪和再生成。
+
+### 基准和定向关系
+
+`resumes` 新增：
+
+- `kind`：baseline、targeted、general-copy。
+- `parent_resume_id`。
+- `target_jd_source_id`。
+
+## 7. JD
+
+### `jd_sources`
+
+- `user_id`、输入类型 text/pdf/docx/image。
+- 标题、公司、岗位名、原始对象位置和内容哈希。
+- 解析状态、解析器版本和用户修订后的规范文本。
+
+### `jd_requirements`
+
+- `jd_source_id`。
+- requirement_type：responsibility、hard_skill、soft_skill、experience、education、preferred。
+- 文本、规范化术语、重要度、是否硬性。
+- 原文位置。
+
+### `jd_fact_matches`
+
+- `user_id/jd_requirement_id/career_fact_id`。
+- match_level：strong、partial、gap、conflict。
+- 理由、证据和模型/规则版本。
+
+## 8. 面试
+
+保留现有会话、轮次、消息和报告表，但必须：
+
+- 在每个表直接或通过不可变父项保存并验证 `user_id`。
+- 会话引用 `resume_version_id` 而不是只引用可变简历。
+- 可选引用 `jd_source_id`。
+- 报告记录生成模型和模板版本。
+
+## 9. 关键唯一约束
+
+- `users(lower(username))` 唯一。
+- 非空 `users(lower(email))` 唯一。
+- `auth_identities(provider_type, provider_subject)` 唯一。
+- `source_snapshots(source_repository_id, commit_sha)` 唯一。
+- `source_documents(source_snapshot_id, path)` 唯一。
+- `webhook_deliveries(delivery_id)` 唯一。
+- `resume_versions(resume_id, version_number)` 唯一。
+- `llm_feature_bindings(user_id, feature)` 唯一。
+
+## 10. 保留和删除
+
+- 被 GitHub 新 Commit 替代的快照不立即删除，以保持证据可验证。
+- 用户可删除连接并选择保留或清除已审核事实。
+- 删除 LLM 档案立即清除密文并使绑定失效。
+- 删除账号采用可恢复期，期满后异步物理删除用户内容。
+- 审计记录按配置保留，但不得保留明文秘密或完整私有内容。

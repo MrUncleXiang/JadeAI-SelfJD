@@ -1,0 +1,1152 @@
+openapi: 3.1.0
+info:
+  title: JadeAI Career API
+  version: 0.1.0
+  description: |
+    Phase 0 initial contract. Paths marked x-implementation-status: planned are not
+    available in the upstream baseline yet.
+servers:
+  - url: /
+security:
+  - cookieSession: []
+
+tags:
+  - name: Auth
+  - name: Admin
+  - name: LLM
+  - name: GitHub
+  - name: Knowledge
+  - name: ResumeChange
+  - name: JD
+  - name: Jobs
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      x-requirement-id: AUTH-001
+      x-implementation-status: planned
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      x-requirement-id: AUTH-001
+      x-implementation-status: planned
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Auth]
+      operationId: updateCurrentUser
+      x-requirement-id: AUTH-001
+      x-implementation-status: planned
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                email:
+                  type: [string, 'null']
+                  format: email
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/me/password:
+    post:
+      tags: [Auth]
+      operationId: changePassword
+      x-requirement-id: AUTH-004
+      x-implementation-status: planned
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  writeOnly: true
+                newPassword:
+                  type: string
+                  minLength: 12
+                  writeOnly: true
+      responses:
+        '204':
+          description: Password changed and old sessions revoked
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      operationId: listUsers
+      x-requirement-id: AUTH-003
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema:
+            type: string
+            maxLength: 120
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/UserStatus'
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUserSummary'
+                  total:
+                    type: integer
+                    minimum: 0
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{userId}:
+    patch:
+      tags: [Admin]
+      operationId: updateUserByAdmin
+      x-requirement-id: AUTH-003
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                status:
+                  $ref: '#/components/schemas/UserStatus'
+                role:
+                  $ref: '#/components/schemas/UserRole'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserSummary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/llm-profiles:
+    get:
+      tags: [LLM]
+      operationId: listLlmProfiles
+      x-requirement-id: LLM-001
+      x-implementation-status: planned
+      responses:
+        '200':
+          description: User-owned profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LlmProfile'
+    post:
+      tags: [LLM]
+      operationId: createLlmProfile
+      x-requirement-id: LLM-001
+      x-implementation-status: planned
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmProfileInput'
+      responses:
+        '201':
+          description: Created without returning plaintext key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/llm-profiles/{profileId}:
+    patch:
+      tags: [LLM]
+      operationId: updateLlmProfile
+      x-requirement-id: LLM-001
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmProfileInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [LLM]
+      operationId: deleteLlmProfile
+      x-requirement-id: LLM-001
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/llm-profiles/{profileId}/test:
+    post:
+      tags: [LLM]
+      operationId: testLlmProfile
+      x-requirement-id: LLM-003
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ProfileId'
+      responses:
+        '200':
+          description: Capability report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmCapabilities'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/github/connect:
+    post:
+      tags: [GitHub]
+      operationId: beginGithubConnection
+      x-requirement-id: GH-001
+      x-implementation-status: planned
+      responses:
+        '200':
+          description: Short-lived GitHub App installation URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirectUrl]
+                properties:
+                  redirectUrl:
+                    type: string
+                    format: uri
+
+  /api/github/repositories:
+    get:
+      tags: [GitHub]
+      operationId: listGithubRepositories
+      x-requirement-id: GH-001
+      x-implementation-status: planned
+      responses:
+        '200':
+          description: Repositories available to the current user connection
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourceRepository'
+
+  /api/github/repositories/{repositoryId}/sync:
+    post:
+      tags: [GitHub]
+      operationId: syncGithubRepository
+      x-requirement-id: GH-003
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/RepositoryId'
+      responses:
+        '202':
+          description: Idempotent sync job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/github/webhooks:
+    post:
+      tags: [GitHub]
+      operationId: receiveGithubWebhook
+      x-requirement-id: GH-003
+      x-implementation-status: planned
+      security: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-GitHub-Delivery
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '202':
+          description: Accepted or already processed
+        '401':
+          description: Invalid signature
+
+  /api/career-facts:
+    get:
+      tags: [Knowledge]
+      operationId: listCareerFacts
+      x-requirement-id: KB-001
+      x-implementation-status: planned
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/FactStatus'
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User-owned facts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CareerFact'
+
+  /api/career-facts/{factId}:
+    patch:
+      tags: [Knowledge]
+      operationId: updateCareerFact
+      x-requirement-id: KB-002
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/FactId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title:
+                  type: string
+                summary:
+                  type: string
+                structuredData:
+                  type: object
+      responses:
+        '200':
+          description: Updated draft or new fact version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerFact'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/career-facts/{factId}/review:
+    post:
+      tags: [Knowledge]
+      operationId: reviewCareerFact
+      x-requirement-id: KB-002
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/FactId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, reject]
+                note:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '200':
+          description: Reviewed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerFact'
+
+  /api/resumes/{resumeId}/change-sets:
+    get:
+      tags: [ResumeChange]
+      operationId: listResumeChangeSets
+      x-requirement-id: AI-002
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+      responses:
+        '200':
+          description: Change sets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResumeChangeSet'
+    post:
+      tags: [ResumeChange]
+      operationId: proposeResumeChangeSet
+      x-requirement-id: AI-001
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [baseVersionId, instruction]
+              properties:
+                baseVersionId:
+                  type: string
+                  format: uuid
+                instruction:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                jdSourceId:
+                  type: string
+                  format: uuid
+      responses:
+        '202':
+          description: Generation job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/resumes/{resumeId}/change-sets/{changeSetId}:
+    get:
+      tags: [ResumeChange]
+      operationId: getResumeChangeSet
+      x-requirement-id: AI-002
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+        - $ref: '#/components/parameters/ChangeSetId'
+      responses:
+        '200':
+          description: Deterministic diff and validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumeChangeSet'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/resumes/{resumeId}/change-sets/{changeSetId}/apply:
+    post:
+      tags: [ResumeChange]
+      operationId: applyResumeChangeSet
+      x-requirement-id: AI-002
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+        - $ref: '#/components/parameters/ChangeSetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [operationIds]
+              properties:
+                operationIds:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Applied atomically
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resumeVersionId, changeSet]
+                properties:
+                  resumeVersionId:
+                    type: string
+                    format: uuid
+                  changeSet:
+                    $ref: '#/components/schemas/ResumeChangeSet'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /api/resumes/{resumeId}/versions:
+    get:
+      tags: [ResumeChange]
+      operationId: listResumeVersions
+      x-requirement-id: RES-003
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+      responses:
+        '200':
+          description: Resume versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResumeVersionSummary'
+
+  /api/jd-sources:
+    post:
+      tags: [JD]
+      operationId: createJdSource
+      x-requirement-id: JD-001
+      x-implementation-status: planned
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 100000
+                title:
+                  type: string
+                  maxLength: 240
+      responses:
+        '201':
+          description: JD source created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdSource'
+
+  /api/jd-sources/{jdSourceId}/analyze:
+    post:
+      tags: [JD]
+      operationId: analyzeJdSource
+      x-requirement-id: JD-003
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/JdSourceId'
+      responses:
+        '202':
+          description: Analysis job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+
+  /api/jd-sources/{jdSourceId}/target-resume:
+    post:
+      tags: [JD]
+      operationId: createTargetedResume
+      x-requirement-id: JD-004
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/JdSourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [baseResumeId, baseVersionId]
+              properties:
+                baseResumeId:
+                  type: string
+                  format: uuid
+                baseVersionId:
+                  type: string
+                  format: uuid
+      responses:
+        '202':
+          description: Targeted resume job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+
+  /api/jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      x-requirement-id: OPS-001
+      x-implementation-status: planned
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Current user's job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: __Host-jadeai-session
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProfileId:
+      name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RepositoryId:
+      name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    FactId:
+      name: factId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ResumeId:
+      name: resumeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ChangeSetId:
+      name: changeSetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JdSourceId:
+      name: jdSourceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Operation is not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Resource state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unprocessable:
+      description: Domain validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, requestId]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requestId:
+          type: string
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          writeOnly: true
+        invitationCode:
+          type: string
+          writeOnly: true
+
+    UserRole:
+      type: string
+      enum: [admin, user]
+
+    UserStatus:
+      type: string
+      enum: [active, disabled, pending]
+
+    CurrentUser:
+      type: object
+      additionalProperties: false
+      required: [id, username, displayName, role, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        displayName:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+
+    AdminUserSummary:
+      allOf:
+        - $ref: '#/components/schemas/CurrentUser'
+        - type: object
+          properties:
+            createdAt:
+              type: string
+              format: date-time
+            lastLoginAt:
+              type: [string, 'null']
+              format: date-time
+
+    LlmProfileInput:
+      type: object
+      additionalProperties: false
+      required: [name, provider, baseUrl, modelName]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+          enum: [openai-compatible, anthropic, gemini]
+        baseUrl:
+          type: string
+          format: uri
+        modelName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        apiKey:
+          type: string
+          writeOnly: true
+
+    LlmProfile:
+      type: object
+      additionalProperties: false
+      required: [id, name, provider, baseUrl, modelName, hasApiKey, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        provider:
+          type: string
+        baseUrl:
+          type: string
+          format: uri
+        modelName:
+          type: string
+        hasApiKey:
+          type: boolean
+        status:
+          type: string
+          enum: [active, invalid, disabled, untested]
+        capabilities:
+          $ref: '#/components/schemas/LlmCapabilities'
+
+    LlmCapabilities:
+      type: object
+      additionalProperties: false
+      required: [reachable, json, tools, vision]
+      properties:
+        reachable:
+          type: boolean
+        json:
+          type: boolean
+        tools:
+          type: boolean
+        vision:
+          type: boolean
+        errorCode:
+          type: [string, 'null']
+        testedAt:
+          type: [string, 'null']
+          format: date-time
+
+    SourceRepository:
+      type: object
+      additionalProperties: false
+      required: [id, externalId, fullName, selected, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        externalId:
+          type: integer
+        fullName:
+          type: string
+        defaultBranch:
+          type: string
+        selected:
+          type: boolean
+        status:
+          type: string
+        lastHeadSha:
+          type: [string, 'null']
+        lastSyncedAt:
+          type: [string, 'null']
+          format: date-time
+
+    FactStatus:
+      type: string
+      enum: [draft, approved, rejected, superseded]
+
+    CareerFact:
+      type: object
+      additionalProperties: false
+      required: [id, factType, title, status, evidence]
+      properties:
+        id:
+          type: string
+          format: uuid
+        factType:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        structuredData:
+          type: object
+        status:
+          $ref: '#/components/schemas/FactStatus'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        evidence:
+          type: array
+          items:
+            type: object
+            required: [sourceDocumentId, contentHash]
+            properties:
+              sourceDocumentId:
+                type: string
+                format: uuid
+              commitSha:
+                type: string
+              path:
+                type: string
+              locator:
+                type: string
+              contentHash:
+                type: string
+
+    ResumeChangeSet:
+      type: object
+      required: [id, resumeId, baseVersionId, status, operations]
+      properties:
+        id:
+          type: string
+          format: uuid
+        resumeId:
+          type: string
+          format: uuid
+        baseVersionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [proposed, validated, stale, partially_applied, applied, rejected, failed]
+        summary:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        operations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumeChangeOperation'
+
+    ResumeChangeOperation:
+      type: object
+      required: [operationId, type, reason, evidenceIds, jdRequirementIds]
+      properties:
+        operationId:
+          type: string
+        type:
+          type: string
+          enum:
+            - set_field
+            - add_item
+            - update_item
+            - remove_item
+            - add_section
+            - remove_section
+            - move_section
+            - set_visibility
+            - set_template
+        sectionId:
+          type: [string, 'null']
+        itemId:
+          type: [string, 'null']
+        expectedHash:
+          type: [string, 'null']
+        value: {}
+        reason:
+          type: string
+        evidenceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        jdRequirementIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    ResumeVersionSummary:
+      type: object
+      required: [id, versionNumber, source, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+          minimum: 1
+        source:
+          type: string
+          enum: [manual, ai-change-set, restore, import]
+        createdAt:
+          type: string
+          format: date-time
+
+    JdSource:
+      type: object
+      required: [id, inputType, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        inputType:
+          type: string
+          enum: [text, pdf, docx, image]
+        title:
+          type: string
+        company:
+          type: string
+        jobTitle:
+          type: string
+        status:
+          type: string
+          enum: [draft, parsing, needs_review, confirmed, failed]
+
+    Job:
+      type: object
+      required: [id, type, status, attempts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, retrying, succeeded, failed, cancelled]
+        attempts:
+          type: integer
+          minimum: 0
+        errorCode:
+          type: [string, 'null']
+        resourceId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

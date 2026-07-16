@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "spec:check": "node scripts/validate-specs.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",
