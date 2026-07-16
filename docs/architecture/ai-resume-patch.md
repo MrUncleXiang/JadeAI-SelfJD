@@ -229,9 +229,10 @@ Diff 由服务器根据规范化前后内容计算，不信任 LLM 自报的 Bef
 - 手工保存、AI 应用和恢复都会形成版本；恢复旧快照不会删除历史。
 - Tool 能力失效时自动降级为文本 JSON，支持 Code Fence、双重编码和有限确定性修复。
 - 提案创建、应用和版本恢复均写入审计事件，且不保存明文 LLM API Key。
+- Phase 4 职业知识库已提供 Approved Fact、非陈旧 Evidence、Allowed Claim 和 Forbidden Claim 适配器；生成提案和应用变更时均重新加载当前用户策略。
+- 新增履历或量化陈述必须引用当前 Approved Evidence；事实被拒绝或失效后，已生成但尚未应用的 Change Set 会在应用阶段被再次阻断。
 
 尚未关闭的发布边界：
 
-- Phase 4 职业知识库尚未落地，因此本阶段引用策略只允许基于现有简历事实进行表达优化；新增履历、指标、技术、单位、日期等无证据陈述会被阻断。
-- `approved Fact`、`forbiddenClaims` 和 JD Requirement 的真实适配器与端到端验收归入 Phase 4/6，AI-003 当前仅完成策略框架和拒绝规则单测。
+- JD Requirement 的真实适配器仍归入 Phase 6；当前 Phase 4 已关闭事实证据闭环，但尚未实现面向招聘 JD 的定向约束。
 - `/api/ai/translate` 的覆盖模式和 `/api/ai/generate-resume` 仍是上游遗留直写路径，必须在发布 Gate 前迁移；当前“AI Chat 写回”已安全化，但不能据此声称所有 AI Route 都已完成迁移。

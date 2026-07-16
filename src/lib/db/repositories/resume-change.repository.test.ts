@@ -1,3 +1,6 @@
+import path from 'node:path';
+
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -7,6 +10,7 @@ vi.hoisted(() => {
 
 import { db, dbReady } from '../index';
 import {
+  careerFacts,
   resumeChangeSets,
   resumeSections,
   resumeVersions,
@@ -15,6 +19,8 @@ import {
 } from '../schema';
 import { resumeChangeRepository } from './resume-change.repository';
 import { resumeRepository } from './resume.repository';
+import { careerRepository } from './career.repository';
+import { parseWorkResumeV2, toCareerSnapshotImport } from '@/lib/career/workresume-v2';
 import { expectedHashForOperation, prepareResumePatch } from '@/lib/resume-patch/operations';
 import { resumePatchSchema, type ResumePatchOperation } from '@/lib/resume-patch/schema';
 import { createResumeSnapshot, parseResumeSnapshot } from '@/lib/resume-patch/snapshot';
@@ -144,6 +150,105 @@ describe('resume change repository', () => {
     const resume = await resumeRepository.findOwnedById(userId, resumeId);
     expect(resume?.sections[0].content).toMatchObject({ fullName: 'Jade', jobTitle: 'Unity Developer' });
     await expect(resumeChangeRepository.listChangeSetsOwned(userId, resumeId)).resolves.not.toHaveLength(0);
+  });
+
+  it('reloads approved evidence at apply time and rejects a revoked fact', async () => {
+    const parsed = await parseWorkResumeV2(path.resolve('tests/fixtures/workresume-v2'));
+    await careerRepository.importSnapshotOwned(toCareerSnapshotImport(userId, parsed, {
+      commitSha: 'c'.repeat(40),
+      treeSha: 'd'.repeat(40),
+      defaultBranch: 'main',
+      externalRepositoryId: `sha256:resume-patch-${suffix}`,
+      displayName: 'ResumePatch synthetic evidence',
+    }));
+    const imported = await careerRepository.listFactsOwned(userId);
+    const fact = imported.find((candidate) => candidate.evidence.length > 0)!;
+    await careerRepository.reviewFactOwned(userId, fact.id, 'approve');
+    const approved = await careerRepository.findFactOwned(userId, fact.id);
+    const evidenceId = approved!.evidence[0].id;
+    const current = await currentSnapshot();
+    const operation = withHash(current.snapshot, {
+      operationId: `evidence-${crypto.randomUUID()}`,
+      type: 'set_field',
+      sectionId: 'personal',
+      expectedHash: 'sha256:placeholder',
+      value: { field: 'jobTitle', value: 'Unity Developer with 20% faster iteration' },
+      reason: 'Add a supported quantitative claim',
+      evidenceIds: [evidenceId],
+      jdRequirementIds: [],
+      confidence: 0.8,
+    });
+    const changeSet = await resumeChangeService.createFromCandidate({
+      userId,
+      resumeId,
+      baseVersionId: current.version.id,
+      candidate: {
+        schemaVersion: 1,
+        resumeId,
+        baseVersionId: current.version.id,
+        summary: 'Evidence revalidation',
+        operations: [operation],
+        warnings: [],
+      },
+    });
+    expect(changeSet).not.toBeNull();
+    if (!changeSet) throw new Error('Expected evidence-backed change set');
+    expect(changeSet.operations[0].evidenceIds).toEqual([evidenceId]);
+
+    const secondResumeId = `patch-resume-reuse-${suffix}`;
+    const secondSectionId = `personal-reuse-${suffix}`;
+    await db.insert(resumes).values({ id: secondResumeId, userId, title: 'Reuse Evidence Test' });
+    await db.insert(resumeSections).values({
+      id: secondSectionId,
+      resumeId: secondResumeId,
+      type: 'personal_info',
+      title: 'Personal',
+      sortOrder: 0,
+      content: { fullName: 'Jade', jobTitle: 'Developer', email: '', phone: '', location: '' },
+    });
+    const secondVersion = await resumeChangeRepository.ensureCurrentVersionOwned(userId, secondResumeId);
+    const secondSnapshot = parseResumeSnapshot(secondVersion.snapshot);
+    const reusedOperation = withHash(secondSnapshot, {
+      operationId: `evidence-reuse-${crypto.randomUUID()}`,
+      type: 'set_field',
+      sectionId: secondSectionId,
+      expectedHash: 'sha256:placeholder',
+      value: { field: 'jobTitle', value: 'Developer with 20% faster iteration' },
+      reason: 'Reuse the same approved evidence in another resume',
+      evidenceIds: [evidenceId],
+      jdRequirementIds: [],
+      confidence: 0.8,
+    });
+    const reusedChangeSet = await resumeChangeService.createFromCandidate({
+      userId,
+      resumeId: secondResumeId,
+      baseVersionId: secondVersion.id,
+      candidate: {
+        schemaVersion: 1,
+        resumeId: secondResumeId,
+        baseVersionId: secondVersion.id,
+        summary: 'Cross-resume evidence reuse',
+        operations: [reusedOperation],
+        warnings: [],
+      },
+    });
+    expect(reusedChangeSet).not.toBeNull();
+    if (!reusedChangeSet) throw new Error('Expected cross-resume evidence-backed change set');
+    expect(reusedChangeSet.operations[0].evidenceIds).toEqual([evidenceId]);
+
+    await db.update(careerFacts).set({ status: 'rejected', updatedAt: new Date() })
+      .where(eq(careerFacts.id, fact.id));
+    await expect(resumeChangeService.apply({
+      userId,
+      resumeId,
+      changeSetId: changeSet.id,
+      operationIds: [operation.operationId],
+    })).rejects.toMatchObject({ code: 'EVIDENCE_NOT_APPROVED', status: 422 });
+
+    const stored = await resumeChangeRepository.findChangeSetOwned(userId, resumeId, changeSet.id);
+    expect(stored?.status).toBe('validated');
+    const unchanged = await resumeRepository.findOwnedById(userId, resumeId);
+    expect(unchanged?.sections[0].content).toMatchObject({ jobTitle: 'Unity Developer' });
   });
 
   it('marks a proposal stale when a manual version is saved after preview', async () => {

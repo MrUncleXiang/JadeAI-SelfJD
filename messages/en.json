@@ -278,9 +278,18 @@
       "clear": "Clear",
       "dateDisplay": "{month} {year}",
       "months": {
-        "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
-        "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
-        "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec"
+        "10": "Oct",
+        "11": "Nov",
+        "12": "Dec",
+        "01": "Jan",
+        "02": "Feb",
+        "03": "Mar",
+        "04": "Apr",
+        "05": "May",
+        "06": "Jun",
+        "07": "Jul",
+        "08": "Aug",
+        "09": "Sep"
       }
     }
   },
@@ -1026,6 +1035,69 @@
       "project_deep_dive": "Project Deep Dive",
       "leader": "Leader",
       "custom": "Custom"
+    }
+  },
+  "knowledge": {
+    "nav": "Knowledge",
+    "title": "Career Knowledge",
+    "description": "Review facts, evidence, and claims extracted from personal information repositories. Only approved facts enter AI resume context; forbidden claims always block exaggeration.",
+    "refresh": "Refresh",
+    "requestFailed": "The operation failed",
+    "statusFilter": "Review status",
+    "typeFilter": "Fact type",
+    "allStatuses": "All statuses",
+    "allTypes": "All types",
+    "mergeSelected": "Merge selected ({count})",
+    "emptyTitle": "No career facts yet",
+    "emptyDescription": "Use the read-only WorkResume v2 import command to create reviewable facts. GitHub authorization and automatic sync will be added in the next phase.",
+    "noSummary": "No summary",
+    "evidence": "Evidence ({count})",
+    "confidence": "Confidence {value}%",
+    "moreEvidence": "{count} more evidence items",
+    "contentHash": "Content hash: {hash}",
+    "allowedClaims": "Allowed claims ({count})",
+    "forbiddenClaims": "Forbidden claims ({count})",
+    "selectFact": "Select fact: {title}",
+    "edit": "Edit",
+    "approve": "Approve",
+    "reject": "Reject",
+    "factApproved": "Fact approved and available to AI",
+    "factRejected": "Fact rejected",
+    "factUpdated": "Draft updated",
+    "newDraftCreated": "A new draft version was created; the reviewed version remains unchanged",
+    "mergeDraftCreated": "Merge draft created; review it before use",
+    "editTitle": "Edit career fact",
+    "editDraftDescription": "The draft is updated in place and the review event is retained.",
+    "editVersionDescription": "Editing a reviewed fact creates a new draft. The old version is superseded only after approval.",
+    "factTitle": "Title",
+    "factSummary": "Summary",
+    "structuredData": "Structured data (JSON object)",
+    "invalidStructuredData": "Structured data must be a valid JSON object",
+    "save": "Save",
+    "cancel": "Cancel",
+    "mergeTitle": "Merge career facts",
+    "mergeDescription": "Create a reviewable draft from {count} facts with deduplicated evidence and claims. Source facts are superseded only after approval.",
+    "factType": "Fact type",
+    "createMergeDraft": "Create merge draft",
+    "status": {
+      "draft": "Draft",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "superseded": "Superseded"
+    },
+    "type": {
+      "profile": "Profile",
+      "employment": "Employment",
+      "project": "Project",
+      "skill": "Skill",
+      "education": "Education",
+      "certificate": "Certificate",
+      "achievement": "Achievement"
+    },
+    "createdBy": {
+      "import": "Repository import",
+      "ai": "AI generated",
+      "user": "User edited"
     }
   }
 }

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "root": ".",
+  "targetRole": "Senior Platform Engineer",
+  "defaultLanguage": "en",
+  "paths": {
+    "positioningDirectory": "00_positioning",
+    "projectEvidenceDirectory": "01_project_evidence",
+    "capabilityPool": "00_positioning/capabilities.json",
+    "jdTermPool": "00_positioning/jd-terms.json",
+    "jdMapping": "00_positioning/jd-mapping.json",
+    "jdMappingView": "00_positioning/jd-mapping.md"
+  }
+}

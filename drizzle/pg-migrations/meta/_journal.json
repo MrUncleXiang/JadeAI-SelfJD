@@ -57,6 +57,13 @@
       "when": 1784214549310,
       "tag": "0007_useful_yellowjacket",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784221758971,
+      "tag": "0008_amusing_vector",
+      "breakpoints": true
     }
   ]
 }

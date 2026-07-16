@@ -120,16 +120,40 @@ async function main(): Promise<void> {
       SELECT title FROM resumes WHERE id = 'legacy-resume'
     `;
     assert.equal(resumes[0].title, 'Preserved resume');
-    const resumeChangeTables = await client<{ table_name: string }[]>`
+    const phaseTables = await client<{ table_name: string }[]>`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name IN ('resume_versions', 'resume_change_sets', 'resume_change_operations')
+        AND table_name IN (
+          'resume_versions',
+          'resume_change_sets',
+          'resume_change_operations',
+          'source_repositories',
+          'source_snapshots',
+          'source_documents',
+          'career_facts',
+          'career_fact_evidence',
+          'career_fact_claims',
+          'career_fact_relations',
+          'fact_review_events'
+        )
       ORDER BY table_name
     `;
     assert.deepEqual(
-      resumeChangeTables.map((row) => row.table_name),
-      ['resume_change_operations', 'resume_change_sets', 'resume_versions'],
+      phaseTables.map((row) => row.table_name),
+      [
+        'career_fact_claims',
+        'career_fact_evidence',
+        'career_fact_relations',
+        'career_facts',
+        'fact_review_events',
+        'resume_change_operations',
+        'resume_change_sets',
+        'resume_versions',
+        'source_documents',
+        'source_repositories',
+        'source_snapshots',
+      ],
     );
   } finally {
     await client.end();
@@ -143,10 +167,12 @@ async function main(): Promise<void> {
   const { llmProfileService } = await import('../src/lib/llm/service');
   const { resumeRepository } = await import('../src/lib/db/repositories/resume.repository');
   const { resumeChangeRepository } = await import('../src/lib/db/repositories/resume-change.repository');
+  const { careerRepository } = await import('../src/lib/db/repositories/career.repository');
   const { resumeChangeService } = await import('../src/lib/resume-patch/service');
   const { expectedHashForOperation } = await import('../src/lib/resume-patch/operations');
   const { resumePatchSchema } = await import('../src/lib/resume-patch/schema');
   const { parseResumeSnapshot } = await import('../src/lib/resume-patch/snapshot');
+  const { parseWorkResumeV2, toCareerSnapshotImport } = await import('../src/lib/career/workresume-v2');
   const { adapter } = await import('../src/lib/db');
   const originalPassword = 'Correct-Horse-Battery-2026!';
   const replacementPassword = 'Different-Correct-Horse-2026!';
@@ -228,6 +254,31 @@ async function main(): Promise<void> {
       (error: unknown) => (error as { code?: string }).code === 'PROFILE_NOT_FOUND',
     );
     assert.equal(await llmProfileRepository.findOwnedById(otherActor.userId, profile.id), null);
+
+    const parsedWorkResume = await parseWorkResumeV2(resolve('tests/fixtures/workresume-v2'));
+    const careerImport = toCareerSnapshotImport(admin.id, parsedWorkResume, {
+      commitSha: 'c'.repeat(40),
+      treeSha: 'd'.repeat(40),
+      defaultBranch: 'main',
+      externalRepositoryId: 'sha256:postgres-workresume-fixture',
+      displayName: 'PostgreSQL WorkResume Fixture',
+    });
+    const firstCareerImport = await careerRepository.importSnapshotOwned(careerImport);
+    const repeatedCareerImport = await careerRepository.importSnapshotOwned(careerImport);
+    assert.equal(firstCareerImport.alreadyImported, false);
+    assert.equal(firstCareerImport.factsCreated, 4);
+    assert.equal(repeatedCareerImport.alreadyImported, true);
+    assert.deepEqual(await careerRepository.listFactsOwned(otherActor.userId), []);
+    const careerFacts = await careerRepository.listFactsOwned(admin.id);
+    const approvedCareerFact = careerFacts.find(
+      (fact: { canonicalKey: string }) => fact.canonicalKey === 'skill:distributed-systems',
+    );
+    assert(approvedCareerFact);
+    await careerRepository.reviewFactOwned(admin.id, approvedCareerFact.id, 'approve', 'postgres verified');
+    const careerPolicy = await careerRepository.loadPolicyOwned(admin.id);
+    assert.deepEqual(careerPolicy.facts.map((fact) => fact.id), [approvedCareerFact.id]);
+    assert(careerPolicy.approvedEvidenceIds.size > 0);
+    assert(careerPolicy.forbiddenClaims.includes('Created the OpenTelemetry standard.'));
 
     const resume = await resumeRepository.createOwned(admin.id, {
       title: 'PostgreSQL ResumePatch',
@@ -313,7 +364,7 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write(
-    'PostgreSQL integration acceptance passed: legacy migration, auth lifecycle, encrypted LLM profile, ResumePatch apply/restore, and tenant isolation.\n',
+    'PostgreSQL integration acceptance passed: legacy migration, auth lifecycle, encrypted LLM profile, WorkResume knowledge import/review, ResumePatch apply/restore, and tenant isolation.\n',
   );
 }
 

@@ -102,10 +102,11 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 
 ### `source_repositories`
 
-- `user_id/source_connection_id`。
+- `user_id/source_type`；`source_type` 首期支持 `local-workresume`，Phase 5 增加 `github`。
+- `source_connection_id` 对本地只读导入可为空，GitHub App 同步时关联授权连接。
 - 外部不可变 Repository ID、`full_name`、默认分支。
-- 是否被用户选中、同步路径策略、最近 HEAD SHA。
-- `(source_connection_id, external_repository_id)` 唯一。
+- 是否被用户选中、最近 HEAD SHA 和最近同步时间。
+- `(user_id, source_type, external_repository_id)` 唯一；本地来源使用稳定内容寻址 ID，不保存本机绝对路径。
 
 ### `source_snapshots`
 
@@ -141,19 +142,31 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 | structured_data | 按 fact_type 校验的 JSON |
 | status | draft、approved、rejected、superseded |
 | confidence | 0 至 1，仅用于提示，不代替审核 |
-| supersedes_fact_id | 新版本指向旧事实 |
+| content_hash | 规范化事实内容哈希，用于幂等和版本判断 |
+| supersedes_fact_id/superseded_by_fact_id | 新旧事实双向版本关系 |
 | created_by | import、ai、user |
 | approved_by/approved_at | 审核记录 |
+| source_parser_id/source_parser_version | 创建该事实的解析器身份 |
 
 ### `career_fact_evidence`
 
 - `career_fact_id`。
-- `source_document_id` 或用户输入来源。
+- 必须关联 `source_document_id`，用户手工输入也需要先形成受控来源文档。
 - Commit SHA、路径、行区间或 JSON Pointer。
 - 引用内容哈希和简短证据摘要。
-- 解析器版本。
+- 解析器 ID、版本和 `stale` 状态。
 
-同一个事实可有多个证据，同一证据可支撑多个事实。
+同一个事实可有多个证据；相同来源定位可分别支撑多个事实，但每条关联均保留独立租户归属。
+
+### `career_fact_claims`
+
+- 保存 `allowed` 与 `forbidden` 两类陈述、规范化文本和内容哈希。
+- Approved Fact 的 allowed claim 可进入 ResumePatch 提示词；任何未 supersede 事实的 forbidden claim 都参与阻断夸大陈述。
+
+### `career_fact_relations`
+
+- 保存事实间显式关系；当前关系类型为 `merged-from`。
+- 合并先创建可审核 Draft，只有该 Draft 获批后才将来源事实标记为 superseded。
 
 ### `fact_review_events`
 

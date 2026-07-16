@@ -71,6 +71,13 @@
       "when": 1784214548356,
       "tag": "0009_goofy_spencer_smythe",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784221758007,
+      "tag": "0010_lonely_medusa",
+      "breakpoints": true
     }
   ]
 }

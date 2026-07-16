@@ -298,10 +298,14 @@ scenarios:
     when: 模型提出新增简历陈述
     then: 仅被批准且不触发禁止规则的内容可应用
     layers: [unit, integration, e2e]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/resume-patch/resume-patch.test.ts
       - src/lib/resume-patch/operations.ts
+      - src/lib/resume-patch/service.ts
+      - src/lib/db/repositories/career.repository.test.ts
+      - src/lib/db/repositories/resume-change.repository.test.ts
+      - scripts/test-postgres-integration.ts
 
   - id: ACC-AI-004
     requirement: AI-004
@@ -327,7 +331,14 @@ scenarios:
     when: 查询事实详情
     then: 可定位到 Commit、路径、位置、哈希和解析器版本
     layers: [unit, integration]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/db/schema.ts
+      - src/lib/db/pg-schema.ts
+      - src/lib/db/repositories/career.repository.test.ts
+      - src/app/api/career-facts/career-fact-routes.test.ts
+      - scripts/test-sqlite-migrations.ts
+      - scripts/test-postgres-integration.ts
 
   - id: ACC-KB-002
     requirement: KB-002
@@ -338,7 +349,12 @@ scenarios:
     when: 生成多个简历
     then: 只有 Approved 自动参与且可以跨简历复用
     layers: [integration, e2e]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/db/repositories/career.repository.test.ts
+      - src/lib/db/repositories/resume-change.repository.test.ts
+      - src/app/api/career-facts/career-fact-routes.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-MYR-001
     requirement: MYR-001
@@ -349,7 +365,13 @@ scenarios:
     when: 连续导入两次
     then: 黄金事实和证据一致且不产生重复
     layers: [unit, integration, golden]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/career/workresume-v2.test.ts
+      - src/lib/db/repositories/career.repository.test.ts
+      - tests/fixtures/workresume-v2
+      - tests/fixtures/workresume-v2.golden.json
+      - scripts/inspect-workresume.ts
 
   - id: ACC-GH-001
     requirement: GH-001

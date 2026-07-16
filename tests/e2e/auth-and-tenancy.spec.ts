@@ -240,6 +240,22 @@ test.beforeEach(async ({ context }) => {
   await installStableBrowserState(context);
 });
 
+test('career knowledge review workspace is authenticated and queries tenant-scoped facts', async ({ page }) => {
+  await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+  await page.goto('/en/knowledge');
+
+  await expect(page).toHaveURL(/\/en\/knowledge$/);
+  await expect(page.getByRole('heading', { name: 'Career Knowledge' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Knowledge' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible();
+  await expect(page.getByText('Review status')).toBeVisible();
+  await expect(page.getByText('Fact type')).toBeVisible();
+
+  const facts = await browserJson<unknown[]>(page, '/api/career-facts');
+  expect(facts.status).toBe(200);
+  expect(Array.isArray(facts.body)).toBe(true);
+});
+
 test('registration, invitation, login, logout, CSRF, and last-admin lifecycle', async ({ page }) => {
   const openUser = uniqueUsername('open-user');
   const invitedUser = uniqueUsername('invite-user');

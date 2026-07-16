@@ -8,6 +8,7 @@ import {
   ResumePatchValidationError,
 } from './operations';
 import { resumePatchSchema, type ResumePatchOperation } from './schema';
+import { buildResumePatchPrompt } from './service';
 import { canonicalJson, contentHash, type ResumeSnapshot } from './snapshot';
 
 function snapshot(): ResumeSnapshot {
@@ -58,6 +59,35 @@ function withHash<T extends ResumePatchOperation>(base: ResumeSnapshot, operatio
 }
 
 describe('ResumePatch v1', () => {
+  it('places only approved career evidence and blocking claims in the model prompt', () => {
+    const prompt = buildResumePatchPrompt(snapshot(), 'version-1', 'Tailor the resume', {
+      facts: [{
+        id: 'fact-approved',
+        factType: 'skill',
+        title: 'Distributed systems',
+        summary: 'Designed idempotent workflows.',
+        structuredData: { level: 'advanced' },
+        evidence: [{
+          id: 'evidence-approved',
+          commitSha: 'a'.repeat(40),
+          path: 'capabilities.json',
+          locator: '/capabilities/0',
+          contentHash: 'sha256:evidence',
+          summary: 'Synthetic evidence',
+        }],
+        allowedClaims: ['Can design idempotent workflows.'],
+      }],
+      approvedEvidenceIds: new Set(['evidence-approved']),
+      forbiddenClaims: ['Created the OpenTelemetry standard.'],
+    });
+
+    expect(prompt).toContain('"id":"fact-approved"');
+    expect(prompt).toContain('"evidenceId":"evidence-approved"');
+    expect(prompt).toContain('Can design idempotent workflows.');
+    expect(prompt).toContain('Created the OpenTelemetry standard.');
+    expect(prompt).toContain('Only facts inside approved_career_facts are reusable.');
+  });
+
   it('uses stable canonical hashes', () => {
     expect(canonicalJson({ b: 2, a: { d: 4, c: 3 } })).toBe('{"a":{"c":3,"d":4},"b":2}');
     expect(contentHash({ a: 1, b: 2 })).toBe(contentHash({ b: 2, a: 1 }));

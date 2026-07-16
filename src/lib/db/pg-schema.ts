@@ -141,6 +141,154 @@ export const llmFeatureBindings = pgTable('llm_feature_bindings', {
   index('llm_feature_bindings_profile_id_idx').on(table.llmProfileId),
 ]);
 
+export const sourceRepositories = pgTable('source_repositories', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceType: text('source_type').notNull(),
+  sourceConnectionId: text('source_connection_id'),
+  externalRepositoryId: text('external_repository_id').notNull(),
+  fullName: text('full_name').notNull(),
+  defaultBranch: text('default_branch').notNull().default('main'),
+  selected: integer('selected').notNull().default(1),
+  lastHeadSha: text('last_head_sha'),
+  lastSyncedAt: integer('last_synced_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('source_repositories_user_source_external_uq')
+    .on(table.userId, table.sourceType, table.externalRepositoryId),
+  index('source_repositories_user_id_idx').on(table.userId),
+]);
+
+export const sourceSnapshots = pgTable('source_snapshots', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceRepositoryId: text('source_repository_id').notNull()
+    .references(() => sourceRepositories.id, { onDelete: 'cascade' }),
+  commitSha: text('commit_sha').notNull(),
+  treeSha: text('tree_sha'),
+  parentSnapshotId: text('parent_snapshot_id'),
+  status: text('status').notNull().default('pending'),
+  parserId: text('parser_id').notNull(),
+  parserVersion: text('parser_version').notNull(),
+  errorCode: text('error_code'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  completedAt: integer('completed_at'),
+}, (table) => [
+  uniqueIndex('source_snapshots_repository_commit_uq').on(table.sourceRepositoryId, table.commitSha),
+  index('source_snapshots_user_id_idx').on(table.userId),
+]);
+
+export const sourceDocuments = pgTable('source_documents', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceSnapshotId: text('source_snapshot_id').notNull()
+    .references(() => sourceSnapshots.id, { onDelete: 'cascade' }),
+  path: text('path').notNull(),
+  blobSha: text('blob_sha'),
+  contentHash: text('content_hash').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  textContent: text('text_content'),
+  parseStatus: text('parse_status').notNull().default('ready'),
+  parserId: text('parser_id').notNull(),
+  parserVersion: text('parser_version').notNull(),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('source_documents_snapshot_path_uq').on(table.sourceSnapshotId, table.path),
+  index('source_documents_user_id_idx').on(table.userId),
+]);
+
+export const careerFacts = pgTable('career_facts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  factType: text('fact_type').notNull(),
+  canonicalKey: text('canonical_key').notNull(),
+  title: text('title').notNull(),
+  summary: text('summary').notNull().default(''),
+  structuredData: text('structured_data').notNull().default('{}'),
+  status: text('status').notNull().default('draft'),
+  confidenceBasisPoints: integer('confidence_basis_points').notNull().default(0),
+  contentHash: text('content_hash').notNull(),
+  supersedesFactId: text('supersedes_fact_id'),
+  supersededByFactId: text('superseded_by_fact_id'),
+  createdBy: text('created_by').notNull().default('import'),
+  approvedBy: text('approved_by').references(() => users.id, { onDelete: 'set null' }),
+  approvedAt: integer('approved_at'),
+  sourceParserId: text('source_parser_id'),
+  sourceParserVersion: text('source_parser_version'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('career_facts_user_key_hash_uq').on(table.userId, table.canonicalKey, table.contentHash),
+  index('career_facts_user_status_type_idx').on(table.userId, table.status, table.factType),
+  index('career_facts_supersedes_idx').on(table.supersedesFactId),
+]);
+
+export const careerFactEvidence = pgTable('career_fact_evidence', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  careerFactId: text('career_fact_id').notNull().references(() => careerFacts.id, { onDelete: 'cascade' }),
+  sourceDocumentId: text('source_document_id').notNull()
+    .references(() => sourceDocuments.id, { onDelete: 'cascade' }),
+  commitSha: text('commit_sha').notNull(),
+  path: text('path').notNull(),
+  locator: text('locator').notNull(),
+  contentHash: text('content_hash').notNull(),
+  excerptHash: text('excerpt_hash'),
+  summary: text('summary').notNull().default(''),
+  parserId: text('parser_id').notNull(),
+  parserVersion: text('parser_version').notNull(),
+  stale: integer('stale').notNull().default(0),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('career_fact_evidence_fact_document_locator_hash_uq')
+    .on(table.careerFactId, table.sourceDocumentId, table.locator, table.contentHash),
+  index('career_fact_evidence_user_fact_idx').on(table.userId, table.careerFactId),
+]);
+
+export const careerFactClaims = pgTable('career_fact_claims', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  careerFactId: text('career_fact_id').notNull().references(() => careerFacts.id, { onDelete: 'cascade' }),
+  claimType: text('claim_type').notNull(),
+  claim: text('claim').notNull(),
+  normalizedClaim: text('normalized_claim').notNull(),
+  contentHash: text('content_hash').notNull(),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('career_fact_claims_fact_type_normalized_uq')
+    .on(table.careerFactId, table.claimType, table.normalizedClaim),
+  index('career_fact_claims_user_fact_idx').on(table.userId, table.careerFactId),
+]);
+
+export const careerFactRelations = pgTable('career_fact_relations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  careerFactId: text('career_fact_id').notNull().references(() => careerFacts.id, { onDelete: 'cascade' }),
+  relatedFactId: text('related_fact_id').notNull().references(() => careerFacts.id, { onDelete: 'cascade' }),
+  relationType: text('relation_type').notNull(),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('career_fact_relations_fact_related_type_uq')
+    .on(table.careerFactId, table.relatedFactId, table.relationType),
+  index('career_fact_relations_user_fact_idx').on(table.userId, table.careerFactId),
+]);
+
+export const factReviewEvents = pgTable('fact_review_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  careerFactId: text('career_fact_id').notNull().references(() => careerFacts.id, { onDelete: 'cascade' }),
+  actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  beforeState: text('before_state'),
+  afterState: text('after_state'),
+  note: text('note'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  index('fact_review_events_user_fact_created_idx').on(table.userId, table.careerFactId, table.createdAt),
+]);
+
 export const resumes = pgTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull(),

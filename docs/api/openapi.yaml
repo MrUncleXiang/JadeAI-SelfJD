@@ -634,7 +634,7 @@ paths:
       tags: [Knowledge]
       operationId: listCareerFacts
       x-requirement-id: KB-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - name: status
           in: query
@@ -643,7 +643,7 @@ paths:
         - name: type
           in: query
           schema:
-            type: string
+            $ref: '#/components/schemas/FactType'
       responses:
         '200':
           description: User-owned facts
@@ -653,13 +653,79 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CareerFact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/career-facts/merge:
+    post:
+      tags: [Knowledge]
+      operationId: mergeCareerFacts
+      x-requirement-id: KB-002
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [factIds, factType, title, summary]
+              properties:
+                factIds:
+                  type: array
+                  minItems: 2
+                  maxItems: 20
+                  uniqueItems: true
+                  items:
+                    type: string
+                    format: uuid
+                factType:
+                  $ref: '#/components/schemas/FactType'
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                summary:
+                  type: string
+                  maxLength: 5000
+                structuredData:
+                  type: object
+      responses:
+        '201':
+          description: Reviewable merged draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerFact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
   /api/career-facts/{factId}:
+    get:
+      tags: [Knowledge]
+      operationId: getCareerFact
+      x-requirement-id: KB-001
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/FactId'
+      responses:
+        '200':
+          description: User-owned fact with provenance and review history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerFact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
     patch:
       tags: [Knowledge]
       operationId: updateCareerFact
       x-requirement-id: KB-002
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/FactId'
       requestBody:
@@ -669,11 +735,14 @@ paths:
             schema:
               type: object
               additionalProperties: false
+              minProperties: 1
               properties:
                 title:
                   type: string
+                  maxLength: 200
                 summary:
                   type: string
+                  maxLength: 5000
                 structuredData:
                   type: object
       responses:
@@ -683,6 +752,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CareerFact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -691,7 +762,7 @@ paths:
       tags: [Knowledge]
       operationId: reviewCareerFact
       x-requirement-id: KB-002
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/FactId'
       requestBody:
@@ -716,6 +787,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CareerFact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /api/resumes/{resumeId}/change-sets:
     get:
@@ -1453,15 +1530,39 @@ components:
       type: string
       enum: [draft, approved, rejected, superseded]
 
+    FactType:
+      type: string
+      enum: [profile, employment, project, skill, education, certificate, achievement]
+
     CareerFact:
       type: object
       additionalProperties: false
-      required: [id, factType, title, status, evidence]
+      required:
+        - id
+        - factType
+        - canonicalKey
+        - title
+        - summary
+        - structuredData
+        - status
+        - confidence
+        - contentHash
+        - supersedesFactId
+        - supersededByFactId
+        - createdBy
+        - approvedAt
+        - createdAt
+        - updatedAt
+        - evidence
+        - claims
+        - reviewEvents
       properties:
         id:
           type: string
           format: uuid
         factType:
+          $ref: '#/components/schemas/FactType'
+        canonicalKey:
           type: string
         title:
           type: string
@@ -1475,23 +1576,114 @@ components:
           type: number
           minimum: 0
           maximum: 1
+        contentHash:
+          type: string
+        supersedesFactId:
+          type: [string, 'null']
+          format: uuid
+        supersededByFactId:
+          type: [string, 'null']
+          format: uuid
+        createdBy:
+          type: string
+          enum: [import, ai, user]
+        approvedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
         evidence:
           type: array
           items:
-            type: object
-            required: [sourceDocumentId, contentHash]
-            properties:
-              sourceDocumentId:
-                type: string
-                format: uuid
-              commitSha:
-                type: string
-              path:
-                type: string
-              locator:
-                type: string
-              contentHash:
-                type: string
+            $ref: '#/components/schemas/CareerEvidence'
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/CareerClaim'
+        reviewEvents:
+          type: array
+          items:
+            $ref: '#/components/schemas/CareerReviewEvent'
+
+    CareerEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceDocumentId
+        - commitSha
+        - path
+        - locator
+        - contentHash
+        - excerptHash
+        - summary
+        - parserId
+        - parserVersion
+        - stale
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceDocumentId:
+          type: string
+          format: uuid
+        commitSha:
+          type: string
+        path:
+          type: string
+        locator:
+          type: string
+        contentHash:
+          type: string
+        excerptHash:
+          type: [string, 'null']
+        summary:
+          type: string
+        parserId:
+          type: string
+        parserVersion:
+          type: string
+        stale:
+          type: boolean
+
+    CareerClaim:
+      type: object
+      additionalProperties: false
+      required: [id, type, claim]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [allowed, forbidden]
+        claim:
+          type: string
+
+    CareerReviewEvent:
+      type: object
+      additionalProperties: false
+      required: [id, action, beforeState, afterState, note, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [imported, edited, approved, rejected, merged, superseded]
+        beforeState:
+          type: [object, 'null']
+        afterState:
+          type: [object, 'null']
+        note:
+          type: [string, 'null']
+        createdAt:
+          type: [string, 'null']
+          format: date-time
 
     ResumePatchCandidate:
       type: object

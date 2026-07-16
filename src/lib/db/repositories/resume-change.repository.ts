@@ -53,6 +53,7 @@ type CreateChangeSetInput = {
   llmProfileId?: string | null;
   provider?: string | null;
   modelName?: string | null;
+  promptVersion?: string | null;
   requestId?: string | null;
   rawModelOutput?: string | null;
 };
@@ -368,6 +369,7 @@ export const resumeChangeRepository = {
       llmProfileId: input.llmProfileId || null,
       provider: input.provider || null,
       modelName: input.modelName || null,
+      promptVersion: input.promptVersion || 'resume-patch-v1',
       requestId: input.requestId || null,
       summary: input.patch.summary,
       warnings: input.patch.warnings,

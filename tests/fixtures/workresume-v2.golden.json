@@ -1,0 +1,43 @@
+{
+  "aggregateHash": "sha256:df3084a0d6ee74d333b5d655179562a9115e01da5586b7c28923ba4206ba77a2",
+  "documentCount": 7,
+  "factCount": 4,
+  "facts": [
+    {
+      "canonicalKey": "skill:distributed-systems",
+      "factType": "skill",
+      "title": "分布式系统",
+      "evidenceCount": 1,
+      "allowedClaims": 1,
+      "forbiddenClaims": 1,
+      "contentHash": "sha256:c91bcb9b7fb09099ef3b8a8ac4cd4700cbd48f519b1b545ceecd68f9cf45c39a"
+    },
+    {
+      "canonicalKey": "skill:observability",
+      "factType": "skill",
+      "title": "可观测性",
+      "evidenceCount": 1,
+      "allowedClaims": 1,
+      "forbiddenClaims": 1,
+      "contentHash": "sha256:d974cba68203fb90ed3783f42cfce7841677b76bfde9ec1e653c9c890a572d98"
+    },
+    {
+      "canonicalKey": "project:9dee1c0ed39ef4e2686f974b",
+      "factType": "project",
+      "title": "Atlas",
+      "evidenceCount": 2,
+      "allowedClaims": 2,
+      "forbiddenClaims": 2,
+      "contentHash": "sha256:e4630e34e68efba32a5a65dfc095f0c992bb99b437c5afd015eea2c604d0d53f"
+    },
+    {
+      "canonicalKey": "project:c0973e9afb7dacf07ec29ee3",
+      "factType": "project",
+      "title": "Beacon",
+      "evidenceCount": 1,
+      "allowedClaims": 1,
+      "forbiddenClaims": 1,
+      "contentHash": "sha256:21987771cbed8995004d7d71e800429589da8db2fbb761042ad75bd84cb01b46"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 3 ResumePatch 核心切片与自动化验收完成；等待人工评审并继续迁移遗留 AI 直写 Route
+状态：Phase 4 职业知识库、WorkResume v2 和 ResumePatch 证据闭环已实现，阶段 Gate 已通过；下一阶段为 Phase 5 GitHub App 与增量同步
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -151,7 +151,7 @@ Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 7. [x] 将现有 Chat Tool 改造成显式“提出变更”，普通对话禁止直接写库。
 8. [ ] 提案编辑后重校验及显式拒绝动作。
 9. [ ] 将旧翻译覆盖模式和 AI 初始简历生成迁移到 Change Set/受控导入边界。
-10. [ ] 接入 Phase 4 Approved Fact/Forbidden Claim 与 Phase 6 JD Requirement 真实数据源。
+10. [ ] 接入真实数据源：Phase 4 Approved Fact/Forbidden Claim 已完成；Phase 6 JD Requirement 待实现。
 
 自动测试：
 
@@ -169,7 +169,7 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - AI Chat 已完全移除仓储写入 Tool；“生成提案”与普通聊天分离，提案持久化不会修改在线简历。
 - 真实浏览器已覆盖 `candidate -> 审阅 -> 只应用选中项 -> 恢复 Version 1`，并验证 Change Set 历史仍可查询。
 - SQLite 空库/旧库迁移和真实 PostgreSQL 临时实例均已覆盖新增三张表及 Apply/Restore 流程。
-- Gate 仍为 **partial**：上游遗留 `/api/ai/translate` 与 `/api/ai/generate-resume` 尚未迁移，Phase 4 事实库也尚未提供 AI-003 的真实证据闭环。
+- Gate 仍为 **partial**：Phase 4 已提供 AI-003 的真实事实证据闭环；上游遗留 `/api/ai/translate` 与 `/api/ai/generate-resume` 尚未迁移，Phase 6 JD Requirement 也尚未接入。
 
 自动化证据（2026-07-16）：
 
@@ -184,12 +184,12 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 
 实现：
 
-1. Source Snapshot、Document、Career Fact、Evidence 和 Review Schema。
-2. 事实列表、详情、编辑、批准、拒绝和合并 UI。
-3. WorkResume v2 JSON/Markdown 解析器。
-4. `allowedClaims` 和 `forbiddenClaims` 策略。
-5. 合成 Fixture 和黄金输出。
-6. 本地私有 `MyUnityResume` 只读验收命令。
+1. [x] Source Repository、Snapshot、Document、Career Fact、Evidence、Claim、Relation 和 Review Schema。
+2. [x] 事实列表、详情、编辑、批准、拒绝和合并 UI。
+3. [x] WorkResume v2 JSON/Markdown 解析器与安全路径/文本边界。
+4. [x] `allowedClaims`、`forbiddenClaims` 和 ResumePatch 应用前重校验策略。
+5. [x] 合成 Fixture、黄金输出和重复导入幂等测试。
+6. [x] 本地私有 `MyUnityResume` 干净 Git Commit 绑定的只读验收命令。
 
 自动测试：
 
@@ -200,6 +200,22 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - 黄金文件对比。
 
 人工 Gate：用真实本地仓库检查事实质量，但不将个人内容写入测试日志。
+
+当前进度（2026-07-16）：
+
+- SQLite/PostgreSQL 前向迁移和租户化仓储已覆盖来源、快照、文档、事实、证据、Claim、合并关系与审核事件。
+- `/knowledge` 提供状态/类型筛选、来源定位、编辑版本、批准、拒绝和合并；GitHub 授权与自动增量同步明确保留到 Phase 5。
+- WorkResume v2 只读取受配置约束的已跟踪 UTF-8 文本，拒绝符号链接、秘密文件名、越界路径、二进制内容、脏工作树和未跟踪文档。
+- Approved Evidence 可跨简历复用；ResumePatch 在提案和应用时加载策略，事实撤销后不会把旧提案写入在线简历。
+- 私有 `MyUnityResume` 只读检查已在不输出个人正文和绝对路径的前提下完成，个人仓库不会进入公开 Fixture。
+
+自动化证据（2026-07-16）：
+
+- `pnpm test`：29 个测试文件、137 个测试通过；覆盖解析 golden、重复导入、状态机、租户隔离、API 生命周期、无效筛选错误关联、跨简历复用和应用前证据撤销。
+- `pnpm test:e2e`：6 个真实浏览器场景通过，新增 `/knowledge` 登录保护、页面渲染和租户化事实查询。
+- `pnpm test:migration` 与真实临时 PostgreSQL `pnpm test:integration` 通过，验证旧库升级、八张知识库表和 WorkResume 导入/审核。
+- `pnpm type-check`、聚焦 ESLint、`pnpm spec:check` 和 `pnpm build` 通过。
+- 私有仓库只读检查：19 个文档、46 条事实、142 条证据、445 条声明；聚合哈希 `sha256:bb1dbd6e2dc95a5b89efce2de58050a4ea52e68ddbcec99f97104154cb3c6335`，无警告代码。
 
 ## 8. Phase 5：GitHub App 与增量同步
 

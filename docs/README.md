@@ -8,7 +8,7 @@
 - 上游仓库：`LingyiChen-AI/JadeAI`
 - 上游版本：`v0.4.1`
 - 上游提交：`ca38294960e4b6f8a1ba66d0106059fcf97c323c`
-- 本地开发分支：`codex/phase-2-llm-profiles`
+- 本地开发分支：`codex/phase-4-career-kb`
 - 生产安装 `/home/ubuntu/apps/JadeAI` 不在本次开发中直接修改
 
 ## 产品与需求
@@ -24,6 +24,7 @@
 - [用户级 LLM 档案](architecture/llm-profiles.md)
 - [GitHub 同步](architecture/github-sync.md)
 - [AI 简历变更协议](architecture/ai-resume-patch.md)
+- [职业知识库与 WorkResume v2 导入](architecture/career-knowledge-base.md)
 - [JD 导入与定向简历](architecture/jd-ingestion.md)
 - [威胁模型](security/threat-model.md)
 - [OpenAPI 活契约](api/openapi.yaml)

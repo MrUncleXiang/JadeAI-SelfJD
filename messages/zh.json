@@ -278,9 +278,18 @@
       "clear": "清除",
       "dateDisplay": "{year}年{month}",
       "months": {
-        "01": "1月", "02": "2月", "03": "3月", "04": "4月",
-        "05": "5月", "06": "6月", "07": "7月", "08": "8月",
-        "09": "9月", "10": "10月", "11": "11月", "12": "12月"
+        "10": "10月",
+        "11": "11月",
+        "12": "12月",
+        "01": "1月",
+        "02": "2月",
+        "03": "3月",
+        "04": "4月",
+        "05": "5月",
+        "06": "6月",
+        "07": "7月",
+        "08": "8月",
+        "09": "9月"
       }
     }
   },
@@ -1026,6 +1035,69 @@
       "project_deep_dive": "项目深挖",
       "leader": "Leader面",
       "custom": "自定义"
+    }
+  },
+  "knowledge": {
+    "nav": "事实库",
+    "title": "职业事实库",
+    "description": "审核从个人信息仓库提取的事实、证据和声明。只有已批准事实可以进入 AI 简历上下文；禁止声明始终用于阻断夸大内容。",
+    "refresh": "刷新",
+    "requestFailed": "操作失败",
+    "statusFilter": "审核状态",
+    "typeFilter": "事实类型",
+    "allStatuses": "全部状态",
+    "allTypes": "全部类型",
+    "mergeSelected": "合并所选（{count}）",
+    "emptyTitle": "还没有职业事实",
+    "emptyDescription": "可先使用只读 WorkResume v2 导入命令创建待审核事实；GitHub 授权与自动同步将在下一阶段接入。",
+    "noSummary": "暂无摘要",
+    "evidence": "证据（{count}）",
+    "confidence": "置信度 {value}%",
+    "moreEvidence": "另有 {count} 条证据",
+    "contentHash": "内容哈希：{hash}",
+    "allowedClaims": "允许声明（{count}）",
+    "forbiddenClaims": "禁止声明（{count}）",
+    "selectFact": "选择事实：{title}",
+    "edit": "编辑",
+    "approve": "批准",
+    "reject": "拒绝",
+    "factApproved": "事实已批准，可供 AI 使用",
+    "factRejected": "事实已拒绝",
+    "factUpdated": "草稿已更新",
+    "newDraftCreated": "已创建新版本草稿，原审核版本保持不变",
+    "mergeDraftCreated": "合并草稿已创建，请审核后再使用",
+    "editTitle": "编辑职业事实",
+    "editDraftDescription": "草稿会原地更新，并保留审核事件。",
+    "editVersionDescription": "修改已审核事实会创建新草稿；批准新草稿后旧版本才会被替代。",
+    "factTitle": "标题",
+    "factSummary": "摘要",
+    "structuredData": "结构化数据（JSON 对象）",
+    "invalidStructuredData": "结构化数据必须是有效的 JSON 对象",
+    "save": "保存",
+    "cancel": "取消",
+    "mergeTitle": "合并职业事实",
+    "mergeDescription": "将 {count} 条事实的证据和声明去重后创建一个待审核草稿。原事实只有在新草稿批准后才会被替代。",
+    "factType": "事实类型",
+    "createMergeDraft": "创建合并草稿",
+    "status": {
+      "draft": "待审核",
+      "approved": "已批准",
+      "rejected": "已拒绝",
+      "superseded": "已替代"
+    },
+    "type": {
+      "profile": "个人信息",
+      "employment": "工作经历",
+      "project": "项目",
+      "skill": "技能",
+      "education": "教育",
+      "certificate": "证书",
+      "achievement": "成果"
+    },
+    "createdBy": {
+      "import": "仓库导入",
+      "ai": "AI 生成",
+      "user": "用户编辑"
     }
   }
 }

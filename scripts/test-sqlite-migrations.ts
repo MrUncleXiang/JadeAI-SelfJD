@@ -85,6 +85,14 @@ function testFreshInstall(): void {
     'resume_versions',
     'resume_change_sets',
     'resume_change_operations',
+    'source_repositories',
+    'source_snapshots',
+    'source_documents',
+    'career_facts',
+    'career_fact_evidence',
+    'career_fact_claims',
+    'career_fact_relations',
+    'fact_review_events',
   ]) {
     assert(tables.has(table), `fresh migration is missing table ${table}`);
   }
@@ -133,7 +141,19 @@ function testLegacyUpgrade(): void {
     (sqlite.prepare('SELECT title FROM resumes WHERE id = ?').get('legacy-resume') as { title: string }).title,
     'Preserved resume',
   );
-  for (const table of ['resume_versions', 'resume_change_sets', 'resume_change_operations']) {
+  for (const table of [
+    'resume_versions',
+    'resume_change_sets',
+    'resume_change_operations',
+    'source_repositories',
+    'source_snapshots',
+    'source_documents',
+    'career_facts',
+    'career_fact_evidence',
+    'career_fact_claims',
+    'career_fact_relations',
+    'fact_review_events',
+  ]) {
     assert.equal(
       (sqlite.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { count: number }).count,
       1,

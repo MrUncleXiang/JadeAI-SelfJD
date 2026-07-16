@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "poolType": "verified-capability-terms",
+  "lastUpdated": "2026-07-16",
+  "terms": [
+    {
+      "id": "distributed-systems",
+      "canonicalName": "Distributed Systems",
+      "chineseName": "分布式系统",
+      "category": "backend",
+      "aliases": ["distributed architecture"],
+      "projectEvidence": [
+        {
+          "project": "Atlas",
+          "strength": "strong",
+          "ownership": "owner",
+          "claim": "Designed the idempotent job orchestration flow.",
+          "evidenceRefs": ["src/jobs/orchestrator.ts:42"]
+        },
+        {
+          "project": "Beacon",
+          "strength": "medium",
+          "ownership": "contributor",
+          "claim": "Implemented bounded retry behavior.",
+          "evidenceRefs": ["src/retry.ts:18"]
+        }
+      ],
+      "allowedClaims": ["Can design idempotent distributed workflows."],
+      "forbiddenClaims": ["Operated a million-node cluster."],
+      "interviewAngles": ["Explain retry and idempotency trade-offs."],
+      "lastVerified": "2026-07-16"
+    },
+    {
+      "id": "observability",
+      "canonicalName": "Observability",
+      "chineseName": "可观测性",
+      "category": "platform",
+      "aliases": ["telemetry"],
+      "projectEvidence": [
+        {
+          "project": "Atlas",
+          "strength": "medium",
+          "ownership": "owner",
+          "claim": "Built trace correlation for asynchronous jobs.",
+          "evidenceRefs": ["src/telemetry/tracing.ts:27"]
+        }
+      ],
+      "allowedClaims": ["Can build traceable asynchronous services."],
+      "forbiddenClaims": ["Created the OpenTelemetry standard."],
+      "interviewAngles": ["Describe trace propagation across queues."],
+      "lastVerified": "2026-07-16"
+    }
+  ]
+}

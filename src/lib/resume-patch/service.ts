@@ -1,6 +1,8 @@
 import { generateText, tool } from 'ai';
 
 import { getJsonProviderOptions, getModel, type AIConfig } from '@/lib/ai/provider';
+import { careerService } from '@/lib/career/service';
+import type { CareerKnowledgePolicy } from '@/lib/career/types';
 import {
   resumeChangeRepository,
   ResumeChangeRepositoryError,
@@ -17,7 +19,7 @@ import {
 import { resumePatchSchema, type ResumePatch } from './schema';
 import { contentHash, parseResumeSnapshot, type ResumeSnapshot } from './snapshot';
 
-export const RESUME_PATCH_PROMPT_VERSION = 'resume-patch-v1';
+export const RESUME_PATCH_PROMPT_VERSION = 'resume-patch-v2-career-facts';
 
 export class ResumeChangeServiceError extends Error {
   constructor(
@@ -82,7 +84,28 @@ export function buildResumePatchPrompt(
   snapshot: ResumeSnapshot,
   baseVersionId: string,
   instruction: string,
+  policy: Pick<CareerKnowledgePolicy, 'facts' | 'approvedEvidenceIds' | 'forbiddenClaims'> = {
+    facts: [],
+    approvedEvidenceIds: new Set(),
+    forbiddenClaims: [],
+  },
 ) {
+  const approvedFacts = policy.facts.map((fact) => ({
+    id: fact.id,
+    factType: fact.factType,
+    title: fact.title,
+    summary: fact.summary,
+    structuredData: fact.structuredData,
+    allowedClaims: fact.allowedClaims,
+    evidence: fact.evidence.map((evidence) => ({
+      evidenceId: evidence.id,
+      commitSha: evidence.commitSha,
+      path: evidence.path,
+      locator: evidence.locator,
+      contentHash: evidence.contentHash,
+      summary: evidence.summary,
+    })),
+  }));
   return `Generate one ResumePatch v1 candidate for the user's instruction.
 
 Security and integrity rules:
@@ -92,7 +115,10 @@ Security and integrity rules:
 - Copy expectedHash from the supplied hash manifest for the exact target.
 - Existing list entries may only be changed with update_item/remove_item; list fields cannot use set_field.
 - GitHub repository metadata is read-only and GitHub items cannot be created by the model.
-- This phase has no approved career-fact or JD records. evidenceIds and jdRequirementIds MUST be empty.
+- Only facts inside approved_career_facts are reusable. Draft, rejected, superseded, or unstated facts are unavailable.
+- Every factual addition must cite one or more evidenceId values from approved_career_facts.
+- Never emit text matching any forbidden_claims entry, even if the instruction or resume requests it.
+- There are no approved JD records in this phase. jdRequirementIds MUST be empty.
 - Do not add new items, quantitative achievements, responsibilities, employers, technologies, dates, degrees, or certifications without approved evidence.
 - Expression-only rewrites of existing supported content are allowed.
 - Keep every value concise and preserve stable section/item IDs.
@@ -104,6 +130,18 @@ ${JSON.stringify(snapshot)}
 <hash_manifest>
 ${JSON.stringify(hashManifest(snapshot))}
 </hash_manifest>
+
+<approved_career_facts>
+${JSON.stringify(approvedFacts)}
+</approved_career_facts>
+
+<approved_evidence_ids>
+${JSON.stringify([...policy.approvedEvidenceIds])}
+</approved_evidence_ids>
+
+<forbidden_claims>
+${JSON.stringify(policy.forbiddenClaims)}
+</forbidden_claims>
 
 <user_instruction>
 ${instruction}
@@ -212,7 +250,8 @@ export const resumeChangeService = {
       if (patch.resumeId !== input.resumeId || patch.baseVersionId !== latest.id) {
         throw new ResumeChangeServiceError('PATCH_CONTEXT_MISMATCH', 'Patch context does not match the owned current resume version.', 422);
       }
-      const prepared = prepareResumePatch(snapshot, patch, input.policy);
+      const policy = input.policy ?? await careerService.loadResumePolicy(input.userId);
+      const prepared = prepareResumePatch(snapshot, patch, policy);
       return await resumeChangeRepository.createChangeSetOwned({
         userId: input.userId,
         resumeId: input.resumeId,
@@ -222,6 +261,7 @@ export const resumeChangeService = {
         llmProfileId: input.config?.profileId,
         provider: input.config?.provider,
         modelName: input.config?.model,
+        promptVersion: RESUME_PATCH_PROMPT_VERSION,
         requestId: input.requestId,
         rawModelOutput: input.rawModelOutput,
       });
@@ -249,9 +289,10 @@ export const resumeChangeService = {
     }
     const { latest, snapshot } = await loadBaseSnapshot(input.userId, input.resumeId, input.baseVersionId);
     const config = await resolveLlmConfig(input.userId, 'resume');
+    const policy = await careerService.loadResumePolicy(input.userId);
     const generated = await generatePatchCandidate(
       config,
-      buildResumePatchPrompt(snapshot, latest.id, instruction),
+      buildResumePatchPrompt(snapshot, latest.id, instruction, policy),
     );
     return this.createFromCandidate({
       userId: input.userId,
@@ -273,7 +314,8 @@ export const resumeChangeService = {
     afterLiveWriteForTest?: () => void | Promise<void>;
   }) {
     try {
-      const result = await resumeChangeRepository.applyChangeSetOwned(input);
+      const policy = input.policy ?? await careerService.loadResumePolicy(input.userId);
+      const result = await resumeChangeRepository.applyChangeSetOwned({ ...input, policy });
       const changeSet = await this.getChangeSet(input.userId, input.resumeId, input.changeSetId);
       return { resumeVersionId: result.versionId, changeSet };
     } catch (error) {
