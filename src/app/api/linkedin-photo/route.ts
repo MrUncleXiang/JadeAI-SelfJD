@@ -1,26 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { AIConfigError } from '@/lib/ai/provider';
+import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 
 export const maxDuration = 60;
-
-const GEMINI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+const MAX_IMAGE_INPUT_CHARS = 15 * 1024 * 1024;
+const MAX_PROMPT_CHARS = 8_000;
+const ALLOWED_ASPECT_RATIOS = new Set(['1:1', '3:4', '2:3', '4:3']);
 
 export async function POST(request: NextRequest) {
   try {
-    const { image, prompt, requirements, aspectRatio, apiKey } = await request.json();
+    const user = await resolveUser(getUserIdFromRequest(request));
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { image, prompt, requirements, aspectRatio } = await request.json();
 
-    if (!apiKey || typeof apiKey !== 'string') {
+    if (!image || typeof image !== 'string' || image.length > MAX_IMAGE_INPUT_CHARS) {
       return NextResponse.json(
-        { error: 'API Key is required' },
+        { error: 'Image is required and must not exceed the upload limit' },
         { status: 400 }
       );
     }
+    if (
+      typeof prompt !== 'string'
+      || prompt.length === 0
+      || prompt.length > MAX_PROMPT_CHARS
+      || (requirements !== undefined && (
+        typeof requirements !== 'string' || requirements.length > MAX_PROMPT_CHARS
+      ))
+      || (aspectRatio !== undefined && (
+        typeof aspectRatio !== 'string' || !ALLOWED_ASPECT_RATIOS.has(aspectRatio)
+      ))
+    ) {
+      return NextResponse.json({ error: 'Invalid prompt' }, { status: 400 });
+    }
 
-    if (!image || typeof image !== 'string') {
-      return NextResponse.json(
-        { error: 'Image is required' },
-        { status: 400 }
-      );
+    const aiConfig = await resolveLlmConfig(user.id, 'vision');
+    if (aiConfig.provider !== 'gemini') {
+      return NextResponse.json({
+        code: 'LLM_PROFILE_PROVIDER_UNSUPPORTED',
+        error: 'LinkedIn photo generation requires a Gemini image-generation profile bound to vision.',
+      }, { status: 422 });
     }
 
     // Build final prompt with aspect ratio and requirements
@@ -39,9 +58,14 @@ export async function POST(request: NextRequest) {
 
     // Gemini REST API accepts both camelCase and snake_case in requests,
     // but we use camelCase to match the canonical proto-JSON format.
-    const res = await fetch(`${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
+    const modelName = aiConfig.model.replace(/^models\//, '');
+    const endpoint = `${aiConfig.baseURL.replace(/\/$/, '')}/models/${encodeURIComponent(modelName)}:generateContent`;
+    const res = await (aiConfig.fetch || fetch)(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': aiConfig.apiKey,
+      },
       body: JSON.stringify({
         contents: [
           {
@@ -63,18 +87,18 @@ export async function POST(request: NextRequest) {
     });
 
     if (!res.ok) {
-      const errBody = await res.text();
-      console.error('Gemini API error:', res.status, errBody);
+      await res.body?.cancel();
+      console.error('Gemini image provider error:', res.status);
 
       if (res.status === 400 || res.status === 403) {
         return NextResponse.json(
-          { error: 'invalid_key', detail: errBody },
+          { error: 'invalid_key' },
           { status: 400 }
         );
       }
 
       return NextResponse.json(
-        { error: 'generate_failed', detail: errBody },
+        { error: 'generate_failed' },
         { status: res.status }
       );
     }
@@ -92,7 +116,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      console.error('Gemini empty response:', JSON.stringify(data).slice(0, 500));
+      console.error('Gemini image provider returned no content:', finishReason || 'UNKNOWN');
       return NextResponse.json(
         { error: 'generate_failed', detail: 'No content in response' },
         { status: 500 }
@@ -116,7 +140,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!resultImage) {
-      console.error('Gemini no image in parts:', JSON.stringify(parts.map((p: Record<string, unknown>) => Object.keys(p))));
+      console.error('Gemini image provider returned no image part');
       return NextResponse.json(
         { error: 'generate_failed', detail: 'No image in response' },
         { status: 500 }
@@ -125,9 +149,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ image: resultImage, text: resultText });
   } catch (err) {
-    console.error('LinkedIn photo generation error:', err);
+    if (err instanceof AIConfigError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message },
+        { status: err.status },
+      );
+    }
+    console.error('LinkedIn photo generation error:', err instanceof Error ? err.name : 'UnknownError');
     return NextResponse.json(
-      { error: 'generate_failed', detail: String(err) },
+      { error: 'generate_failed' },
       { status: 500 }
     );
   }

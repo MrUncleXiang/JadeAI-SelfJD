@@ -22,6 +22,11 @@ const env = {
   REGISTRATION_MODE: 'closed',
   DB_TYPE: 'sqlite',
   SQLITE_PATH: databasePath,
+  LLM_ENCRYPTION_KEYS: JSON.stringify({
+    1: 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=',
+  }),
+  LLM_ENCRYPTION_ACTIVE_KEY_VERSION: '1',
+  LLM_BASE_URL_ALLOWLIST: '',
 };
 
 const bootstrap = spawnSync(

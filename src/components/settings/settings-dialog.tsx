@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useLocale } from 'next-intl';
 import { useTheme } from 'next-themes';
-import { Settings, Cpu, Paintbrush, PenTool, Eye, EyeOff, Sun, Moon, Monitor, ChevronsUpDown, Check, Loader2, UserRound } from 'lucide-react';
+import { Settings, Cpu, Paintbrush, PenTool, Sun, Moon, Monitor, UserRound } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -25,25 +24,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUIStore } from '@/stores/ui-store';
-import { useSettingsStore, getAIHeaders, type AIProvider } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useTourStore } from '@/stores/tour-store';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { locales, localeNames } from '@/i18n/config';
-import { cn } from '@/lib/utils';
 import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
 import { AccountSettings } from './account-settings';
-
-const AI_PROVIDERS: { value: AIProvider; label: string }[] = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'gemini', label: 'Google Gemini' },
-];
+import { LlmProfileSettings } from './llm-profile-settings';
 
 export function SettingsDialog() {
   const t = useTranslations('settings');
-  const tCommon = useTranslations('common');
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -51,16 +42,8 @@ export function SettingsDialog() {
   const { authEnabled } = useRuntimeConfig();
   const { activeModal, closeModal, settingsTab, setSettingsTab } = useUIStore();
   const {
-    aiProvider,
-    aiApiKey,
-    aiBaseURL,
-    aiModel,
     autoSave,
     autoSaveInterval,
-    setAIProvider,
-    setAIApiKey,
-    setAIBaseURL,
-    setAIModel,
     setAutoSave,
     setAutoSaveInterval,
     hydrate,
@@ -68,70 +51,13 @@ export function SettingsDialog() {
   } = useSettingsStore();
 
   const startTour = useTourStore((s) => s.startTour);
-  const [showApiKey, setShowApiKey] = useState(false);
   const isOpen = activeModal === 'settings';
-
-  // Model combobox state
-  const [modelOpen, setModelOpen] = useState(false);
-  const [modelSearch, setModelSearch] = useState('');
-  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
-  const [modelsFetching, setModelsFetching] = useState(false);
-  const [modelsFetched, setModelsFetched] = useState(false);
-  const modelSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen && !_hydrated) {
-      hydrate();
+      void hydrate();
     }
   }, [isOpen, _hydrated, hydrate]);
-
-  // Fetch models when combobox opens or when apiKey/baseURL changes
-  const fetchModels = useCallback(async () => {
-    setModelsFetching(true);
-    try {
-      const res = await fetch('/api/ai/models', { headers: getAIHeaders() });
-      const data = await res.json();
-      const ids = (data.models || []).map((m: { id: string }) => m.id);
-      setFetchedModels(ids);
-      setModelsFetched(true);
-    } catch {
-      setFetchedModels([]);
-      setModelsFetched(true);
-    } finally {
-      setModelsFetching(false);
-    }
-  }, []);
-
-  // Re-fetch models when apiKey or baseURL changes
-  const prevKeyRef = useRef(aiApiKey);
-  const prevUrlRef = useRef(aiBaseURL);
-  useEffect(() => {
-    if (prevKeyRef.current !== aiApiKey || prevUrlRef.current !== aiBaseURL) {
-      prevKeyRef.current = aiApiKey;
-      prevUrlRef.current = aiBaseURL;
-      setModelsFetched(false);
-      setFetchedModels([]);
-    }
-  }, [aiApiKey, aiBaseURL]);
-
-  useEffect(() => {
-    if (modelOpen && !modelsFetched && !modelsFetching) {
-      fetchModels();
-    }
-  }, [modelOpen, modelsFetched, modelsFetching, fetchModels]);
-
-  // Focus search input when popover opens
-  useEffect(() => {
-    if (modelOpen) {
-      setTimeout(() => modelSearchRef.current?.focus(), 50);
-    } else {
-      setModelSearch('');
-    }
-  }, [modelOpen]);
-
-  const filteredModels = fetchedModels.filter((m) =>
-    m.toLowerCase().includes(modelSearch.toLowerCase())
-  );
 
   const handleLocaleChange = (newLocale: string) => {
     router.replace(pathname, { locale: newLocale });
@@ -176,134 +102,8 @@ export function SettingsDialog() {
           </div>
 
           {/* AI Configuration Tab */}
-          <TabsContent value="ai" className="px-6 pb-6 pt-4 space-y-5">
-            {/* Provider */}
-            <div className="space-y-2">
-              <Label>{t('ai.provider')}</Label>
-              <Select value={aiProvider} onValueChange={(v) => setAIProvider(v as AIProvider)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AI_PROVIDERS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* API Key */}
-            <div className="space-y-2">
-              <Label>{t('ai.apiKey')}</Label>
-              <div className="relative">
-                <Input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={aiApiKey}
-                  onChange={(e) => setAIApiKey(e.target.value)}
-                  placeholder={t('ai.apiKeyPlaceholder')}
-                  className="pr-10"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                >
-                  {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
-              <p className="text-xs text-zinc-400">{t('ai.apiKeyHint')}</p>
-            </div>
-
-            {/* Base URL */}
-            <div className="space-y-2">
-              <Label>{t('ai.baseURL')}</Label>
-              <Input
-                value={aiBaseURL}
-                onChange={(e) => setAIBaseURL(e.target.value)}
-                placeholder="https://api.openai.com/v1"
-              />
-            </div>
-
-            {/* Model — Combobox */}
-            <div className="space-y-2">
-              <Label>{t('ai.model')}</Label>
-              <Popover open={modelOpen} onOpenChange={setModelOpen} modal={false}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={modelOpen}
-                    className="w-full justify-between cursor-pointer font-normal"
-                  >
-                    <span className="truncate">{aiModel || t('ai.modelPlaceholder')}</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  {/* Search input */}
-                  <div className="border-b px-3 py-2">
-                    <Input
-                      ref={modelSearchRef}
-                      value={modelSearch}
-                      onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder={tCommon('search')}
-                      className="h-8 border-0 p-0 shadow-none focus-visible:ring-0"
-                    />
-                  </div>
-
-                  {/* Model list */}
-                  <div className="max-h-48 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
-                    {modelsFetching && (
-                      <div className="flex items-center justify-center py-4 text-sm text-zinc-400">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {tCommon('loading')}
-                      </div>
-                    )}
-
-                    {!modelsFetching && filteredModels.length === 0 && modelsFetched && (
-                      <div className="py-3 text-center text-xs text-zinc-400">
-                        {t('ai.noModelsFound')}
-                      </div>
-                    )}
-
-                    {filteredModels.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        className={cn(
-                          'flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800',
-                          aiModel === m && 'bg-zinc-100 dark:bg-zinc-800'
-                        )}
-                        onClick={() => {
-                          setAIModel(m);
-                          setModelOpen(false);
-                        }}
-                      >
-                        <Check className={cn('mr-2 h-4 w-4', aiModel === m ? 'opacity-100' : 'opacity-0')} />
-                        <span className="truncate">{m}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Manual entry */}
-                  <div className="border-t px-3 py-2">
-                    <Input
-                      value={aiModel}
-                      onChange={(e) => setAIModel(e.target.value)}
-                      placeholder={t('ai.modelPlaceholder')}
-                      className="h-8 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') setModelOpen(false);
-                      }}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
+          <TabsContent value="ai" className="px-6 pb-6 pt-4">
+            <LlmProfileSettings />
           </TabsContent>
 
           {/* Appearance Tab */}

@@ -4,7 +4,6 @@ import { useTranslations, useLocale } from 'next-intl';
 import { SkipForward, Lightbulb, Bookmark, BookmarkCheck, StopCircle, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useInterviewStore } from '@/stores/interview-store';
-import { getAIHeaders } from '@/stores/settings-store';
 
 interface ControlBarProps {
   sessionId: string;
@@ -28,7 +27,6 @@ export function useInterviewControls({ sessionId, roundId, lastAssistantMessageI
       headers: {
         'Content-Type': 'application/json',
         ...(fp ? { 'x-fingerprint': fp } : {}),
-        ...getAIHeaders(),
       },
       body: JSON.stringify({ action, roundId, locale }),
     });

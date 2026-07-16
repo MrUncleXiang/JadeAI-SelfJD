@@ -9,6 +9,8 @@ import type { ActorContext } from '@/lib/auth/service';
 
 import { encryptLlmApiKey, LlmEncryptionError } from './encryption';
 import { LlmBaseUrlPolicyError, validateLlmBaseUrl } from './outbound-url';
+import { probeLlmCapabilities, type LlmProbeResult } from './probe';
+import { resolveOwnedLlmConfig } from './resolver';
 
 export const LLM_FEATURES: LlmFeature[] = ['resume', 'jd', 'vision', 'interview'];
 
@@ -17,6 +19,8 @@ export type LlmCapabilities = {
   json: boolean;
   tools: boolean;
   vision: boolean;
+  errors?: LlmProbeResult['errors'];
+  latencyMs?: number;
 };
 
 export type CreateLlmProfileInput = {
@@ -191,5 +195,29 @@ export const llmProfileService = {
       metadata: { profileId },
     });
     return binding;
+  },
+
+  async testProfile(actor: ActorContext, profileId: string) {
+    await dbReady;
+    const existing = await llmProfileRepository.findOwnedById(actor.userId, profileId);
+    if (!existing) throw new LlmProfileServiceError('PROFILE_NOT_FOUND', 404);
+
+    const config = await resolveOwnedLlmConfig(actor.userId, profileId, { allowInvalid: true });
+    const capabilities = await probeLlmCapabilities(config);
+    const profile = await llmProfileRepository.updateProbeOwned(actor.userId, profileId, {
+      capabilities,
+      status: capabilities.reachable ? 'active' : 'invalid',
+      lastTestedAt: new Date(),
+    });
+    await writeAudit(actor, 'llm_profile.tested', profileId, {
+      provider: existing.provider,
+      modelName: existing.modelName,
+      reachable: capabilities.reachable,
+      json: capabilities.json,
+      tools: capabilities.tools,
+      vision: capabilities.vision,
+      errors: capabilities.errors,
+    });
+    return profile!;
   },
 };

@@ -18,6 +18,11 @@ Build professional resumes with drag-and-drop editing, real-time AI optimization
 
 ---
 
+> **Fork status:** Account/password authentication, administration, database sessions,
+> tenant isolation, and encrypted per-user LLM profiles are implemented on the current
+> JadeAI Career branch. GitHub App synchronization and the reviewed AI resume patch flow
+> remain later phases. The upstream public Docker image does not include these changes.
+
 ## Community
 
 Join our groups for discussion and support:
@@ -223,9 +228,16 @@ AUTH_ENABLED=true
 REGISTRATION_MODE=closed
 SESSION_TTL_DAYS=30
 ENABLE_FINGERPRINT_AUTH=false
+
+# Required before users can save encrypted LLM profiles
+LLM_ENCRYPTION_KEYS={"1":"replace-with-base64-32-byte-key"}
+LLM_ENCRYPTION_ACTIVE_KEY_VERSION=1
 ```
 
-> **AI Configuration:** No server-side env vars needed. Each user configures their own API Key, Base URL, and Model in **Settings > AI** within the app.
+Generate the encryption key with `openssl rand -base64 32`. Each signed-in user then
+configures one or more OpenAI-compatible, Anthropic, or Gemini profiles in
+**Settings > AI** and can bind a different profile to resume, JD, vision, and interview
+features. API keys are encrypted server-side and are not sent in business request headers.
 
 See `.env.example` for all available options.
 
@@ -419,7 +431,10 @@ Contributions are welcome! Here's how to get started:
 <details>
 <summary><b>How does AI configuration work?</b></summary>
 
-The current compatibility UI lets each user configure an OpenAI-compatible, Anthropic, or custom endpoint in **Settings > AI**. During Phase 2 this fork will migrate those settings to encrypted, server-side, per-user LLM profiles; until that gate is complete, API keys remain in the browser's local storage.
+Each signed-in user can maintain multiple OpenAI-compatible, Anthropic, or Gemini profiles
+in **Settings > AI**. API keys are encrypted server-side with a versioned AES-256-GCM
+keyring. Existing JadeAI browser keys are detected once and are cleared only after the
+profiles and feature bindings have migrated successfully.
 
 </details>
 

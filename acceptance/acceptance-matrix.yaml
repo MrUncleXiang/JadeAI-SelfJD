@@ -154,6 +154,7 @@ scenarios:
     automationEvidence:
       - src/app/api/llm-profiles/llm-profile-routes.test.ts
       - scripts/test-postgres-integration.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-LLM-002
     requirement: LLM-002
@@ -164,11 +165,13 @@ scenarios:
     when: 检查数据库、API、日志和浏览器存储
     then: 不存在明文 Key，服务端仍可完成授权请求
     layers: [unit, integration, security]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/llm/encryption.test.ts
       - src/app/api/llm-profiles/llm-profile-routes.test.ts
+      - src/stores/settings-store.test.ts
       - scripts/test-postgres-integration.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-LLM-003
     requirement: LLM-003
@@ -179,7 +182,10 @@ scenarios:
     when: 用户运行连接测试
     then: 返回连通性、JSON、Tool、Vision 能力和可读错误
     layers: [unit, contract, e2e]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/llm/probe.test.ts
+      - src/app/api/llm-profiles/llm-profile-routes.test.ts
 
   - id: ACC-LLM-004
     requirement: LLM-004
@@ -193,7 +199,11 @@ scenarios:
     automationStatus: partial
     automationEvidence:
       - src/app/api/llm-profiles/llm-profile-routes.test.ts
+      - src/app/api/ai/chat/route.test.ts
+      - src/app/api/ai/jd-analysis/route.test.ts
+      - src/app/api/interview/[id]/chat/route.test.ts
       - scripts/test-postgres-integration.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-LLM-005
     requirement: LLM-005
@@ -204,10 +214,12 @@ scenarios:
     when: 创建档案或发起请求
     then: 默认阻止，只有管理员精确 Allowlist 可放行
     layers: [unit, integration, security]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/llm/outbound-url.test.ts
+      - src/lib/llm/transport.test.ts
       - src/app/api/llm-profiles/llm-profile-routes.test.ts
+      - src/app/api/ai/models/route.test.ts
 
   - id: ACC-RES-001
     requirement: RES-001

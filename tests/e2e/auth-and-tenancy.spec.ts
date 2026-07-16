@@ -37,6 +37,20 @@ interface ResumeRecord {
   title: string;
 }
 
+interface LlmProfileRecord {
+  id: string;
+  name: string;
+  modelName: string;
+  hasApiKey: boolean;
+}
+
+interface LlmBindings {
+  resume: string | null;
+  jd: string | null;
+  vision: string | null;
+  interview: string | null;
+}
+
 function uniqueUsername(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
 }
@@ -345,4 +359,54 @@ test('resume read, mutation, duplicate, delete, and export stay tenant scoped', 
     await attackerContext.close();
     await ownerContext.close();
   }
+});
+
+test('legacy browser keys migrate into encrypted per-user LLM profiles and bindings', async ({ page }) => {
+  const legacyKey = `e2e-legacy-${crypto.randomUUID()}`;
+  await page.addInitScript(({ apiKey }) => {
+    localStorage.setItem('jade_api_key', apiKey);
+    localStorage.setItem('jade_provider_configs', JSON.stringify({
+      openai: {
+        baseURL: 'https://8.8.8.8/v1',
+        model: 'e2e-model',
+        apiKey,
+      },
+    }));
+  }, { apiKey: legacyKey });
+
+  await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByText(/legacy browser API key\(s\) detected/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Migrate and clear' }).click();
+
+  await expect(page.getByText('Legacy settings migrated and cleared')).toBeVisible();
+  await expect(page.getByText('OpenAI / Compatible 1', { exact: true })).toBeVisible();
+  await expect(page.getByText(/OpenAI \/ Compatible · e2e-model/)).toBeVisible();
+
+  await expect.poll(() => page.evaluate(() => ({
+    key: localStorage.getItem('jade_api_key'),
+    providers: localStorage.getItem('jade_provider_configs'),
+    imageKey: localStorage.getItem('jade_nanobanana_api_key'),
+  }))).toEqual({ key: null, providers: null, imageKey: null });
+
+  const profiles = await browserJson<LlmProfileRecord[]>(page, '/api/llm-profiles');
+  expect(profiles.status).toBe(200);
+  expect(profiles.body).toHaveLength(1);
+  const profile = profiles.body?.[0];
+  expect(profile).toMatchObject({
+    name: 'OpenAI / Compatible 1',
+    modelName: 'e2e-model',
+    hasApiKey: true,
+  });
+  expect(JSON.stringify(profiles.body)).not.toContain(legacyKey);
+  expect(JSON.stringify(profiles.body)).not.toContain('encryptedApiKey');
+
+  const bindings = await browserJson<LlmBindings>(page, '/api/llm-bindings');
+  expect(bindings.status).toBe(200);
+  expect(bindings.body).toEqual({
+    resume: profile?.id,
+    jd: profile?.id,
+    vision: profile?.id,
+    interview: profile?.id,
+  });
 });

@@ -168,13 +168,13 @@ src/
 
 ## 7. 基线风险
 
-当前上游基线已确认的风险必须在 Phase 1 至 Phase 3 内消除：
+原始上游基线确认的风险及本 Fork 处理状态：
 
-- AI Chat 接收任意 `resumeId` 后读取简历和创建可执行 Tool，未先验证所属用户。
-- 仓储存在只按资源 ID 更新和删除的接口，容易形成跨租户调用。
-- LLM API Key 保存在浏览器 `localStorage` 并通过请求 Header 发送。
-- Tool 成功时直接修改数据库，没有 Diff、版本和用户确认。
-- PostgreSQL 初始化捕获迁移异常后继续启动，并在空库自动播种演示数据。
+- [Phase 1 已处理] AI Chat 在读取 Resume 或创建可执行 Tool 前验证所属用户。
+- [Phase 1 已处理] 受保护仓储和 Route 改为同时使用 `userId + resourceId`。
+- [Phase 2 已处理] LLM API Key 改为服务端加密档案，业务请求不再携带浏览器 Key。
+- [Phase 3 待处理] Tool 成功时仍可直接修改数据库，尚缺 Diff、版本和用户确认。
+- [Phase 1 已处理] 数据库迁移 Fail Closed，Demo Seed 仅允许显式开发 Fixture。
 
 ## 8. 发布拓扑
 

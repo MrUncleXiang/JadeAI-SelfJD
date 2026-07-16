@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { getModel, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { generateResumeInputSchema, type GenerateResumeOutput } from '@/lib/ai/generate-resume-schema';
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
     const { jobTitle, yearsOfExperience, skills, industry, experience, template, language } = parsed.data;
     const lang = language || 'zh';
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await resolveLlmConfig(user.id, 'resume');
     const model = getModel(aiConfig);
 
     const skillsContext = skills && skills.length > 0
@@ -175,7 +176,7 @@ Respond with JSON only.`;
     });
   } catch (error) {
     if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     }
     console.error('POST /api/ai/generate-resume error:', error);
     // Surface the underlying reason (bad model id, endpoint rejected the request,

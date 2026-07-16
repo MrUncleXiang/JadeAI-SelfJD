@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
-import { getModel, extractAIConfig, AIConfigError, getJsonProviderOptions } from '@/lib/ai/provider';
+import { getModel, AIConfigError, getJsonProviderOptions } from '@/lib/ai/provider';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { interviewReportSchema } from '@/lib/ai/interview-report-schema';
@@ -37,9 +38,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const existing = await interviewRepository.findOwnedReportBySessionId(user.id, sessionId);
     if (existing) return NextResponse.json(existing);
 
-    const { model: modelId, locale = 'zh' } = await request.json();
-    const aiConfig = extractAIConfig(request);
-    const model = getModel(aiConfig, modelId);
+    const { locale = 'zh' } = await request.json();
+    const aiConfig = await resolveLlmConfig(user.id, 'interview');
+    const model = getModel(aiConfig);
 
     const roundsWithMessages = await interviewRepository.findOwnedAllMessagesBySessionId(user.id, sessionId);
     if (!roundsWithMessages) {
@@ -178,7 +179,7 @@ DO NOT use alternative names like "comprehensiveScore", "capabilityScores", "dir
     return NextResponse.json(saved);
   } catch (error) {
     if (error instanceof AIConfigError) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 401 });
+      return new Response(JSON.stringify({ code: error.code, error: error.message }), { status: error.status });
     }
     console.error('POST /api/interview/[id]/report error:', error);
     return new Response('Internal server error', { status: 500 });

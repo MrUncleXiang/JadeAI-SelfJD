@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateLlmBaseUrl } from './outbound-url';
+import { validateLlmBaseUrl, validateLlmRequestUrl } from './outbound-url';
 
 const lookup = (addresses: string[]) => async () => addresses.map((address) => ({
   address,
@@ -26,6 +26,8 @@ describe('LLM BaseURL outbound policy', () => {
     'https://10.0.0.1/v1',
     'https://192.168.1.10/v1',
     'https://[::1]/v1',
+    'https://[::ffff:127.0.0.1]/v1',
+    'https://[::ffff:10.0.0.1]/v1',
     'https://[fe80::1]/v1',
     'https://[fc00::1]/v1',
   ])('blocks non-public literal address %s', async (url) => {
@@ -61,5 +63,28 @@ describe('LLM BaseURL outbound policy', () => {
       lookup: async () => { throw new Error('ENOTFOUND'); },
       allowlist: '',
     })).rejects.toMatchObject({ code: 'BASE_URL_DNS_FAILED' });
+  });
+
+  it('revalidates concrete SDK requests while allowing provider query parameters', async () => {
+    await expect(validateLlmRequestUrl(
+      'https://llm.example/v1/models?alt=sse',
+      'https://llm.example/v1',
+      { lookup: lookup(['8.8.8.8']), allowlist: '' },
+    )).resolves.toMatchObject({
+      url: 'https://llm.example/v1/models?alt=sse',
+      addresses: [{ address: '8.8.8.8', family: 4 }],
+    });
+
+    await expect(validateLlmRequestUrl(
+      'https://other.example/v1/models',
+      'https://llm.example/v1',
+      { lookup: lookup(['8.8.8.8']), allowlist: '' },
+    )).rejects.toMatchObject({ code: 'BASE_URL_BLOCKED' });
+
+    await expect(validateLlmRequestUrl(
+      'https://llm.example/admin',
+      'https://llm.example/v1',
+      { lookup: lookup(['8.8.8.8']), allowlist: '' },
+    )).rejects.toMatchObject({ code: 'BASE_URL_BLOCKED' });
   });
 });

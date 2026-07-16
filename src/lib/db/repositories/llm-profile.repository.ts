@@ -129,4 +129,12 @@ export const llmProfileRepository = {
       .limit(1);
     return rows[0]?.profile ?? null;
   },
+
+  async updateProbeOwned(
+    userId: string,
+    profileId: string,
+    input: { capabilities: unknown; status: LlmProfileStatus; lastTestedAt: Date },
+  ) {
+    return this.updateOwned(userId, profileId, input);
+  },
 };

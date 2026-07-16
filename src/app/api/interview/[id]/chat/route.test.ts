@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   addOwnedMessage: vi.fn(),
   updateOwnedRoundStatus: vi.fn(),
   updateOwnedSessionStatus: vi.fn(),
-  extractAIConfig: vi.fn(),
+  resolveLlmConfig: vi.fn(),
   getModel: vi.fn(),
   convertToModelMessages: vi.fn(),
   streamText: vi.fn(),
@@ -40,10 +40,13 @@ vi.mock('@/lib/ai/provider', () => {
   class AIConfigError extends Error {}
   return {
     AIConfigError,
-    extractAIConfig: mocks.extractAIConfig,
     getModel: mocks.getModel,
   };
 });
+
+vi.mock('@/lib/llm/resolver', () => ({
+  resolveLlmConfig: mocks.resolveLlmConfig,
+}));
 
 vi.mock('@/lib/ai/interview-prompts', () => ({
   buildInterviewSystemPrompt: vi.fn(() => 'system'),
@@ -80,7 +83,7 @@ describe('POST /api/interview/[id]/chat tenant boundary', () => {
     expect(response.status).toBe(404);
     expect(mocks.findOwnedSession).toHaveBeenCalledWith('user-a', 'session-b');
     expect(mocks.findOwnedRound).not.toHaveBeenCalled();
-    expect(mocks.extractAIConfig).not.toHaveBeenCalled();
+    expect(mocks.resolveLlmConfig).not.toHaveBeenCalled();
     expect(mocks.streamText).not.toHaveBeenCalled();
     expect(mocks.addOwnedMessage).not.toHaveBeenCalled();
   });
@@ -103,7 +106,7 @@ describe('POST /api/interview/[id]/chat tenant boundary', () => {
 
     expect(response.status).toBe(404);
     expect(mocks.findOwnedRound).toHaveBeenCalledWith('user-a', 'session-a', 'round-b');
-    expect(mocks.extractAIConfig).not.toHaveBeenCalled();
+    expect(mocks.resolveLlmConfig).not.toHaveBeenCalled();
     expect(mocks.streamText).not.toHaveBeenCalled();
     expect(mocks.addOwnedMessage).not.toHaveBeenCalled();
     expect(mocks.updateOwnedRoundStatus).not.toHaveBeenCalled();

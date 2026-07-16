@@ -14,13 +14,23 @@ vi.hoisted(() => {
   process.env.LLM_BASE_URL_ALLOWLIST = '';
 });
 
+const probeMocks = vi.hoisted(() => ({
+  probe: vi.fn(),
+}));
+
+vi.mock('@/lib/llm/probe', () => ({
+  probeLlmCapabilities: probeMocks.probe,
+}));
+
 import { db, dbReady } from '@/lib/db';
 import { authRepository } from '@/lib/db/repositories/auth.repository';
 import { auditEvents, llmFeatureBindings, llmProfiles } from '@/lib/db/schema';
 import { authService } from '@/lib/auth/service';
 import { decryptLlmApiKey } from '@/lib/llm/encryption';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { GET as listProfiles, POST as createProfile } from './route';
 import { DELETE as deleteProfile, PATCH as updateProfile } from './[profileId]/route';
+import { POST as testProfile } from './[profileId]/test/route';
 import { GET as listBindings } from '../llm-bindings/route';
 import { PUT as setBinding } from '../llm-bindings/[feature]/route';
 
@@ -30,6 +40,7 @@ const secondKey = `sk-second-${suffix}`;
 let ownerCookie = '';
 let otherCookie = '';
 let ownerId = '';
+let otherId = '';
 
 function cookie(token: string) {
   return `jade_session=${token}`;
@@ -62,6 +73,7 @@ beforeAll(async () => {
   ownerCookie = cookie(owner.token);
   otherCookie = cookie(other.token);
   ownerId = owner.user.id;
+  otherId = other.user.id;
 });
 
 describe('LLM profile routes', () => {
@@ -149,6 +161,15 @@ describe('LLM profile routes', () => {
     );
     expect(foreignBinding.status).toBe(404);
 
+    const testLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const foreignTest = await testProfile(new NextRequest(
+      `https://resume.test/api/llm-profiles/${created.id}/test`,
+      { method: 'POST', headers: { cookie: otherCookie, origin: 'https://resume.test' } },
+    ), { params: Promise.resolve({ profileId: created.id }) });
+    expect(foreignTest.status).toBe(404);
+    expect(probeMocks.probe).not.toHaveBeenCalled();
+    testLog.mockRestore();
+
     const bound = await setBinding(
       jsonRequest('/api/llm-bindings/resume', { profileId: created.id }, ownerCookie, 'PUT'),
       { params: Promise.resolve({ feature: 'resume' }) },
@@ -164,6 +185,51 @@ describe('LLM profile routes', () => {
       vision: null,
       interview: null,
     });
+
+    const resolved = await resolveLlmConfig(ownerId, 'resume');
+    expect(resolved).toMatchObject({
+      profileId: created.id,
+      provider: 'openai-compatible',
+      baseURL: 'https://8.8.8.8/v1',
+      model: 'test-model',
+      apiKey: secondKey,
+    });
+    expect(resolved.fetch).toBeTypeOf('function');
+    await expect(resolveLlmConfig(otherId, 'resume')).rejects.toMatchObject({
+      code: 'LLM_PROFILE_REQUIRED',
+      status: 422,
+    });
+
+    probeMocks.probe.mockResolvedValueOnce({
+      reachable: true,
+      json: true,
+      tools: false,
+      vision: true,
+      errors: { tools: 'UNSUPPORTED' },
+      latencyMs: 123,
+    });
+    const tested = await testProfile(new NextRequest(
+      `https://resume.test/api/llm-profiles/${created.id}/test`,
+      { method: 'POST', headers: { cookie: ownerCookie, origin: 'https://resume.test' } },
+    ), { params: Promise.resolve({ profileId: created.id }) });
+    expect(tested.status).toBe(200);
+    await expect(tested.json()).resolves.toMatchObject({
+      id: created.id,
+      status: 'active',
+      hasApiKey: true,
+      capabilities: {
+        reachable: true,
+        json: true,
+        tools: false,
+        vision: true,
+        errors: { tools: 'UNSUPPORTED' },
+        latencyMs: 123,
+      },
+    });
+    expect(probeMocks.probe).toHaveBeenCalledWith(expect.objectContaining({
+      profileId: created.id,
+      apiKey: secondKey,
+    }));
 
     const deleted = await deleteProfile(new NextRequest(
       `https://resume.test/api/llm-profiles/${created.id}`,

@@ -1,8 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { SendHorizonal } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Cpu, SendHorizonal } from 'lucide-react';
 import type { FormEvent, ChangeEvent } from 'react';
 
 interface AIInputProps {
@@ -10,12 +9,10 @@ interface AIInputProps {
   onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   isLoading: boolean;
-  models: string[];
-  selectedModel?: string;
-  onModelChange: (model: string) => void;
+  modelLabel?: string;
 }
 
-export function AIInput({ input, onChange, onSubmit, isLoading, models, selectedModel, onModelChange }: AIInputProps) {
+export function AIInput({ input, onChange, onSubmit, isLoading, modelLabel }: AIInputProps) {
   const t = useTranslations('ai');
 
   return (
@@ -39,26 +36,9 @@ export function AIInput({ input, onChange, onSubmit, isLoading, models, selected
 
         {/* Bottom toolbar */}
         <div className="flex items-center justify-between px-3 pb-2.5">
-          {/* Model selector */}
-          <div>
-            <Select value={selectedModel} onValueChange={onModelChange}>
-              <SelectTrigger className="h-7 max-w-[180px] gap-1 rounded-full border-zinc-200 bg-white px-2.5 text-[11px] font-medium text-zinc-600 shadow-none">
-                <span className="mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                <SelectValue placeholder="Model" />
-              </SelectTrigger>
-              <SelectContent>
-                {models.map((id) => (
-                  <SelectItem key={id} value={id} className="text-xs">
-                    {id}
-                  </SelectItem>
-                ))}
-                {models.length === 0 && selectedModel && (
-                  <SelectItem value={selectedModel} className="text-xs">
-                    {selectedModel}
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+          <div className="flex max-w-[210px] items-center gap-1.5 truncate text-[11px] text-zinc-500">
+            <Cpu className="h-3 w-3 shrink-0" />
+            <span className="truncate">{modelLabel || 'LLM profile required'}</span>
           </div>
 
           {/* Send button */}

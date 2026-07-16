@@ -25,11 +25,34 @@ function dateString(value: Date | number | string | null): string | null {
 
 function capabilities(value: unknown): LlmCapabilities {
   const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const rawErrors = record.errors && typeof record.errors === 'object'
+    ? record.errors as Record<string, unknown>
+    : {};
+  const allowedErrors = new Set([
+    'AUTH_FAILED',
+    'MODEL_NOT_FOUND',
+    'RATE_LIMITED',
+    'TIMEOUT',
+    'OUTBOUND_BLOCKED',
+    'PROVIDER_ERROR',
+    'INVALID_RESPONSE',
+    'UNSUPPORTED',
+  ]);
+  const errors = Object.fromEntries(
+    ['reachable', 'json', 'tools', 'vision'].flatMap((key) => {
+      const error = rawErrors[key];
+      return typeof error === 'string' && allowedErrors.has(error) ? [[key, error]] : [];
+    }),
+  );
   return {
     reachable: record.reachable === true,
     json: record.json === true,
     tools: record.tools === true,
     vision: record.vision === true,
+    ...(Object.keys(errors).length > 0 ? { errors } : {}),
+    ...(typeof record.latencyMs === 'number' && Number.isFinite(record.latencyMs)
+      ? { latencyMs: Math.max(0, Math.round(record.latencyMs)) }
+      : {}),
   };
 }
 

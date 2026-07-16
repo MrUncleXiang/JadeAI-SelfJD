@@ -15,7 +15,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { LanguageSelect } from '@/components/ui/language-select';
 import { cn } from '@/lib/utils';
-import { getAIHeaders } from '@/stores/settings-store';
 
 interface CoverLetterDialogProps {
   open: boolean;
@@ -53,7 +52,6 @@ export function CoverLetterDialog({ open, onOpenChange, resumeId }: CoverLetterD
         headers: {
           'Content-Type': 'application/json',
           ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
-          ...getAIHeaders(),
         },
         body: JSON.stringify({ resumeId, jobDescription, tone, language }),
       });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
-import { getModel, extractAIConfig, AIConfigError } from '@/lib/ai/provider';
+import { getModel, AIConfigError } from '@/lib/ai/provider';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { coverLetterInputSchema } from '@/lib/ai/cover-letter-schema';
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     const resumeContext = JSON.stringify(resume.sections);
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await resolveLlmConfig(user.id, 'resume');
     const model = getModel(aiConfig);
 
     const result = await generateText({
@@ -111,7 +112,7 @@ Based on this resume and job description, write a tailored cover letter. Use the
     return NextResponse.json(coverLetterData);
   } catch (error) {
     if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     }
     console.error('POST /api/ai/cover-letter error:', error);
     return NextResponse.json({ error: 'Failed to generate cover letter' }, { status: 500 });

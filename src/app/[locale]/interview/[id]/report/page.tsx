@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { InterviewReportView } from '@/components/interview/interview-report';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useSettingsStore, getAIHeaders } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import type { InterviewReport, InterviewSession } from '@/types/interview';
 
 export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +20,6 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(fp ? { 'x-fingerprint': fp } : {}),
-      ...getAIHeaders(),
     };
 
     fetch(`/api/interview/${id}`, { headers })

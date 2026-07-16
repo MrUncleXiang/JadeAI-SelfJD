@@ -485,18 +485,61 @@ paths:
       tags: [LLM]
       operationId: testLlmProfile
       x-requirement-id: LLM-003
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ProfileId'
       responses:
         '200':
-          description: Capability report
+          description: Updated safe profile including the persisted capability report
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LlmCapabilities'
+                $ref: '#/components/schemas/LlmProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/Unprocessable'
+
+  /api/ai/models:
+    get:
+      tags: [LLM]
+      operationId: listOwnedLlmProfileModels
+      x-requirement-id: LLM-001
+      x-implementation-status: implemented
+      parameters:
+        - name: profileId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deduplicated model IDs returned through the selected owned profile
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [models]
+                properties:
+                  models:
+                    type: array
+                    maxItems: 1000
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id]
+                      properties:
+                        id:
+                          type: string
+                          maxLength: 200
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: Provider model list could not be read safely
 
   /api/github/connect:
     post:
@@ -1319,11 +1362,25 @@ components:
           type: boolean
         vision:
           type: boolean
-        errorCode:
-          type: [string, 'null']
-        testedAt:
-          type: [string, 'null']
-          format: date-time
+        errors:
+          type: object
+          additionalProperties: false
+          properties:
+            reachable:
+              type: string
+              enum: [AUTH_FAILED, MODEL_NOT_FOUND, RATE_LIMITED, TIMEOUT, OUTBOUND_BLOCKED, PROVIDER_ERROR, INVALID_RESPONSE, UNSUPPORTED]
+            json:
+              type: string
+              enum: [AUTH_FAILED, MODEL_NOT_FOUND, RATE_LIMITED, TIMEOUT, OUTBOUND_BLOCKED, PROVIDER_ERROR, INVALID_RESPONSE, UNSUPPORTED]
+            tools:
+              type: string
+              enum: [AUTH_FAILED, MODEL_NOT_FOUND, RATE_LIMITED, TIMEOUT, OUTBOUND_BLOCKED, PROVIDER_ERROR, INVALID_RESPONSE, UNSUPPORTED]
+            vision:
+              type: string
+              enum: [AUTH_FAILED, MODEL_NOT_FOUND, RATE_LIMITED, TIMEOUT, OUTBOUND_BLOCKED, PROVIDER_ERROR, INVALID_RESPONSE, UNSUPPORTED]
+        latencyMs:
+          type: integer
+          minimum: 0
 
     SourceRepository:
       type: object

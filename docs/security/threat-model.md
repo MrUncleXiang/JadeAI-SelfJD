@@ -34,7 +34,7 @@
 | 密码暴力破解 | 账号接管 | 参数化 scrypt、统一错误、数据库限流、Session 轮换 | AUTH-001、SEC-001 |
 | Session 盗用和固定 | 账号接管 | HttpOnly Cookie、登录旋转、Token Version、CSRF | AUTH-004、SEC-001 |
 | LLM Key 泄露 | 费用和数据风险 | 服务端 AES-GCM、脱敏日志、客户端不持久化 | LLM-002、SEC-001 |
-| BaseURL SSRF | 访问内网或云元数据 | DNS/IP 校验、重定向复检、管理员 Allowlist | LLM-005 |
+| BaseURL SSRF | 访问内网或云元数据 | DNS/IP 校验、实际请求 IP Pinning、拒绝重定向、管理员 Allowlist | LLM-005 |
 | 恶意 LLM Provider | 收集上传内容 | UI 明示目标 Provider，按 Feature 最小上下文 | LLM-003、LLM-004 |
 | GitHub App 权限过大 | 私有仓库泄露或写入 | 只读 Contents、选择仓库、短期 Token | GH-001 |
 | Webhook 伪造或重放 | 伪同步和任务耗尽 | HMAC 验签、Delivery ID 唯一、速率限制 | GH-003 |
@@ -54,9 +54,11 @@
 
 - 只允许 HTTPS。
 - 解析域名后阻止环回、私网、链路本地、保留和云元数据地址。
-- 每次重定向重新验证。
+- 每次实际请求重新解析并校验，只连接本次校验通过的固定 IP。
+- 拒绝所有 Provider 重定向，避免未经验证的第二跳。
 - 禁止 URL 中携带 Username/Password。
-- 限制连接和响应超时、响应大小和并发数。
+- 限制连接和响应超时；模型列表在读取前限制响应大小。
+- 发布前的 Provider Adapter 继续统一响应大小和进程级并发配额。
 
 自托管用户确需局域网模型时，由管理员在系统配置中添加精确 Host/CIDR Allowlist，并记录
 审计。普通用户不能自行绕过。

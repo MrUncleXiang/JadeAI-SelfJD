@@ -27,7 +27,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useEditorStore } from '@/stores/editor-store';
-import { getAIHeaders } from '@/stores/settings-store';
 
 interface GrammarIssue {
   sectionId: string;
@@ -247,7 +246,6 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
     return {
       'Content-Type': 'application/json',
       ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
-      ...getAIHeaders(),
     };
   };
 

@@ -31,7 +31,6 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useEditorStore } from '@/stores/editor-store';
-import { getAIHeaders } from '@/stores/settings-store';
 import { setPendingOptimizeMessage } from '@/lib/pending-optimize';
 
 interface JdAnalysisResult {
@@ -291,7 +290,6 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
     return {
       'Content-Type': 'application/json',
       ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
-      ...getAIHeaders(),
     };
   };
 

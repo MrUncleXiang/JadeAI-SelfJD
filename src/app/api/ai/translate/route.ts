@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { generateText, type LanguageModel } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError, type AIConfig } from '@/lib/ai/provider';
+import { getModel, getJsonProviderOptions, AIConfigError, type AIConfig } from '@/lib/ai/provider';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { translateInputSchema } from '@/lib/ai/translate-schema';
@@ -177,7 +178,7 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await resolveLlmConfig(user.id, 'resume');
     const model = getModel(aiConfig);
     const encoder = new TextEncoder();
 
@@ -288,7 +289,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof AIConfigError) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 401 });
+      return new Response(JSON.stringify({ code: error.code, error: error.message }), { status: error.status });
     }
     console.error('POST /api/ai/translate error:', error);
     return new Response(JSON.stringify({ error: 'Failed to translate resume' }), { status: 500 });

@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 1 自动化验收完成，等待人工安全/迁移评审
+状态：Phase 2 功能切片与自动化验收完成，等待人工密钥/出站安全评审
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -98,13 +98,14 @@ Gate：所有现有测试和 Phase 1 安全测试通过。
 
 实现：
 
-1. `llm_profiles`、Feature Binding 和 AES-GCM Key Version。
-2. 服务端 Provider Resolver，业务 Route 不再读取 `x-api-key`。
-3. 设置页支持多档案 CRUD、掩码和连接测试。
-4. JSON、Tool、Vision 能力探测。
-5. 出站 URL 策略、DNS/IP 校验和管理员私网 Allowlist。
-6. 调用审计、超时、并发和错误分类。
-7. 清除浏览器 `localStorage` 中旧 API Key，并提供一次迁移提示。
+1. [x] `llm_profiles`、Feature Binding 和 AES-GCM Key Version。
+2. [x] 服务端 Provider Resolver，业务 Route 不再读取 `x-api-key`。
+3. [x] 设置页支持多档案 CRUD、掩码、模型列表和连接测试。
+4. [x] JSON、Tool、Vision 能力探测。
+5. [x] 出站 URL 策略、DNS/IP 校验、实际请求 IP Pinning、重定向拒绝和管理员私网 Allowlist。
+6. [x] 档案/能力测试审计、请求超时和稳定错误分类。
+7. [x] 旧浏览器 Key 一次性迁移，且仅在服务端档案和绑定成功后清除。
+8. [ ] 完整 AI 调用用量审计、统一响应大小及进程级并发配额作为发布加固项继续补齐。
 
 自动测试：
 
@@ -122,10 +123,18 @@ Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 - [x] 版本化 AES-256-GCM Keyring、随机 IV、AAD 租户绑定和轮换单测。
 - [x] 租户化档案 CRUD、Feature Binding API、安全 DTO、审计与集成测试。
 - [x] 保存阶段 HTTPS、DNS/IP 分类、精确 Origin/CIDR Allowlist 门禁及单测。
-- [ ] 服务端 Provider Resolver、实际请求/重定向复检和业务 Route 去除 `x-api-key`。
-- [ ] JSON/Tool/Vision 能力探测、超时/并发/错误分类。
-- [ ] 设置页多档案管理、Feature 选择、旧浏览器 Key 迁移后清除。
-- [ ] Playwright、安全扫描和 PostgreSQL 全链路 Gate；完成后才能将 LLM-001 至 LLM-005 标记为 automated。
+- [x] 服务端 Provider Resolver、每次实际请求复检/IP Pinning、重定向拒绝和业务 Route 去除 `x-api-key`。
+- [x] JSON/Tool/Vision 能力探测、超时和稳定错误分类。
+- [x] 设置页多档案管理、Feature 选择、模型列表和旧浏览器 Key 安全迁移。
+- [x] Playwright 旧 Key 迁移与绑定 Gate；单元测试、TypeScript 和生产构建通过。
+- [ ] 完整 Mock Provider 浏览器矩阵、全 AI 调用用量审计、统一响应上限及进程级并发配额。
+
+自动化证据（2026-07-16）：
+
+- `pnpm test`：24 个测试文件、111 个测试通过。
+- `pnpm test:e2e`：4 个真实浏览器场景通过，新增场景覆盖旧浏览器 Key 迁移、四类 Feature 绑定、成功后清除和 API 不回传密钥材料。
+- `pnpm type-check`、`pnpm build`、`pnpm test:migration`、`pnpm test:integration` 和 `pnpm spec:check`。
+- 新增 LLM 核心文件通过 ESLint；上游/既有组件仍保留全量 Lint 债务，未放宽规则。
 
 ## 6. Phase 3：ResumePatch、Diff 和版本
 

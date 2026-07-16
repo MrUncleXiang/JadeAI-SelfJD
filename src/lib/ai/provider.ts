@@ -1,40 +1,49 @@
-import { NextRequest } from 'next/server';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 export interface AIConfig {
-  provider: string;
+  provider: 'openai-compatible' | 'anthropic' | 'gemini';
   apiKey: string;
   baseURL: string;
   model: string;
+  profileId?: string;
+  fetch?: typeof globalThis.fetch;
 }
 
-export function extractAIConfig(request: NextRequest): AIConfig {
-  const provider = request.headers.get('x-provider') || 'openai';
-  const apiKey = request.headers.get('x-api-key') || '';
-  const baseURL = request.headers.get('x-base-url') || 'https://api.openai.com/v1';
-  const model = request.headers.get('x-model') || 'gpt-4o';
-  return { provider, apiKey, baseURL, model };
-}
-
-export function getModel(config: AIConfig, modelOverride?: string) {
+export function getModel(config: AIConfig) {
   if (!config.apiKey) {
-    throw new AIConfigError('API key is required. Please configure it in Settings.');
+    throw new AIConfigError(
+      'LLM_API_KEY_MISSING',
+      'The selected LLM profile does not have an API key.',
+      422,
+    );
   }
-  const modelId = modelOverride || config.model;
+  const modelId = config.model;
 
   switch (config.provider) {
     case 'anthropic': {
-      const p = createAnthropic({ apiKey: config.apiKey, baseURL: config.baseURL || undefined });
+      const p = createAnthropic({
+        apiKey: config.apiKey,
+        baseURL: config.baseURL || undefined,
+        fetch: config.fetch,
+      });
       return p(modelId);
     }
     case 'gemini': {
-      const p = createGoogleGenerativeAI({ apiKey: config.apiKey, baseURL: config.baseURL || undefined });
+      const p = createGoogleGenerativeAI({
+        apiKey: config.apiKey,
+        baseURL: config.baseURL || undefined,
+        fetch: config.fetch,
+      });
       return p(modelId);
     }
     default: {
-      const p = createOpenAI({ apiKey: config.apiKey, baseURL: config.baseURL });
+      const p = createOpenAI({
+        apiKey: config.apiKey,
+        baseURL: config.baseURL,
+        fetch: config.fetch,
+      });
       return p.chat(modelId);
     }
   }
@@ -44,14 +53,18 @@ export function getModel(config: AIConfig, modelOverride?: string) {
  * Returns providerOptions for JSON mode — only applicable to OpenAI-compatible providers.
  */
 export function getJsonProviderOptions(config: AIConfig) {
-  if (config.provider === 'openai') {
+  if (config.provider === 'openai-compatible') {
     return { openai: { response_format: { type: 'json_object' as const } } };
   }
   return {} as Record<string, never>;
 }
 
 export class AIConfigError extends Error {
-  constructor(message: string) {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly status = 422,
+  ) {
     super(message);
     this.name = 'AIConfigError';
   }

@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   findOwnedSession: vi.fn(),
   updateOwnedSessionTitle: vi.fn(),
   addOwnedMessage: vi.fn(),
-  extractAIConfig: vi.fn(),
+  resolveLlmConfig: vi.fn(),
   getModel: vi.fn(),
   convertToModelMessages: vi.fn(),
   createExecutableTools: vi.fn(),
@@ -37,10 +37,13 @@ vi.mock('@/lib/ai/provider', () => {
   class AIConfigError extends Error {}
   return {
     AIConfigError,
-    extractAIConfig: mocks.extractAIConfig,
     getModel: mocks.getModel,
   };
 });
+
+vi.mock('@/lib/llm/resolver', () => ({
+  resolveLlmConfig: mocks.resolveLlmConfig,
+}));
 
 vi.mock('@/lib/ai/prompts', () => ({
   getSystemPrompt: vi.fn(() => 'system'),
@@ -75,7 +78,7 @@ describe('POST /api/ai/chat tenant boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resolveUser.mockResolvedValue({ id: 'user-a' });
-    mocks.extractAIConfig.mockReturnValue({ provider: 'test' });
+    mocks.resolveLlmConfig.mockResolvedValue({ provider: 'openai-compatible' });
     mocks.getModel.mockReturnValue({ id: 'model' });
     mocks.convertToModelMessages.mockResolvedValue([userMessage]);
     mocks.createExecutableTools.mockReturnValue({ updateSection: {} });
@@ -96,7 +99,7 @@ describe('POST /api/ai/chat tenant boundary', () => {
     expect(response.status).toBe(404);
     expect(mocks.findOwnedById).toHaveBeenCalledWith('user-a', 'resume-b');
     expect(mocks.findOwnedSession).not.toHaveBeenCalled();
-    expect(mocks.extractAIConfig).not.toHaveBeenCalled();
+    expect(mocks.resolveLlmConfig).not.toHaveBeenCalled();
     expect(mocks.streamText).not.toHaveBeenCalled();
     expect(mocks.updateOwnedSessionTitle).not.toHaveBeenCalled();
     expect(mocks.addOwnedMessage).not.toHaveBeenCalled();
@@ -118,7 +121,7 @@ describe('POST /api/ai/chat tenant boundary', () => {
 
     expect(response.status).toBe(404);
     expect(mocks.findOwnedSession).toHaveBeenCalledWith('user-a', 'session-b');
-    expect(mocks.extractAIConfig).not.toHaveBeenCalled();
+    expect(mocks.resolveLlmConfig).not.toHaveBeenCalled();
     expect(mocks.streamText).not.toHaveBeenCalled();
     expect(mocks.addOwnedMessage).not.toHaveBeenCalled();
   });
@@ -156,8 +159,9 @@ describe('POST /api/ai/chat tenant boundary', () => {
     expect(mocks.createExecutableTools).toHaveBeenCalledWith(
       'user-a',
       'resume-a',
-      { provider: 'test' },
+      { provider: 'openai-compatible' },
     );
+    expect(mocks.resolveLlmConfig).toHaveBeenCalledWith('user-a', 'resume');
     expect(mocks.streamText).toHaveBeenCalledOnce();
   });
 });

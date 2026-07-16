@@ -52,7 +52,10 @@ function calcWindowPos(bubbleRight: number, bubbleBottom: number, winW: number, 
 export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
   const t = useTranslations('ai');
   const { showAiChat, toggleAiChat } = useEditorStore();
-  const hasApiKey = useSettingsStore((s) => !!s.aiApiKey);
+  const hasLlmProfile = useSettingsStore((state) => Boolean(
+    state.llmBindings.resume
+    && state.llmProfiles.some((profile) => profile.id === state.llmBindings.resume),
+  ));
 
   // Bubble position (draggable, right/bottom offsets)
   const [bubblePos, setBubblePos] = useState({ x: 24, y: 24 });
@@ -197,7 +200,7 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
         {/* Tooltip */}
         {showTooltip && !showAiChat && (
           <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-white shadow-lg">
-            {hasApiKey ? t('bubbleTooltip') : t('apiKeyMissingBubble')}
+            {hasLlmProfile ? t('bubbleTooltip') : t('apiKeyMissingBubble')}
             <div className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-zinc-800" />
           </div>
         )}
@@ -208,7 +211,7 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
           onClick={onBubbleClick}
         >
           <MessageSquare className="h-6 w-6" />
-          {!hasApiKey && (
+          {!hasLlmProfile && (
             <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 shadow-sm">
               <AlertTriangle className="h-3 w-3 text-amber-900" />
             </span>

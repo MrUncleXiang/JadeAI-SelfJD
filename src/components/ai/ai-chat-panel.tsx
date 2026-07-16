@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useEditorStore } from '@/stores/editor-store';
-import { useSettingsStore, getAIHeaders } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useAIChat } from '@/hooks/use-ai-chat';
 import { useMessagePagination } from '@/hooks/use-message-pagination';
 import { AIMessage } from './ai-message';
@@ -44,10 +44,6 @@ function formatTime(date: Date | number | null) {
 /** Headless chat body — reusable in both side panel and floating bubble */
 export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
   const t = useTranslations('ai');
-  const [models, setModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string | undefined>(
-    () => useSettingsStore.getState().aiModel || undefined
-  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
 
@@ -59,39 +55,10 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
 
   const { historicalMessages, hasMore, isLoadingMore, loadInitial, loadMore, reset: resetPagination } = useMessagePagination();
 
-  const settingsModel = useSettingsStore((s) => s.aiModel);
-  const settingsProvider = useSettingsStore((s) => s.aiProvider);
-  const settingsBaseURL = useSettingsStore((s) => s.aiBaseURL);
-  const settingsApiKey = useSettingsStore((s) => s.aiApiKey);
-  const hydrated = useSettingsStore((s) => s._hydrated);
-
-  // Sync selectedModel when settings hydrate or user changes default model
-  useEffect(() => {
-    if (hydrated && settingsModel) {
-      setSelectedModel(settingsModel);
-    }
-  }, [hydrated, settingsModel]);
-
-  // Fetch models from API — re-fetch when provider/key/baseURL/model changes
-  useEffect(() => {
-    if (!hydrated) return;
-    fetch('/api/ai/models', { headers: getAIHeaders() })
-      .then((res) => res.json())
-      .then((data: { models: { id: string }[] }) => {
-        const ids = data.models.map((m) => m.id);
-        // Ensure user's configured model is always in the list
-        if (settingsModel && !ids.includes(settingsModel)) {
-          ids.unshift(settingsModel);
-        }
-        setModels(ids);
-      })
-      .catch(() => {
-        // Even on error, show user's configured model
-        if (settingsModel) {
-          setModels([settingsModel]);
-        }
-      });
-  }, [hydrated, settingsProvider, settingsBaseURL, settingsApiKey, settingsModel]);
+  const boundResumeProfile = useSettingsStore((state) => {
+    const profileId = state.llmBindings.resume;
+    return state.llmProfiles.find((profile) => profile.id === profileId) || null;
+  });
 
   // Fetch sessions for resumeId; reset state synchronously first so stale
   // sessionsLoaded/activeSessionId can't leak a pendingAiMessage to the wrong resume.
@@ -191,7 +158,6 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
     resumeId,
     sessionId: activeSessionId,
     initialMessages,
-    selectedModel,
   });
 
   // Show toast when AI API call fails
@@ -383,9 +349,7 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
         onChange={handleInputChange}
         onSubmit={handleSubmit}
         isLoading={isLoading}
-        models={models}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
+        modelLabel={boundResumeProfile?.modelName}
       />
     </>
   );

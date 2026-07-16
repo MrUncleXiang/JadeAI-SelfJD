@@ -5,22 +5,18 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResumeStore } from '@/stores/resume-store';
-import { useSettingsStore, getAIHeaders } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { generateId } from '@/lib/utils';
 
 interface UseAIChatOptions {
   resumeId: string;
   sessionId?: string;
   initialMessages?: UIMessage[];
-  selectedModel?: string;
 }
 
-export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel }: UseAIChatOptions) {
+export function useAIChat({ resumeId, sessionId, initialMessages }: UseAIChatOptions) {
   const [input, setInput] = useState('');
   const [localMessages, setLocalMessages] = useState<UIMessage[]>([]);
-
-  const modelRef = useRef(selectedModel);
-  modelRef.current = selectedModel;
 
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
@@ -29,12 +25,12 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
     () =>
       new DefaultChatTransport({
         api: '/api/ai/chat',
-        body: () => ({ resumeId, model: modelRef.current, sessionId: sessionIdRef.current }),
-        // headers must be a function — useChat never updates the transport ref,
-        // so a static object would freeze stale values from before store hydration.
+        body: () => ({ resumeId, sessionId: sessionIdRef.current }),
         headers: () => {
           const fp = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
-          return { ...(fp ? { 'x-fingerprint': fp } : {}), ...getAIHeaders() };
+          const headers: Record<string, string> = {};
+          if (fp) headers['x-fingerprint'] = fp;
+          return headers;
         },
       }),
     [resumeId]
@@ -108,8 +104,12 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
     e.preventDefault();
     if (!input.trim()) return;
 
-    // Check if API key is configured
-    if (!useSettingsStore.getState().aiApiKey) {
+    const settings = useSettingsStore.getState();
+    const profileId = settings.llmBindings.resume;
+    const hasResumeProfile = Boolean(
+      profileId && settings.llmProfiles.some((profile) => profile.id === profileId),
+    );
+    if (!hasResumeProfile) {
       const userMsg: UIMessage = {
         id: generateId(),
         role: 'user',

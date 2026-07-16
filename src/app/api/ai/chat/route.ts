@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
-import { getModel, extractAIConfig, AIConfigError } from '@/lib/ai/provider';
+import { getModel, AIConfigError } from '@/lib/ai/provider';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { chatRepository } from '@/lib/db/repositories/chat.repository';
@@ -21,7 +22,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const messages = body?.messages;
     const resumeId = typeof body?.resumeId === 'string' ? body.resumeId : undefined;
-    const modelId = typeof body?.model === 'string' ? body.model : undefined;
     const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : undefined;
 
     if (!Array.isArray(messages)) {
@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const aiConfig = extractAIConfig(request);
-    const model = getModel(aiConfig, modelId);
+    const aiConfig = await resolveLlmConfig(user.id, 'resume');
+    const model = getModel(aiConfig);
     const modelMessages = await convertToModelMessages(messages);
 
     // Truncate to last N rounds for LLM context
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     return result.toUIMessageStreamResponse();
   } catch (error) {
     if (error instanceof AIConfigError) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 401 });
+      return new Response(JSON.stringify({ code: error.code, error: error.message }), { status: error.status });
     }
     console.error('POST /api/ai/chat error:', error);
     return new Response('Internal server error', { status: 500 });

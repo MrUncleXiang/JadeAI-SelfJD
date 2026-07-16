@@ -3,9 +3,15 @@ import { BlockList, isIP } from 'node:net';
 
 const DNS_TIMEOUT_MS = 3_000;
 
-type AddressFamily = 4 | 6;
-type LookupAddress = { address: string; family: AddressFamily };
+export type AddressFamily = 4 | 6;
+export type LookupAddress = { address: string; family: AddressFamily };
 type Lookup = (hostname: string) => Promise<LookupAddress[]>;
+
+export type ValidatedLlmTarget = {
+  url: string;
+  hostname: string;
+  addresses: LookupAddress[];
+};
 
 export class LlmBaseUrlPolicyError extends Error {
   constructor(public readonly code:
@@ -41,6 +47,7 @@ for (const [network, prefix] of [
 }
 for (const [network, prefix] of [
   ['::', 128],
+  ['::', 96],
   ['::1', 128],
   ['64:ff9b:1::', 48],
   ['100::', 64],
@@ -140,10 +147,20 @@ function normalizedHostname(url: URL): string {
     : hostname;
 }
 
-export async function validateLlmBaseUrl(
+function isIpv4MappedIpv6(address: string): boolean {
+  if (isIP(address) !== 6) return false;
+  try {
+    const hostname = new URL(`http://[${address}]/`).hostname.toLowerCase();
+    return hostname.startsWith('[::ffff:');
+  } catch {
+    return true;
+  }
+}
+
+export async function resolveLlmBaseUrlTarget(
   rawUrl: string,
   options: { lookup?: Lookup; allowlist?: string } = {},
-): Promise<string> {
+): Promise<ValidatedLlmTarget> {
   if (!rawUrl || rawUrl.length > 2_048) {
     throw new LlmBaseUrlPolicyError('INVALID_BASE_URL');
   }
@@ -170,7 +187,13 @@ export async function validateLlmBaseUrl(
     if (!allowlist.origins.has(url.origin.toLowerCase())) {
       throw new LlmBaseUrlPolicyError('BASE_URL_BLOCKED');
     }
-    return url.toString();
+    return {
+      url: url.toString(),
+      hostname,
+      addresses: hostname === 'localhost' || hostname.endsWith('.localhost')
+        ? await lookupWithTimeout(hostname, options.lookup || defaultLookup)
+        : [],
+    };
   }
 
   const allowlist = parseAllowlist(options.allowlist);
@@ -185,6 +208,7 @@ export async function validateLlmBaseUrl(
     return allowlist.cidrs.check(address, type);
   });
   const hasDeniedAddress = addresses.some(({ address }) => {
+    if (isIpv4MappedIpv6(address)) return true;
     const type = addressType(address);
     return deniedAddresses.check(address, type);
   });
@@ -196,5 +220,52 @@ export async function validateLlmBaseUrl(
     throw new LlmBaseUrlPolicyError('BASE_URL_BLOCKED');
   }
 
-  return url.toString();
+  return { url: url.toString(), hostname, addresses };
+}
+
+export async function validateLlmBaseUrl(
+  rawUrl: string,
+  options: { lookup?: Lookup; allowlist?: string } = {},
+): Promise<string> {
+  return (await resolveLlmBaseUrlTarget(rawUrl, options)).url;
+}
+
+function pathIsWithinBase(requestPath: string, basePath: string): boolean {
+  if (basePath === '/') return true;
+  const normalizedBase = basePath.endsWith('/') ? basePath : `${basePath}/`;
+  return requestPath === basePath || requestPath.startsWith(normalizedBase);
+}
+
+/**
+ * Revalidates a concrete provider request immediately before the transport opens
+ * a socket. Query parameters are allowed here because provider SDKs add them,
+ * while credentials, fragments, cross-origin targets and paths outside the
+ * configured BaseURL remain forbidden.
+ */
+export async function validateLlmRequestUrl(
+  rawUrl: string,
+  configuredBaseUrl: string,
+  options: { lookup?: Lookup; allowlist?: string } = {},
+): Promise<ValidatedLlmTarget> {
+  let requestUrl: URL;
+  let baseUrl: URL;
+  try {
+    requestUrl = new URL(rawUrl);
+    baseUrl = new URL(configuredBaseUrl);
+  } catch {
+    throw new LlmBaseUrlPolicyError('INVALID_BASE_URL');
+  }
+
+  if (
+    requestUrl.username
+    || requestUrl.password
+    || requestUrl.hash
+    || requestUrl.origin.toLowerCase() !== baseUrl.origin.toLowerCase()
+    || !pathIsWithinBase(requestUrl.pathname, baseUrl.pathname)
+  ) {
+    throw new LlmBaseUrlPolicyError('BASE_URL_BLOCKED');
+  }
+
+  const target = await resolveLlmBaseUrlTarget(configuredBaseUrl, options);
+  return { ...target, url: requestUrl.toString() };
 }

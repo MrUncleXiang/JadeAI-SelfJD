@@ -8,7 +8,6 @@ import { JDInput } from './jd-input';
 import { ResumeSelector } from './resume-selector';
 import { InterviewerPicker } from './interviewer-picker';
 import { useRouter } from '@/i18n/routing';
-import { getAIHeaders } from '@/stores/settings-store';
 import type { InterviewerConfig } from '@/types/interview';
 
 export function InterviewSetup() {
@@ -33,7 +32,6 @@ export function InterviewSetup() {
         headers: {
           'Content-Type': 'application/json',
           ...(fp ? { 'x-fingerprint': fp } : {}),
-          ...getAIHeaders(),
         },
         body: JSON.stringify({
           jobDescription: jd,

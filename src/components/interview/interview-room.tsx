@@ -6,7 +6,6 @@ import type { UIMessage } from 'ai';
 import { useRouter } from '@/i18n/routing';
 import { useInterviewStore } from '@/stores/interview-store';
 import { useInterviewChat } from '@/hooks/use-interview-chat';
-import { useSettingsStore } from '@/stores/settings-store';
 import { INIT_TRIGGER } from '@/lib/interview/constants';
 import { isRoundViewOnly } from '@/lib/interview/round-status';
 import { ProgressBar } from './progress-bar';
@@ -50,7 +49,6 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
     useInterviewChat({
       sessionId,
       roundId: currentRound?.id || '',
-      selectedModel: useSettingsStore.getState().aiModel,
     });
 
   // Load initial messages from DB on first render

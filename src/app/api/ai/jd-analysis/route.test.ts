@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   resolveUser: vi.fn(),
   findOwnedById: vi.fn(),
   createOwnedJdAnalysis: vi.fn(),
-  extractAIConfig: vi.fn(),
+  resolveLlmConfig: vi.fn(),
   getModel: vi.fn(),
   generateText: vi.fn(),
 }));
@@ -27,11 +27,14 @@ vi.mock('@/lib/ai/provider', () => {
   class AIConfigError extends Error {}
   return {
     AIConfigError,
-    extractAIConfig: mocks.extractAIConfig,
     getJsonProviderOptions: vi.fn(() => ({})),
     getModel: mocks.getModel,
   };
 });
+
+vi.mock('@/lib/llm/resolver', () => ({
+  resolveLlmConfig: mocks.resolveLlmConfig,
+}));
 
 vi.mock('ai', () => ({ generateText: mocks.generateText }));
 
@@ -61,7 +64,7 @@ describe('POST /api/ai/jd-analysis tenant boundary', () => {
 
     expect(response.status).toBe(404);
     expect(mocks.findOwnedById).toHaveBeenCalledWith('user-a', 'resume-b');
-    expect(mocks.extractAIConfig).not.toHaveBeenCalled();
+    expect(mocks.resolveLlmConfig).not.toHaveBeenCalled();
     expect(mocks.getModel).not.toHaveBeenCalled();
     expect(mocks.generateText).not.toHaveBeenCalled();
     expect(mocks.createOwnedJdAnalysis).not.toHaveBeenCalled();

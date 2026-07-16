@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import type { ModelMessage } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { getModel, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import type { ParsedResume } from '@/lib/ai/parse-schema';
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await resolveLlmConfig(user.id, 'vision');
     const model = getModel(aiConfig);
 
     // Build messages based on file type
@@ -154,7 +155,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(fullResume, { status: 201 });
   } catch (error) {
     if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     }
     console.error('POST /api/resume/parse error:', error);
     return NextResponse.json({ error: 'Failed to parse resume' }, { status: 500 });

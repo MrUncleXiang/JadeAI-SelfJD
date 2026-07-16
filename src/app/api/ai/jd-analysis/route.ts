@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { getModel, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     const resumeContext = JSON.stringify(resume.sections);
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await resolveLlmConfig(user.id, 'jd');
     const model = getModel(aiConfig);
 
     const result = await generateText({
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...analysisData, historyId });
   } catch (error) {
     if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     }
     console.error('POST /api/ai/jd-analysis error:', error);
     return NextResponse.json({ error: 'Failed to analyze job description match' }, { status: 500 });

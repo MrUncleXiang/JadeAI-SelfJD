@@ -4,20 +4,16 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInterviewStore } from '@/stores/interview-store';
-import { getAIHeaders } from '@/stores/settings-store';
 import { useLocale } from 'next-intl';
 
 interface UseInterviewChatOptions {
   sessionId: string;
   roundId: string;
-  selectedModel?: string;
 }
 
-export function useInterviewChat({ sessionId, roundId, selectedModel }: UseInterviewChatOptions) {
+export function useInterviewChat({ sessionId, roundId }: UseInterviewChatOptions) {
   const [input, setInput] = useState('');
   const locale = useLocale();
-  const modelRef = useRef(selectedModel);
-  modelRef.current = selectedModel;
 
   const roundIdRef = useRef(roundId);
   roundIdRef.current = roundId;
@@ -28,12 +24,13 @@ export function useInterviewChat({ sessionId, roundId, selectedModel }: UseInter
         api: `/api/interview/${sessionId}/chat`,
         body: () => ({
           roundId: roundIdRef.current,
-          model: modelRef.current,
           locale,
         }),
         headers: () => {
           const fp = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
-          return { ...(fp ? { 'x-fingerprint': fp } : {}), ...getAIHeaders() };
+          const headers: Record<string, string> = {};
+          if (fp) headers['x-fingerprint'] = fp;
+          return headers;
         },
       }),
     [sessionId, locale]
