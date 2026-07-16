@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server';
-import { streamText, convertToModelMessages, stepCountIs } from 'ai';
+import { streamText, convertToModelMessages } from 'ai';
 import { getModel, AIConfigError } from '@/lib/ai/provider';
 import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { chatRepository } from '@/lib/db/repositories/chat.repository';
 import { getSystemPrompt } from '@/lib/ai/prompts';
-import { createExecutableTools } from '@/lib/ai/tools';
 
 const MAX_ROUNDS = 10;
 const MAX_MESSAGES = MAX_ROUNDS * 2; // 10 rounds = 20 messages (user + assistant)
@@ -81,42 +80,24 @@ export async function POST(request: NextRequest) {
     // Truncate to last N rounds for LLM context
     const truncatedMessages = modelMessages.slice(-MAX_MESSAGES);
 
-    const tools = effectiveResumeId
-      ? createExecutableTools(user.id, effectiveResumeId, aiConfig)
-      : undefined;
-
     const result = streamText({
       model,
       system: getSystemPrompt(resumeContext),
       messages: truncatedMessages,
-      tools,
-      stopWhen: tools ? stepCountIs(25) : undefined,
       onFinish: async ({ text, steps }) => {
         if (!sessionId) return;
 
-        // Build ordered parts array preserving the interleaving of text and tool calls
-        const orderedParts: ({ type: 'text'; text: string } | { type: 'tool'; toolName: string; args: unknown; result: unknown })[] = [];
+        // Preserve streamed text parts for the persisted assistant message.
+        const orderedParts: { type: 'text'; text: string }[] = [];
 
         for (const step of steps) {
           if (step.text) {
             orderedParts.push({ type: 'text', text: step.text });
           }
-          const tcs = step.toolCalls ?? [];
-          const trs = step.toolResults ?? [];
-          for (let i = 0; i < tcs.length; i++) {
-            const toolCall = tcs[i] as { toolName: string; input: unknown };
-            const toolResult = trs[i] as { output?: unknown } | undefined;
-            orderedParts.push({
-              type: 'tool',
-              toolName: toolCall.toolName,
-              args: toolCall.input,
-              result: toolResult?.output,
-            });
-          }
         }
 
         const fullText = text || '';
-        if (fullText || orderedParts.some((p) => p.type === 'tool')) {
+        if (fullText) {
           await chatRepository.addOwnedMessage(user.id, {
             sessionId,
             role: 'assistant',

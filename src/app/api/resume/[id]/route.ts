@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { resumeSections } from '@/lib/db/schema';
+import { resumeChangeRepository } from '@/lib/db/repositories/resume-change.repository';
+import { createResumeSnapshot } from '@/lib/resume-patch/snapshot';
 
-type ResumeSectionRow = typeof resumeSections.$inferSelect;
+type SnapshotSectionInput = {
+  id: string;
+  type: string;
+  title: string;
+  sortOrder: number;
+  visible: boolean;
+  content: unknown;
+};
 
 export async function GET(
   request: NextRequest,
@@ -43,53 +51,35 @@ export async function PUT(
     if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const body = await request.json();
-    const { title, template, themeConfig, sections } = body;
-
-    // Update resume metadata
-    if (title || template || themeConfig) {
-      await resumeRepository.updateOwned(user.id, id, {
-        ...(title && { title }),
-        ...(template && { template }),
-        ...(themeConfig && { themeConfig }),
-      });
+    const { title, template, themeConfig, language, sections } = body;
+    if (sections !== undefined && (!Array.isArray(sections) || sections.length > 100)) {
+      return NextResponse.json({ code: 'INVALID_SECTIONS', error: 'Invalid sections' }, { status: 400 });
     }
 
-    // Sync sections: create new, update existing, delete removed
-    if (sections && Array.isArray(sections)) {
-      const existingSections = resume.sections || [];
-      const existingIds = new Set(existingSections.map((section: ResumeSectionRow) => section.id));
-      const incomingIds = new Set(sections.map((section: { id: string }) => section.id));
-
-      // Delete sections that were removed by the user
-      for (const existing of existingSections) {
-        if (!incomingIds.has(existing.id)) {
-          await resumeRepository.deleteSectionOwned(user.id, id, existing.id);
-        }
-      }
-
-      for (const section of sections) {
-        if (existingIds.has(section.id)) {
-          // Update existing section
-          await resumeRepository.updateSectionOwned(user.id, id, section.id, {
-            title: section.title,
-            sortOrder: section.sortOrder,
-            visible: section.visible,
-            content: section.content,
-          });
-        } else {
-          // Create new section added by the user
-          await resumeRepository.createSectionOwned(user.id, {
-            id: section.id,
-            resumeId: id,
-            type: section.type,
-            title: section.title,
-            sortOrder: section.sortOrder,
-            visible: section.visible,
-            content: section.content,
-          });
-        }
-      }
+    const nextSections: SnapshotSectionInput[] = Array.isArray(sections)
+      ? sections.map((section: Record<string, unknown>, index: number) => ({
+          id: typeof section.id === 'string' ? section.id : '',
+          type: typeof section.type === 'string' ? section.type : '',
+          title: typeof section.title === 'string' ? section.title : '',
+          sortOrder: index,
+          visible: section.visible !== false,
+          content: section.content,
+        }))
+      : resume.sections;
+    if (nextSections.some((section: SnapshotSectionInput) => !section.id || !section.type || !section.title)
+      || new Set(nextSections.map((section: SnapshotSectionInput) => section.id)).size !== nextSections.length) {
+      return NextResponse.json({ code: 'INVALID_SECTIONS', error: 'Invalid section identifiers' }, { status: 400 });
     }
+
+    const snapshot = createResumeSnapshot({
+      ...resume,
+      title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 240) : resume.title,
+      template: typeof template === 'string' && template ? template : resume.template,
+      themeConfig: themeConfig !== undefined ? themeConfig : resume.themeConfig,
+      language: language === 'en' || language === 'zh' ? language : resume.language,
+      sections: nextSections,
+    });
+    await resumeChangeRepository.saveManualSnapshotOwned(user.id, id, snapshot);
 
     const updated = await resumeRepository.findOwnedById(user.id, id);
     return NextResponse.json(updated);

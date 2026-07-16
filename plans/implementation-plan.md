@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 2 功能切片与自动化验收完成，等待人工密钥/出站安全评审
+状态：Phase 3 ResumePatch 核心切片与自动化验收完成；等待人工评审并继续迁移遗留 AI 直写 Route
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -142,13 +142,16 @@ Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 
 实现：
 
-1. Resume Version、Change Set 和 Operation Schema。
-2. LLM 候选生成及 JSON 降级。
-3. Schema、领域、租户和证据校验框架。
-4. 确定性 Diff UI。
-5. 应用单项/全部、乐观并发和事务。
-6. 恢复旧版本。
-7. 将现有 Chat Tool 改造成“提出变更”，禁止直接写库。
+1. [x] Resume Version、Change Set 和 Operation Schema，含 SQLite/PostgreSQL 前向迁移。
+2. [x] LLM Tool 候选生成、文本 JSON 降级和有界修复。
+3. [x] Schema、领域、租户、哈希和证据引用策略框架。
+4. [x] 服务端确定性 Diff 与编辑器审阅 UI。
+5. [x] 应用单项/全部、乐观并发、事务回滚和审计。
+6. [x] 恢复旧版本且保留完整历史。
+7. [x] 将现有 Chat Tool 改造成显式“提出变更”，普通对话禁止直接写库。
+8. [ ] 提案编辑后重校验及显式拒绝动作。
+9. [ ] 将旧翻译覆盖模式和 AI 初始简历生成迁移到 Change Set/受控导入边界。
+10. [ ] 接入 Phase 4 Approved Fact/Forbidden Claim 与 Phase 6 JD Requirement 真实数据源。
 
 自动测试：
 
@@ -159,6 +162,21 @@ Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 - Playwright Chat -> Diff -> Apply -> Undo。
 
 Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
+
+当前进度（2026-07-16）：
+
+- ResumePatch v1 九类 Operation、严格 Schema、服务端 Diff、Stale 检测、部分选择、事务回滚和版本恢复已实现。
+- AI Chat 已完全移除仓储写入 Tool；“生成提案”与普通聊天分离，提案持久化不会修改在线简历。
+- 真实浏览器已覆盖 `candidate -> 审阅 -> 只应用选中项 -> 恢复 Version 1`，并验证 Change Set 历史仍可查询。
+- SQLite 空库/旧库迁移和真实 PostgreSQL 临时实例均已覆盖新增三张表及 Apply/Restore 流程。
+- Gate 仍为 **partial**：上游遗留 `/api/ai/translate` 与 `/api/ai/generate-resume` 尚未迁移，Phase 4 事实库也尚未提供 AI-003 的真实证据闭环。
+
+自动化证据（2026-07-16）：
+
+- `pnpm test`：26 个测试文件、119 个测试通过。
+- `pnpm test:e2e`：5 个真实浏览器场景通过。
+- `pnpm test:migration`、真实 PostgreSQL `pnpm test:integration`、`pnpm type-check`、`pnpm build` 和 `pnpm spec:check` 通过。
+- Phase 3 新增/修改核心文件通过聚焦 ESLint；未放宽全局规则掩盖既有债务。
 
 ## 7. Phase 4：职业知识库和 WorkResume v2
 

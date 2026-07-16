@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   resolveLlmConfig: vi.fn(),
   getModel: vi.fn(),
   convertToModelMessages: vi.fn(),
-  createExecutableTools: vi.fn(),
   streamText: vi.fn(),
 }));
 
@@ -49,13 +48,8 @@ vi.mock('@/lib/ai/prompts', () => ({
   getSystemPrompt: vi.fn(() => 'system'),
 }));
 
-vi.mock('@/lib/ai/tools', () => ({
-  createExecutableTools: mocks.createExecutableTools,
-}));
-
 vi.mock('ai', () => ({
   convertToModelMessages: mocks.convertToModelMessages,
-  stepCountIs: vi.fn(() => 'stop-condition'),
   streamText: mocks.streamText,
 }));
 
@@ -81,7 +75,6 @@ describe('POST /api/ai/chat tenant boundary', () => {
     mocks.resolveLlmConfig.mockResolvedValue({ provider: 'openai-compatible' });
     mocks.getModel.mockReturnValue({ id: 'model' });
     mocks.convertToModelMessages.mockResolvedValue([userMessage]);
-    mocks.createExecutableTools.mockReturnValue({ updateSection: {} });
     mocks.streamText.mockReturnValue({
       toUIMessageStreamResponse: () => new Response('stream'),
     });
@@ -126,7 +119,7 @@ describe('POST /api/ai/chat tenant boundary', () => {
     expect(mocks.addOwnedMessage).not.toHaveBeenCalled();
   });
 
-  it('passes the actor identity through owned chat writes and executable tools', async () => {
+  it('passes the actor identity through owned chat writes without exposing executable resume tools', async () => {
     mocks.findOwnedById.mockResolvedValue({
       id: 'resume-a',
       userId: 'user-a',
@@ -156,12 +149,9 @@ describe('POST /api/ai/chat tenant boundary', () => {
       role: 'user',
       content: 'Improve my resume',
     });
-    expect(mocks.createExecutableTools).toHaveBeenCalledWith(
-      'user-a',
-      'resume-a',
-      { provider: 'openai-compatible' },
-    );
     expect(mocks.resolveLlmConfig).toHaveBeenCalledWith('user-a', 'resume');
     expect(mocks.streamText).toHaveBeenCalledOnce();
+    expect(mocks.streamText.mock.calls[0][0]).not.toHaveProperty('tools');
+    expect(mocks.streamText.mock.calls[0][0]).not.toHaveProperty('stopWhen');
   });
 });

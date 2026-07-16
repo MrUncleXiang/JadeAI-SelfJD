@@ -173,7 +173,8 @@ src/
 - [Phase 1 已处理] AI Chat 在读取 Resume 或创建可执行 Tool 前验证所属用户。
 - [Phase 1 已处理] 受保护仓储和 Route 改为同时使用 `userId + resourceId`。
 - [Phase 2 已处理] LLM API Key 改为服务端加密档案，业务请求不再携带浏览器 Key。
-- [Phase 3 待处理] Tool 成功时仍可直接修改数据库，尚缺 Diff、版本和用户确认。
+- [Phase 3 核心已处理] AI Chat 已移除可执行写库 Tool，改为 `ResumePatch -> 服务端 Diff -> 用户选择 -> 原子应用 -> 新版本`。
+- [Phase 3 发布前续项] 旧 `/api/ai/translate` 覆盖模式及 `/api/ai/generate-resume` 初始生成流程仍需迁移到 Change Set/受控导入边界；在此之前不得宣告“所有 AI 写入均经过 ResumePatch”发布 Gate 已通过。
 - [Phase 1 已处理] 数据库迁移 Fail Closed，Demo Seed 仅允许显式开发 Fixture。
 
 ## 8. 发布拓扑

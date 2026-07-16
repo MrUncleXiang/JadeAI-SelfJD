@@ -8,11 +8,13 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useEditorStore } from '@/stores/editor-store';
+import { useResumeStore } from '@/stores/resume-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useAIChat } from '@/hooks/use-ai-chat';
 import { useMessagePagination } from '@/hooks/use-message-pagination';
 import { AIMessage } from './ai-message';
 import { AIInput } from './ai-input';
+import { ResumeChangeReview } from './resume-change-review';
 
 interface ChatSession {
   id: string;
@@ -52,6 +54,9 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>();
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [changeReviewOpen, setChangeReviewOpen] = useState(false);
+  const [changeReviewRefreshKey, setChangeReviewRefreshKey] = useState(0);
+  const [isProposing, setIsProposing] = useState(false);
 
   const { historicalMessages, hasMore, isLoadingMore, loadInitial, loadMore, reset: resetPagination } = useMessagePagination();
 
@@ -154,7 +159,17 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
     }
   }, [activeSessionId, sessions, loadInitial, createNewSession]);
 
-  const { messages: chatMessages, input, handleInputChange, handleSubmit: originalHandleSubmit, isLoading, status, error: chatError, sendMessage } = useAIChat({
+  const {
+    messages: chatMessages,
+    input,
+    handleInputChange,
+    handleSubmit: originalHandleSubmit,
+    isLoading,
+    status,
+    error: chatError,
+    sendMessage,
+    clearInput,
+  } = useAIChat({
     resumeId,
     sessionId: activeSessionId,
     initialMessages,
@@ -169,8 +184,8 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
       // Show a user-friendly message for common errors
       if (msg.includes('ETIMEDOUT') || msg.includes('Cannot connect')) {
         toast.error(t('errorMessage'), { description: 'API 连接超时，请检查网络或 API 配置' });
-      } else if (msg.includes('No tool call found')) {
-        toast.error(t('errorMessage'), { description: 'AI 模型返回了无效的工具调用，请重试' });
+      } else if (msg.includes('INVALID_MODEL_OUTPUT')) {
+        toast.error(t('errorMessage'), { description: t('proposalInvalidOutput') });
       } else {
         toast.error(t('errorMessage'), { description: msg.length > 200 ? msg.slice(0, 200) + '...' : msg });
       }
@@ -207,6 +222,46 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
     originalHandleSubmit(e);
   }, [sessions, activeSessionId, input, originalHandleSubmit]);
 
+  const createProposal = useCallback(async () => {
+    const instruction = input.trim();
+    if (!instruction || isProposing) return;
+    if (!boundResumeProfile) {
+      toast.error(t('apiKeyMissing'), { description: t('apiKeyMissingHint') });
+      return;
+    }
+
+    setIsProposing(true);
+    try {
+      // Flush local edits first so the proposal is based on the same immutable version
+      // the user currently sees in the editor.
+      const saved = await useResumeStore.getState().save();
+      if (!saved) throw new Error(t('proposalSaveFailed'));
+      const response = await fetch(`/api/resumes/${resumeId}/change-sets`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ instruction }),
+      });
+      if (!response.ok) {
+        let detail = `${response.status} ${response.statusText}`;
+        try {
+          const body = await response.json() as { error?: string; code?: string };
+          detail = body.error || body.code || detail;
+        } catch { /* keep HTTP detail */ }
+        throw new Error(detail);
+      }
+      clearInput();
+      setChangeReviewRefreshKey((value) => value + 1);
+      setChangeReviewOpen(true);
+      toast.success(t('proposalCreated'));
+    } catch (error) {
+      toast.error(t('proposalFailed'), {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setIsProposing(false);
+    }
+  }, [boundResumeProfile, clearInput, input, isProposing, resumeId, t]);
+
   // Smart auto-scroll: only scroll to bottom when user is near bottom
   useEffect(() => {
     const el = scrollRef.current;
@@ -241,6 +296,13 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
           </div>
         )}
         <div className="flex items-center gap-1">
+          <ResumeChangeReview
+            resumeId={resumeId}
+            open={changeReviewOpen}
+            onOpenChange={setChangeReviewOpen}
+            refreshKey={changeReviewRefreshKey}
+          />
+
           {/* History popover */}
           <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
             <PopoverTrigger asChild>
@@ -349,6 +411,8 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
         onChange={handleInputChange}
         onSubmit={handleSubmit}
         isLoading={isLoading}
+        isProposing={isProposing}
+        onPropose={() => void createProposal()}
         modelLabel={boundResumeProfile?.modelName}
       />
     </>

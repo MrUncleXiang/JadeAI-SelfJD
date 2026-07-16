@@ -82,6 +82,9 @@ function testFreshInstall(): void {
     'invitations',
     'system_settings',
     'audit_events',
+    'resume_versions',
+    'resume_change_sets',
+    'resume_change_operations',
   ]) {
     assert(tables.has(table), `fresh migration is missing table ${table}`);
   }
@@ -130,6 +133,13 @@ function testLegacyUpgrade(): void {
     (sqlite.prepare('SELECT title FROM resumes WHERE id = ?').get('legacy-resume') as { title: string }).title,
     'Preserved resume',
   );
+  for (const table of ['resume_versions', 'resume_change_sets', 'resume_change_operations']) {
+    assert.equal(
+      (sqlite.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { count: number }).count,
+      1,
+      `legacy upgrade is missing table ${table}`,
+    );
+  }
   assert.equal(
     (sqlite.prepare(
       "SELECT count(*) AS count FROM audit_events WHERE action = 'auth.migration_identity_conflict'",

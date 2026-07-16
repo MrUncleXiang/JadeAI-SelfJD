@@ -20,7 +20,7 @@ interface ResumeStore {
   toggleSectionVisibility: (sectionId: string) => void;
   setTemplate: (template: string) => void;
   setTitle: (title: string) => void;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
   _scheduleSave: () => void;
   reset: () => void;
 }
@@ -150,16 +150,18 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
   },
 
   save: async () => {
-    const { currentResume, sections, isDirty } = get();
-    if (!currentResume || !isDirty) return;
+    const { currentResume, sections, isDirty, _saveTimeout } = get();
+    if (!currentResume) return false;
+    if (!isDirty) return true;
+    if (_saveTimeout) clearTimeout(_saveTimeout);
 
-    set({ isSaving: true });
+    set({ isSaving: true, _saveTimeout: null });
     try {
       const fingerprint = typeof window !== 'undefined'
         ? localStorage.getItem('jade_fingerprint')
         : null;
 
-      await fetch(`/api/resume/${currentResume.id}`, {
+      const response = await fetch(`/api/resume/${currentResume.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -179,10 +181,24 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
           })),
         }),
       });
+      if (!response.ok) {
+        let detail = `${response.status} ${response.statusText}`;
+        try {
+          const body = await response.json() as { error?: string; code?: string };
+          detail = body.error || body.code || detail;
+        } catch { /* keep HTTP detail */ }
+        throw new Error(detail);
+      }
 
-      set({ isDirty: false });
+      let savedCurrentState = false;
+      set((state) => {
+        savedCurrentState = state.currentResume === currentResume && state.sections === sections;
+        return savedCurrentState ? { isDirty: false } : {};
+      });
+      return savedCurrentState;
     } catch (error) {
       console.error('Failed to save resume:', error);
+      return false;
     } finally {
       set({ isSaving: false });
     }
@@ -202,7 +218,7 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
 
     const delay = _hydrated ? autoSaveInterval : AUTOSAVE_DELAY;
     const timeout = setTimeout(() => {
-      get().save();
+      void get().save();
     }, delay);
 
     set({ _saveTimeout: timeout });

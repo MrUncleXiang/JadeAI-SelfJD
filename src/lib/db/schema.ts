@@ -156,6 +156,87 @@ export const resumes = sqliteTable('resumes', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
+export const resumeVersions = sqliteTable('resume_versions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  resumeId: text('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),
+  versionNumber: integer('version_number').notNull(),
+  snapshot: text('snapshot', { mode: 'json' }).notNull(),
+  source: text('source', {
+    enum: ['manual', 'ai-change-set', 'restore', 'import'],
+  }).notNull(),
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  uniqueIndex('resume_versions_resume_number_uq').on(table.resumeId, table.versionNumber),
+  index('resume_versions_user_resume_idx').on(table.userId, table.resumeId),
+  index('resume_versions_resume_created_at_idx').on(table.resumeId, table.createdAt),
+]);
+
+export const resumeChangeSets = sqliteTable('resume_change_sets', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  resumeId: text('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),
+  baseVersionId: text('base_version_id').notNull().references(() => resumeVersions.id, { onDelete: 'cascade' }),
+  appliedVersionId: text('applied_version_id').references(() => resumeVersions.id, { onDelete: 'set null' }),
+  status: text('status', {
+    enum: ['proposed', 'validated', 'stale', 'partially_applied', 'applied', 'rejected', 'failed'],
+  }).notNull().default('validated'),
+  llmProfileId: text('llm_profile_id').references(() => llmProfiles.id, { onDelete: 'set null' }),
+  provider: text('provider'),
+  modelName: text('model_name'),
+  promptVersion: text('prompt_version').notNull().default('resume-patch-v1'),
+  requestId: text('request_id'),
+  summary: text('summary').notNull().default(''),
+  warnings: text('warnings', { mode: 'json' }).notNull().default('[]'),
+  validationResult: text('validation_result', { mode: 'json' }).notNull().default('{}'),
+  rawModelOutput: text('raw_model_output'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  index('resume_change_sets_user_resume_idx').on(table.userId, table.resumeId),
+  index('resume_change_sets_base_version_idx').on(table.baseVersionId),
+  index('resume_change_sets_created_at_idx').on(table.createdAt),
+]);
+
+export const resumeChangeOperations = sqliteTable('resume_change_operations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  changeSetId: text('change_set_id').notNull().references(() => resumeChangeSets.id, { onDelete: 'cascade' }),
+  operationId: text('operation_id').notNull(),
+  sortOrder: integer('sort_order').notNull(),
+  type: text('type', {
+    enum: [
+      'set_field',
+      'add_item',
+      'update_item',
+      'remove_item',
+      'add_section',
+      'remove_section',
+      'move_section',
+      'set_visibility',
+      'set_template',
+    ],
+  }).notNull(),
+  sectionId: text('section_id'),
+  itemId: text('item_id'),
+  expectedHash: text('expected_hash'),
+  value: text('value', { mode: 'json' }),
+  reason: text('reason').notNull(),
+  evidenceIds: text('evidence_ids', { mode: 'json' }).notNull().default('[]'),
+  jdRequirementIds: text('jd_requirement_ids', { mode: 'json' }).notNull().default('[]'),
+  confidenceBasisPoints: integer('confidence_basis_points').notNull().default(0),
+  diff: text('diff', { mode: 'json' }).notNull().default('{}'),
+  selected: integer('selected', { mode: 'boolean' }).notNull().default(false),
+  result: text('result', {
+    enum: ['pending', 'applied', 'not_selected', 'failed'],
+  }).notNull().default('pending'),
+  errorCode: text('error_code'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  uniqueIndex('resume_change_operations_set_operation_uq').on(table.changeSetId, table.operationId),
+  index('resume_change_operations_change_set_idx').on(table.changeSetId, table.sortOrder),
+]);
+
 export const resumeSections = sqliteTable('resume_sections', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   resumeId: text('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),

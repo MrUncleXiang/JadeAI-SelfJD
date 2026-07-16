@@ -120,6 +120,17 @@ async function main(): Promise<void> {
       SELECT title FROM resumes WHERE id = 'legacy-resume'
     `;
     assert.equal(resumes[0].title, 'Preserved resume');
+    const resumeChangeTables = await client<{ table_name: string }[]>`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name IN ('resume_versions', 'resume_change_sets', 'resume_change_operations')
+      ORDER BY table_name
+    `;
+    assert.deepEqual(
+      resumeChangeTables.map((row) => row.table_name),
+      ['resume_change_operations', 'resume_change_sets', 'resume_versions'],
+    );
   } finally {
     await client.end();
     rmSync(workdir, { recursive: true, force: true });
@@ -130,6 +141,12 @@ async function main(): Promise<void> {
   const { llmProfileRepository } = await import('../src/lib/db/repositories/llm-profile.repository');
   const { decryptLlmApiKey } = await import('../src/lib/llm/encryption');
   const { llmProfileService } = await import('../src/lib/llm/service');
+  const { resumeRepository } = await import('../src/lib/db/repositories/resume.repository');
+  const { resumeChangeRepository } = await import('../src/lib/db/repositories/resume-change.repository');
+  const { resumeChangeService } = await import('../src/lib/resume-patch/service');
+  const { expectedHashForOperation } = await import('../src/lib/resume-patch/operations');
+  const { resumePatchSchema } = await import('../src/lib/resume-patch/schema');
+  const { parseResumeSnapshot } = await import('../src/lib/resume-patch/snapshot');
   const { adapter } = await import('../src/lib/db');
   const originalPassword = 'Correct-Horse-Battery-2026!';
   const replacementPassword = 'Different-Correct-Horse-2026!';
@@ -212,6 +229,80 @@ async function main(): Promise<void> {
     );
     assert.equal(await llmProfileRepository.findOwnedById(otherActor.userId, profile.id), null);
 
+    const resume = await resumeRepository.createOwned(admin.id, {
+      title: 'PostgreSQL ResumePatch',
+      template: 'classic',
+      language: 'en',
+    });
+    assert(resume);
+    const summarySection = await resumeRepository.createSectionOwned(admin.id, {
+      resumeId: resume.id,
+      type: 'summary',
+      title: 'Summary',
+      sortOrder: 0,
+      content: { text: 'Original summary' },
+    });
+    assert(summarySection);
+    const baseline = await resumeChangeRepository.ensureCurrentVersionOwned(admin.id, resume.id);
+    const snapshot = parseResumeSnapshot(baseline.snapshot);
+    const operationWithoutHash = {
+      operationId: 'postgres-summary-rewrite',
+      type: 'set_field' as const,
+      sectionId: summarySection.id,
+      expectedHash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+      value: { field: 'text', value: 'Improved professional summary' },
+      reason: 'Improve clarity without adding facts',
+      evidenceIds: [],
+      jdRequirementIds: [],
+      confidence: 0.92,
+    };
+    const operation = {
+      ...operationWithoutHash,
+      expectedHash: expectedHashForOperation(snapshot, operationWithoutHash),
+    };
+    const patch = resumePatchSchema.parse({
+      schemaVersion: 1,
+      resumeId: resume.id,
+      baseVersionId: baseline.id,
+      summary: 'PostgreSQL transactional patch',
+      operations: [operation],
+      warnings: [],
+    });
+    const changeSet = await resumeChangeService.createFromCandidate({
+      userId: admin.id,
+      resumeId: resume.id,
+      candidate: patch,
+      config: { profileId: profile.id, provider: profile.provider, model: profile.modelName },
+    });
+    assert(changeSet);
+    assert.equal(changeSet.status, 'validated');
+    await assert.rejects(
+      resumeChangeService.getChangeSet(otherActor.userId, resume.id, changeSet.id),
+      (error: unknown) => (error as { code?: string }).code === 'CHANGE_SET_NOT_FOUND',
+    );
+    const applied = await resumeChangeService.apply({
+      userId: admin.id,
+      resumeId: resume.id,
+      changeSetId: changeSet.id,
+      operationIds: [operation.operationId],
+    });
+    assert.equal(applied.changeSet.status, 'applied');
+    const updatedResume = await resumeRepository.findOwnedById(admin.id, resume.id);
+    assert.equal((updatedResume?.sections[0].content as { text?: string }).text, 'Improved professional summary');
+    const versionsAfterApply = await resumeChangeService.listVersions(admin.id, resume.id);
+    assert.deepEqual(
+      versionsAfterApply.map((version: { versionNumber: number }) => version.versionNumber),
+      [2, 1],
+    );
+    await resumeChangeService.restore(admin.id, resume.id, baseline.id);
+    const restoredResume = await resumeRepository.findOwnedById(admin.id, resume.id);
+    assert.equal((restoredResume?.sections[0].content as { text?: string }).text, 'Original summary');
+    const versionsAfterRestore = await resumeChangeService.listVersions(admin.id, resume.id);
+    assert.deepEqual(
+      versionsAfterRestore.map((version: { versionNumber: number }) => version.versionNumber),
+      [3, 2, 1],
+    );
+
     await authService.changePassword(admin.id, originalPassword, replacementPassword);
     assert.equal(
       await authService.resolveSession(login.token, 'postgres-integration-revoked'),
@@ -222,7 +313,7 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write(
-    'PostgreSQL integration acceptance passed: legacy migration, auth lifecycle, encrypted LLM profile, binding, and tenant isolation.\n',
+    'PostgreSQL integration acceptance passed: legacy migration, auth lifecycle, encrypted LLM profile, ResumePatch apply/restore, and tenant isolation.\n',
   );
 }
 

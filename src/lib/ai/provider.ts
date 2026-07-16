@@ -8,6 +8,12 @@ export interface AIConfig {
   baseURL: string;
   model: string;
   profileId?: string;
+  capabilities?: {
+    reachable?: boolean;
+    json?: boolean;
+    tools?: boolean;
+    vision?: boolean;
+  };
   fetch?: typeof globalThis.fetch;
 }
 

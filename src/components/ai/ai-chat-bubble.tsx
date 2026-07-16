@@ -80,7 +80,6 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
   const autoWindowPos = useMemo(() => {
     if (typeof window === 'undefined') return { left: 100, top: 100 };
     return calcWindowPos(bubblePos.x, bubblePos.y, winSize.w, winSize.h);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bubblePos.x, bubblePos.y, winSize.w, winSize.h]);
 
   const winPos = windowPos ?? autoWindowPos;
@@ -206,6 +205,7 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
         )}
         <button
           data-tour="ai-chat"
+          aria-label={t('bubbleTooltip')}
           className="relative flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-hover text-white shadow-lg transition-transform hover:scale-110 active:cursor-grabbing active:scale-95"
           onMouseDown={onBubbleMouseDown}
           onClick={onBubbleClick}

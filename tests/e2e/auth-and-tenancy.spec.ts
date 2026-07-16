@@ -5,6 +5,7 @@ import {
   type BrowserContext,
   type Page,
 } from '@playwright/test';
+import { createHash } from 'node:crypto';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3100';
 const ADMIN_USERNAME = 'e2e-admin';
@@ -35,6 +36,23 @@ interface Invitation {
 interface ResumeRecord {
   id: string;
   title: string;
+  sections?: Array<{
+    id: string;
+    type: string;
+    content: Record<string, unknown>;
+  }>;
+}
+
+interface ResumeVersionRecord {
+  id: string;
+  versionNumber: number;
+  source: string;
+}
+
+interface ResumeChangeSetRecord {
+  id: string;
+  status: string;
+  operations: Array<{ operationId: string; result: string }>;
 }
 
 interface LlmProfileRecord {
@@ -53,6 +71,10 @@ interface LlmBindings {
 
 function uniqueUsername(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+}
+
+function contentHash(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
 
 async function installStableBrowserState(context: BrowserContext): Promise<void> {
@@ -181,6 +203,38 @@ function findUser(users: AdminUserList, username: string): AdminUser {
   expect(user, `Expected admin user list to contain ${username}`).toBeDefined();
   return user as AdminUser;
 }
+
+test.beforeAll(async ({ request }) => {
+  const placeholder = '00000000-0000-4000-8000-000000000000';
+  const routes = [
+    {
+      method: 'GET',
+      path: `/api/resumes/${placeholder}/change-sets/${placeholder}`,
+    },
+    {
+      method: 'POST',
+      path: `/api/resumes/${placeholder}/change-sets/${placeholder}/apply`,
+      data: { operationIds: [] },
+    },
+    {
+      method: 'POST',
+      path: `/api/resumes/${placeholder}/versions/${placeholder}/restore`,
+    },
+  ];
+
+  // Compile the deepest dynamic API routes before a UI assertion depends on
+  // them. Next.js dev mode can answer the first lazy-compilation request with
+  // its HTML 404; an unauthenticated 401 proves the route is actually ready.
+  for (const route of routes) {
+    await expect.poll(async () => {
+      const response = await request.fetch(route.path, {
+        method: route.method,
+        ...(route.data ? { data: route.data } : {}),
+      });
+      return response.status();
+    }, { timeout: 60_000 }).toBe(401);
+  }
+});
 
 test.beforeEach(async ({ context }) => {
   await installStableBrowserState(context);
@@ -337,9 +391,14 @@ test('resume read, mutation, duplicate, delete, and export stay tenant scoped', 
       browserJson(attackerPage, `/api/resume/${ownerResumeId}/duplicate`, 'POST'),
       browserJson(attackerPage, `/api/resume/${ownerResumeId}/export?format=json`),
       browserJson(attackerPage, `/api/resume/${ownerResumeId}`, 'DELETE'),
+      browserJson(attackerPage, `/api/resumes/${ownerResumeId}/versions`),
+      browserJson(attackerPage, `/api/resumes/${ownerResumeId}/change-sets`),
+      browserJson(attackerPage, `/api/resumes/${ownerResumeId}/change-sets`, 'POST', {
+        candidate: {},
+      }),
     ];
     const results = await Promise.all(foreignOperations);
-    expect(results.map((result) => result.status)).toEqual([404, 404, 404, 404, 404]);
+    expect(results.map((result) => result.status)).toEqual([404, 404, 404, 404, 404, 404, 404, 404]);
 
     const ownerRead = await browserJson<ResumeRecord>(
       ownerPage,
@@ -359,6 +418,157 @@ test('resume read, mutation, duplicate, delete, and export stay tenant scoped', 
     await attackerContext.close();
     await ownerContext.close();
   }
+});
+
+test('reviewable ResumePatch applies a selected subset and restores an old version', async ({ page }) => {
+  await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+
+  const created = await browserJson<ResumeRecord>(page, '/api/resume', 'POST', {
+    title: 'ResumePatch E2E',
+    template: 'classic',
+    language: 'en',
+    sections: [
+      {
+        type: 'personal_info',
+        title: 'Personal Information',
+        visible: true,
+        content: {
+          fullName: 'Jade Tester',
+          jobTitle: 'Original title',
+          email: '',
+          phone: '',
+          location: '',
+        },
+      },
+      {
+        type: 'summary',
+        title: 'Professional Summary',
+        visible: true,
+        content: { text: 'Original summary' },
+      },
+    ],
+  });
+  expect(created.status).toBe(201);
+  const resumeId = created.body?.id;
+  expect(resumeId).toBeTruthy();
+  const personal = created.body?.sections?.find((section) => section.type === 'personal_info');
+  const summary = created.body?.sections?.find((section) => section.type === 'summary');
+  expect(personal?.id).toBeTruthy();
+  expect(summary?.id).toBeTruthy();
+
+  const baselineResult = await browserJson<ResumeVersionRecord[]>(
+    page,
+    `/api/resumes/${resumeId}/versions`,
+  );
+  expect(baselineResult.status).toBe(200);
+  expect(baselineResult.body).toHaveLength(1);
+  const baseline = baselineResult.body?.[0];
+  expect(baseline?.versionNumber).toBe(1);
+
+  const summaryOperationId = `summary-${crypto.randomUUID()}`;
+  const titleOperationId = `title-${crypto.randomUUID()}`;
+  const proposal = await browserJson<ResumeChangeSetRecord>(
+    page,
+    `/api/resumes/${resumeId}/change-sets`,
+    'POST',
+    {
+      candidate: {
+        schemaVersion: 1,
+        resumeId,
+        baseVersionId: baseline?.id,
+        summary: 'Improve the summary and title',
+        warnings: [],
+        operations: [
+          {
+            operationId: summaryOperationId,
+            type: 'set_field',
+            sectionId: summary?.id,
+            expectedHash: contentHash('Original summary'),
+            value: { field: 'text', value: 'Improved concise summary' },
+            reason: 'Improve clarity without adding new facts',
+            evidenceIds: [],
+            jdRequirementIds: [],
+            confidence: 0.95,
+          },
+          {
+            operationId: titleOperationId,
+            type: 'set_field',
+            sectionId: personal?.id,
+            expectedHash: contentHash('Original title'),
+            value: { field: 'jobTitle', value: 'Proposed title' },
+            reason: 'Make the title more concise',
+            evidenceIds: [],
+            jdRequirementIds: [],
+            confidence: 0.9,
+          },
+        ],
+      },
+    },
+  );
+  expect(proposal.status).toBe(201);
+  expect(proposal.body).toMatchObject({ status: 'validated' });
+
+  await page.goto(`/en/editor/${resumeId}`);
+  await expect(page.getByRole('button', { name: 'Chat with AI Assistant' })).toBeVisible();
+  await page.getByRole('button', { name: 'Chat with AI Assistant' }).click();
+  await page.getByRole('button', { name: 'Review AI changes and resume versions' }).click();
+  await expect(page.getByRole('heading', { name: 'Resume Change Review' })).toBeVisible();
+  await expect(page.getByText('Improve the summary and title', { exact: true }).first()).toBeVisible();
+
+  const operations = page.getByRole('checkbox');
+  await expect(operations).toHaveCount(2);
+  await expect(operations.nth(0)).toHaveAttribute('aria-checked', 'true');
+  await expect(operations.nth(1)).toHaveAttribute('aria-checked', 'true');
+  await operations.nth(1).click();
+  await expect(page.getByText('Selected 1/2')).toBeVisible();
+
+  await Promise.all([
+    page.waitForResponse((response) => (
+      response.url().includes(`/api/resumes/${resumeId}/change-sets/`)
+      && response.url().endsWith('/apply')
+      && response.request().method() === 'POST'
+    )),
+    page.getByRole('button', { name: 'Apply Selected' }).click(),
+  ]);
+  await expect(page.getByText('Selected changes were applied in a new resume version')).toBeVisible();
+
+  const afterApply = await browserJson<ResumeRecord>(page, `/api/resume/${resumeId}`);
+  const appliedSummary = afterApply.body?.sections?.find((section) => section.type === 'summary');
+  const unchangedPersonal = afterApply.body?.sections?.find((section) => section.type === 'personal_info');
+  expect(appliedSummary?.content.text).toBe('Improved concise summary');
+  expect(unchangedPersonal?.content.jobTitle).toBe('Original title');
+
+  await page.getByRole('tab', { name: 'Version History' }).click();
+  await expect(page.getByText('Version 2', { exact: true })).toBeVisible();
+  await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
+  page.once('dialog', async (dialog) => dialog.accept());
+  await Promise.all([
+    page.waitForResponse((response) => (
+      response.url().endsWith(`/api/resumes/${resumeId}/versions/${baseline?.id}/restore`)
+      && response.request().method() === 'POST'
+    )),
+    page.getByRole('button', { name: 'Restore' }).last().click(),
+  ]);
+  await expect(page.getByText('Restored the content of version 1')).toBeVisible();
+
+  const afterRestore = await browserJson<ResumeRecord>(page, `/api/resume/${resumeId}`);
+  const restoredSummary = afterRestore.body?.sections?.find((section) => section.type === 'summary');
+  const restoredPersonal = afterRestore.body?.sections?.find((section) => section.type === 'personal_info');
+  expect(restoredSummary?.content.text).toBe('Original summary');
+  expect(restoredPersonal?.content.jobTitle).toBe('Original title');
+
+  const storedProposal = await browserJson<ResumeChangeSetRecord>(
+    page,
+    `/api/resumes/${resumeId}/change-sets/${proposal.body?.id}`,
+  );
+  expect(storedProposal.status).toBe(200);
+  expect(storedProposal.body).toMatchObject({
+    status: 'partially_applied',
+    operations: [
+      { operationId: summaryOperationId, result: 'applied' },
+      { operationId: titleOperationId, result: 'not_selected' },
+    ],
+  });
 });
 
 test('legacy browser keys migrate into encrypted per-user LLM profiles and bindings', async ({ page }) => {

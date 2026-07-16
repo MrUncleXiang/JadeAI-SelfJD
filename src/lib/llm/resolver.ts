@@ -12,6 +12,21 @@ import { createLlmProviderFetch } from './transport';
 
 type ProfileRecord = NonNullable<Awaited<ReturnType<typeof llmProfileRepository.findOwnedById>>>;
 
+function parseCapabilities(value: unknown): AIConfig['capabilities'] {
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed); } catch { return {}; }
+  }
+  if (!parsed || typeof parsed !== 'object') return {};
+  const record = parsed as Record<string, unknown>;
+  return {
+    reachable: record.reachable === true,
+    json: record.json === true,
+    tools: record.tools === true,
+    vision: record.vision === true,
+  };
+}
+
 function resolverError(error: unknown): never {
   if (error instanceof AIConfigError) throw error;
   if (error instanceof LlmEncryptionError) {
@@ -77,6 +92,7 @@ async function materializeProfile(
       baseURL,
       model: profile.modelName,
       profileId: profile.id,
+      capabilities: parseCapabilities(profile.capabilities),
       fetch: createLlmProviderFetch(baseURL),
     };
   } catch (error) {

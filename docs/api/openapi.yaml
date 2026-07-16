@@ -722,7 +722,7 @@ paths:
       tags: [ResumeChange]
       operationId: listResumeChangeSets
       x-requirement-id: AI-002
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ResumeId'
       responses:
@@ -738,7 +738,7 @@ paths:
       tags: [ResumeChange]
       operationId: proposeResumeChangeSet
       x-requirement-id: AI-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ResumeId'
       requestBody:
@@ -748,34 +748,43 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [baseVersionId, instruction]
+              anyOf:
+                - required: [instruction]
+                - required: [candidate]
               properties:
                 baseVersionId:
                   type: string
                   format: uuid
+                  description: Optional optimistic base; omitted means the current version.
                 instruction:
                   type: string
                   minLength: 1
                   maxLength: 10000
-                jdSourceId:
-                  type: string
-                  format: uuid
+                candidate:
+                  $ref: '#/components/schemas/ResumePatchCandidate'
+                  description: Structured automation input; it still passes all tenant, schema, evidence, hash and diff validation.
       responses:
-        '202':
-          description: Generation job accepted
+        '201':
+          description: Validated reviewable change set created; the live resume is unchanged.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Job'
+                $ref: '#/components/schemas/ResumeChangeSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
   /api/resumes/{resumeId}/change-sets/{changeSetId}:
     get:
       tags: [ResumeChange]
       operationId: getResumeChangeSet
       x-requirement-id: AI-002
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ResumeId'
         - $ref: '#/components/parameters/ChangeSetId'
@@ -794,7 +803,7 @@ paths:
       tags: [ResumeChange]
       operationId: applyResumeChangeSet
       x-requirement-id: AI-002
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ResumeId'
         - $ref: '#/components/parameters/ChangeSetId'
@@ -837,7 +846,7 @@ paths:
       tags: [ResumeChange]
       operationId: listResumeVersions
       x-requirement-id: RES-003
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/ResumeId'
       responses:
@@ -849,6 +858,33 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ResumeVersionSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/resumes/{resumeId}/versions/{versionId}/restore:
+    post:
+      tags: [ResumeChange]
+      operationId: restoreResumeVersion
+      x-requirement-id: RES-003
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+        - $ref: '#/components/parameters/VersionId'
+      responses:
+        '200':
+          description: The selected snapshot is restored as a new immutable version.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [resumeVersionId]
+                properties:
+                  resumeVersionId:
+                    type: string
+                    format: uuid
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/jd-sources:
     post:
@@ -1019,6 +1055,13 @@ components:
         format: uuid
     ChangeSetId:
       name: changeSetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VersionId:
+      name: versionId
       in: path
       required: true
       schema:
@@ -1450,6 +1493,87 @@ components:
               contentHash:
                 type: string
 
+    ResumePatchCandidate:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, resumeId, baseVersionId, summary, operations, warnings]
+      properties:
+        schemaVersion:
+          type: integer
+          const: 1
+        resumeId:
+          type: string
+        baseVersionId:
+          type: string
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        operations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ResumePatchCandidateOperation'
+        warnings:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1000
+
+    ResumePatchCandidateOperation:
+      type: object
+      additionalProperties: false
+      description: |
+        Strict ResumePatch v1 discriminated operation. Required target/value fields
+        vary by operation type and are revalidated by the server before persistence.
+      required: [operationId, type, expectedHash, reason, evidenceIds, jdRequirementIds, confidence]
+      properties:
+        operationId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        type:
+          type: string
+          enum:
+            - set_field
+            - add_item
+            - update_item
+            - remove_item
+            - add_section
+            - remove_section
+            - move_section
+            - set_visibility
+            - set_template
+        sectionId:
+          type: [string, 'null']
+        itemId:
+          type: [string, 'null']
+        expectedHash:
+          type: string
+          pattern: '^sha256:[a-f0-9]{64}$'
+        value: {}
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        evidenceIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+        jdRequirementIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
     ResumeChangeSet:
       type: object
       required: [id, resumeId, baseVersionId, status, operations]
@@ -1472,6 +1596,8 @@ components:
           type: array
           items:
             type: string
+        appliedVersionId:
+          type: [string, 'null']
         operations:
           type: array
           items:
@@ -1479,7 +1605,7 @@ components:
 
     ResumeChangeOperation:
       type: object
-      required: [operationId, type, reason, evidenceIds, jdRequirementIds]
+      required: [operationId, type, reason, evidenceIds, jdRequirementIds, confidence, diff, selected, result]
       properties:
         operationId:
           type: string
@@ -1518,6 +1644,16 @@ components:
           type: number
           minimum: 0
           maximum: 1
+        diff:
+          type: object
+          description: Server-computed before/after preview; model-supplied diff values are ignored.
+        selected:
+          type: boolean
+        result:
+          type: string
+          enum: [pending, applied, not_selected, failed]
+        errorCode:
+          type: [string, 'null']
 
     ResumeVersionSummary:
       type: object

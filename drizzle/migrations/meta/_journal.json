@@ -64,6 +64,13 @@
       "when": 1784207772237,
       "tag": "0008_blue_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1784214548356,
+      "tag": "0009_goofy_spencer_smythe",
+      "breakpoints": true
     }
   ]
 }

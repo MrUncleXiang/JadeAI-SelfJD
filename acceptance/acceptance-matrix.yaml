@@ -252,7 +252,11 @@ scenarios:
     when: 查看历史并恢复旧版本
     then: 创建新版本且旧历史不被删除
     layers: [unit, integration, e2e]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/db/repositories/resume-change.repository.test.ts
+      - scripts/test-postgres-integration.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AI-001
     requirement: AI-001
@@ -263,7 +267,11 @@ scenarios:
     when: 解析候选变更
     then: 仅固定 Schema 和操作枚举可形成 Change Set
     layers: [unit, contract, security]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/resume-patch/resume-patch.test.ts
+      - src/app/api/ai/chat/route.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AI-002
     requirement: AI-002
@@ -274,7 +282,12 @@ scenarios:
     when: 用户选择部分或全部应用
     then: 只有选中项原子写入，失败全部回滚
     layers: [unit, integration, e2e]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/resume-patch/resume-patch.test.ts
+      - src/lib/db/repositories/resume-change.repository.test.ts
+      - scripts/test-postgres-integration.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AI-003
     requirement: AI-003
@@ -285,7 +298,10 @@ scenarios:
     when: 模型提出新增简历陈述
     then: 仅被批准且不触发禁止规则的内容可应用
     layers: [unit, integration, e2e]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/resume-patch/resume-patch.test.ts
+      - src/lib/resume-patch/operations.ts
 
   - id: ACC-AI-004
     requirement: AI-004
@@ -296,7 +312,11 @@ scenarios:
     when: 生成简历变更
     then: 通过 JSON 提取、有限修复和 Schema 校验完成流程
     layers: [unit, contract, e2e]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/resume-patch/resume-patch.test.ts
+      - src/lib/resume-patch/extract.ts
+      - src/lib/resume-patch/service.ts
 
   - id: ACC-KB-001
     requirement: KB-001
