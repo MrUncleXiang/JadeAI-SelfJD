@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     const resumeId = request.nextUrl.searchParams.get('resumeId');
     if (!resumeId) return new Response('Missing resumeId', { status: 400 });
 
-    const sessions = await chatRepository.findSessionsByResumeId(resumeId);
+    const sessions = await chatRepository.findOwnedSessionsByResumeId(user.id, resumeId);
     return NextResponse.json({ sessions });
   } catch (error) {
     console.error('GET /api/ai/chat/sessions error:', error);
@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
     const { resumeId } = await request.json();
     if (!resumeId) return new Response('Missing resumeId', { status: 400 });
 
-    const session = await chatRepository.createSession({ resumeId });
+    const session = await chatRepository.createOwnedSession(user.id, { resumeId });
+    if (!session) return new Response('Not found', { status: 404 });
     return NextResponse.json({ session });
   } catch (error) {
     console.error('POST /api/ai/chat/sessions error:', error);

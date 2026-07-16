@@ -18,12 +18,35 @@ export async function POST(request: NextRequest) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const { messages, resumeId, model: modelId, sessionId } = await request.json();
+    const body = await request.json();
+    const messages = body?.messages;
+    const resumeId = typeof body?.resumeId === 'string' ? body.resumeId : undefined;
+    const modelId = typeof body?.model === 'string' ? body.model : undefined;
+    const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : undefined;
+
+    if (!Array.isArray(messages)) {
+      return new Response('Invalid messages', { status: 400 });
+    }
 
     let resumeContext = '';
+    let effectiveResumeId = resumeId;
     if (resumeId) {
-      const resume = await resumeRepository.findById(resumeId);
-      if (resume) {
+      const resume = await resumeRepository.findOwnedById(user.id, resumeId);
+      if (!resume) return new Response('Not found', { status: 404 });
+      resumeContext = JSON.stringify(resume.sections);
+    }
+
+    if (sessionId) {
+      const session = await chatRepository.findOwnedSession(user.id, sessionId);
+      if (!session) return new Response('Not found', { status: 404 });
+      if (resumeId && session.resumeId !== resumeId) {
+        return new Response('Not found', { status: 404 });
+      }
+
+      if (!effectiveResumeId) {
+        effectiveResumeId = session.resumeId;
+        const resume = await resumeRepository.findOwnedById(user.id, effectiveResumeId);
+        if (!resume) return new Response('Not found', { status: 404 });
         resumeContext = JSON.stringify(resume.sections);
       }
     }
@@ -39,10 +62,10 @@ export async function POST(request: NextRequest) {
           const userMessages = messages.filter((m: { role: string }) => m.role === 'user');
           if (userMessages.length === 1) {
             const title = content.slice(0, 50);
-            await chatRepository.updateSessionTitle(sessionId, title);
+            await chatRepository.updateOwnedSessionTitle(user.id, sessionId, title);
           }
 
-          await chatRepository.addMessage({
+          await chatRepository.addOwnedMessage(user.id, {
             sessionId,
             role: 'user',
             content,
@@ -58,7 +81,9 @@ export async function POST(request: NextRequest) {
     // Truncate to last N rounds for LLM context
     const truncatedMessages = modelMessages.slice(-MAX_MESSAGES);
 
-    const tools = resumeId ? createExecutableTools(resumeId, aiConfig) : undefined;
+    const tools = effectiveResumeId
+      ? createExecutableTools(user.id, effectiveResumeId, aiConfig)
+      : undefined;
 
     const result = streamText({
       model,
@@ -79,18 +104,20 @@ export async function POST(request: NextRequest) {
           const tcs = step.toolCalls ?? [];
           const trs = step.toolResults ?? [];
           for (let i = 0; i < tcs.length; i++) {
+            const toolCall = tcs[i] as { toolName: string; input: unknown };
+            const toolResult = trs[i] as { output?: unknown } | undefined;
             orderedParts.push({
               type: 'tool',
-              toolName: (tcs[i] as any).toolName,
-              args: (tcs[i] as any).input,
-              result: (trs[i] as any)?.output,
+              toolName: toolCall.toolName,
+              args: toolCall.input,
+              result: toolResult?.output,
             });
           }
         }
 
         const fullText = text || '';
         if (fullText || orderedParts.some((p) => p.type === 'tool')) {
-          await chatRepository.addMessage({
+          await chatRepository.addOwnedMessage(user.id, {
             sessionId,
             role: 'assistant',
             content: fullText,

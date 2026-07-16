@@ -7,8 +7,8 @@ let lastWrite: { sectionId: string; data: any } | null;
 
 vi.mock('@/lib/db/repositories/resume.repository', () => ({
   resumeRepository: {
-    findById: vi.fn(async () => store),
-    updateSection: vi.fn(async (sectionId: string, data: any) => {
+    findOwnedById: vi.fn(async () => store),
+    updateSectionOwned: vi.fn(async (_userId: string, _resumeId: string, sectionId: string, data: any) => {
       lastWrite = { sectionId, data };
       const s = store.sections.find((x: any) => x.id === sectionId);
       if (s) Object.assign(s, data);
@@ -31,7 +31,7 @@ function makeStore() {
 }
 
 function getTools() {
-  return createExecutableTools('r1', {} as any);
+  return createExecutableTools('user-1', 'r1', {} as any);
 }
 
 async function runUpdate(input: { sectionId: string; field: string; value: string }) {

@@ -6,7 +6,7 @@ import { jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { normalizeSectionContent } from '@/lib/resume/normalize-content';
 
-export function createExecutableTools(resumeId: string, aiConfig: AIConfig) {
+export function createExecutableTools(userId: string, resumeId: string, aiConfig: AIConfig) {
   return {
     updateSection: tool({
       description: `Update the content of a specific resume section. Section content structures:
@@ -27,7 +27,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         value: z.string().describe('The new value for the field. For complex values (arrays, objects), pass a JSON string.'),
       }),
       execute: async ({ sectionId, field, value }) => {
-        const resume = await resumeRepository.findById(resumeId);
+        const resume = await resumeRepository.findOwnedById(userId, resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
         const section = resume.sections.find((s: any) => s.id === sectionId);
@@ -133,7 +133,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         // Coerce inner list fields (highlights/technologies/skills) to arrays so a
         // string written by the model can't crash the renderer (issue #87).
         const updatedContent = normalizeSectionContent(section.type, merged);
-        await resumeRepository.updateSection(sectionId, { content: updatedContent });
+        await resumeRepository.updateSectionOwned(userId, resumeId, sectionId, { content: updatedContent });
 
         return { success: true, sectionType: section.type, field: actualField, updatedContent };
       },
@@ -147,7 +147,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         content: z.string().optional().describe('Initial content as a JSON string. Defaults to empty structure.'),
       }),
       execute: async ({ type, title, content }) => {
-        const resume = await resumeRepository.findById(resumeId);
+        const resume = await resumeRepository.findOwnedById(userId, resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
         const maxOrder = resume.sections.reduce((max: number, s: any) => Math.max(max, s.sortOrder), -1);
@@ -163,7 +163,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
           else parsedContent = { items: [] };
         }
 
-        const section = await resumeRepository.createSection({
+        const section = await resumeRepository.createSectionOwned(userId, {
           resumeId,
           type,
           title,
@@ -183,7 +183,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         improvedText: z.string().describe('The improved text to replace the original'),
       }),
       execute: async ({ sectionId, field, improvedText }) => {
-        const resume = await resumeRepository.findById(resumeId);
+        const resume = await resumeRepository.findOwnedById(userId, resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
         const section = resume.sections.find((s: any) => s.id === sectionId);
@@ -191,7 +191,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
 
         const merged = { ...(section.content as Record<string, unknown>), [field]: improvedText };
         const updatedContent = normalizeSectionContent(section.type, merged);
-        await resumeRepository.updateSection(sectionId, { content: updatedContent });
+        await resumeRepository.updateSectionOwned(userId, resumeId, sectionId, { content: updatedContent });
 
         return { success: true, sectionType: section.type, field, improvedText };
       },
@@ -204,7 +204,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         category: z.string().describe('The skill category name'),
       }),
       execute: async ({ skills, category }) => {
-        const resume = await resumeRepository.findById(resumeId);
+        const resume = await resumeRepository.findOwnedById(userId, resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
         const skillsSection = resume.sections.find((s: any) => s.type === 'skills');
@@ -221,7 +221,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
           categories.push({ id: crypto.randomUUID(), name: category, skills });
         }
 
-        await resumeRepository.updateSection(skillsSection.id, { content: { categories } });
+        await resumeRepository.updateSectionOwned(userId, resumeId, skillsSection.id, { content: { categories } });
 
         return { success: true, category, skills, sectionId: skillsSection.id };
       },
@@ -233,7 +233,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         jobDescription: z.string().describe('The job description text to analyze against the resume'),
       }),
       execute: async ({ jobDescription }) => {
-        const resume = await resumeRepository.findById(resumeId);
+        const resume = await resumeRepository.findOwnedById(userId, resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
         const model = getModel(aiConfig);
@@ -259,7 +259,7 @@ CRITICAL: You are a JSON API. Your entire response must be a single valid JSON o
         targetLanguage: z.enum(['zh', 'en']).describe('Target language: "zh" for Chinese, "en" for English'),
       }),
       execute: async ({ targetLanguage }) => {
-        const resume = await resumeRepository.findById(resumeId);
+        const resume = await resumeRepository.findOwnedById(userId, resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
         const model = getModel(aiConfig);
@@ -327,7 +327,7 @@ Rules:
           if (!r.ok) { failed++; continue; }
           const translated = r.data;
           const sectionType: string = typeById.get(translated.sectionId) || '';
-          await resumeRepository.updateSection(translated.sectionId, {
+          await resumeRepository.updateSectionOwned(userId, resumeId, translated.sectionId, {
             title: translated.title,
             // A mistranslated structure could crash the renderer — normalize it (issue #87).
             content: normalizeSectionContent(sectionType, translated.content),
@@ -336,7 +336,7 @@ Rules:
         }
 
         // Update resume language
-        await resumeRepository.update(resumeId, { language: targetLanguage });
+        await resumeRepository.updateOwned(userId, resumeId, { language: targetLanguage });
 
         return {
           success: true,

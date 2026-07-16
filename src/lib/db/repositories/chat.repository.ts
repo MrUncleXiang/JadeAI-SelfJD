@@ -1,15 +1,36 @@
 import { eq, desc, and, lt } from 'drizzle-orm';
 import { db } from '../index';
-import { chatSessions, chatMessages } from '../schema';
+import { chatSessions, chatMessages, resumes } from '../schema';
 
 export const chatRepository = {
   async findSessionsByResumeId(resumeId: string) {
     return db.select().from(chatSessions).where(eq(chatSessions.resumeId, resumeId)).orderBy(desc(chatSessions.updatedAt));
   },
 
+  async findOwnedSessionsByResumeId(userId: string, resumeId: string) {
+    const ownedResume = await db
+      .select({ id: resumes.id })
+      .from(resumes)
+      .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
+      .limit(1);
+    if (!ownedResume[0]) return [];
+    return this.findSessionsByResumeId(resumeId);
+  },
+
   async findSession(sessionId: string) {
     const rows = await db.select().from(chatSessions).where(eq(chatSessions.id, sessionId)).limit(1);
     return rows[0] ?? null;
+  },
+
+  async findOwnedSession(userId: string, sessionId: string) {
+    const session = await this.findSession(sessionId);
+    if (!session) return null;
+    const ownedResume = await db
+      .select({ id: resumes.id })
+      .from(resumes)
+      .where(and(eq(resumes.id, session.resumeId), eq(resumes.userId, userId)))
+      .limit(1);
+    return ownedResume[0] ? session : null;
   },
 
   async findPaginatedMessages(sessionId: string, opts: { cursor?: string; limit?: number } = {}) {
@@ -47,11 +68,32 @@ export const chatRepository = {
     return { messages: rows, hasMore, nextCursor };
   },
 
+  async findOwnedPaginatedMessages(
+    userId: string,
+    sessionId: string,
+    opts: { cursor?: string; limit?: number } = {},
+  ) {
+    const session = await this.findOwnedSession(userId, sessionId);
+    if (!session) return null;
+    return this.findPaginatedMessages(sessionId, opts);
+  },
+
   async findSessionWithMessages(sessionId: string) {
     const session = await db.select().from(chatSessions).where(eq(chatSessions.id, sessionId)).limit(1);
     if (!session[0]) return null;
     const messages = await db.select().from(chatMessages).where(eq(chatMessages.sessionId, sessionId)).orderBy(chatMessages.createdAt);
     return { ...session[0], messages };
+  },
+
+  async findOwnedSessionWithMessages(userId: string, sessionId: string) {
+    const session = await this.findOwnedSession(userId, sessionId);
+    if (!session) return null;
+    const messages = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.sessionId, sessionId))
+      .orderBy(chatMessages.createdAt);
+    return { ...session, messages };
   },
 
   async createSession(data: { resumeId: string; title?: string }) {
@@ -64,6 +106,16 @@ export const chatRepository = {
     return this.findSessionWithMessages(id);
   },
 
+  async createOwnedSession(userId: string, data: { resumeId: string; title?: string }) {
+    const ownedResume = await db
+      .select({ id: resumes.id })
+      .from(resumes)
+      .where(and(eq(resumes.id, data.resumeId), eq(resumes.userId, userId)))
+      .limit(1);
+    if (!ownedResume[0]) return null;
+    return this.createSession(data);
+  },
+
   async addMessage(data: { sessionId: string; role: 'user' | 'assistant' | 'system'; content: string; metadata?: unknown }) {
     const id = crypto.randomUUID();
     await db.insert(chatMessages).values({
@@ -72,16 +124,40 @@ export const chatRepository = {
       role: data.role,
       content: data.content,
       metadata: data.metadata || {},
-    } as any);
+    });
     await db.update(chatSessions).set({ updatedAt: new Date() }).where(eq(chatSessions.id, data.sessionId));
-    return db.select().from(chatMessages).where(eq(chatMessages.id, id)).limit(1).then((r: any[]) => r[0]);
+    const rows = await db.select().from(chatMessages).where(eq(chatMessages.id, id)).limit(1);
+    return rows[0];
+  },
+
+  async addOwnedMessage(
+    userId: string,
+    data: { sessionId: string; role: 'user' | 'assistant' | 'system'; content: string; metadata?: unknown },
+  ) {
+    const session = await this.findOwnedSession(userId, data.sessionId);
+    if (!session) return null;
+    return this.addMessage(data);
   },
 
   async updateSessionTitle(sessionId: string, title: string) {
     await db.update(chatSessions).set({ title }).where(eq(chatSessions.id, sessionId));
   },
 
+  async updateOwnedSessionTitle(userId: string, sessionId: string, title: string) {
+    const session = await this.findOwnedSession(userId, sessionId);
+    if (!session) return false;
+    await db.update(chatSessions).set({ title }).where(eq(chatSessions.id, sessionId));
+    return true;
+  },
+
   async deleteSession(sessionId: string) {
     await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
+  },
+
+  async deleteOwnedSession(userId: string, sessionId: string) {
+    const session = await this.findOwnedSession(userId, sessionId);
+    if (!session) return false;
+    await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
+    return true;
   },
 };
