@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
+import { jdAnalyses } from '@/lib/db/schema';
+
+type JdAnalysisRow = typeof jdAnalyses.$inferSelect;
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,25 +20,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'resumeId is required' }, { status: 400 });
     }
 
-    // Verify ownership
-    const resume = await resumeRepository.findById(resumeId);
-    if (!resume || resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
     // Single record detail
     if (id) {
-      const analysis = await analysisRepository.findJdAnalysisById(id);
-      if (!analysis || analysis.resumeId !== resumeId) {
+      const analysis = await analysisRepository.findOwnedJdAnalysisById(user.id, id, resumeId);
+      if (!analysis) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
       return NextResponse.json(analysis);
     }
 
     // List all
-    const analyses = await analysisRepository.findJdAnalysesByResumeId(resumeId);
+    const analyses = await analysisRepository.findOwnedJdAnalysesByResumeId(user.id, resumeId);
+    if (!analyses) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const list = analyses.map((a: any) => ({
+    const list = analyses.map((a: JdAnalysisRow) => ({
       id: a.id,
       overallScore: a.overallScore,
       atsScore: a.atsScore,
@@ -64,17 +61,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    // Verify ownership via the analysis record
-    const analysis = await analysisRepository.findJdAnalysisById(id);
-    if (!analysis) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    const resume = await resumeRepository.findById(analysis.resumeId);
-    if (!resume || resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    await analysisRepository.deleteJdAnalysis(id);
+    const deleted = await analysisRepository.deleteOwnedJdAnalysis(user.id, id);
+    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/ai/jd-analysis/history error:', error);

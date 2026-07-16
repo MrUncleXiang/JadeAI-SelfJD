@@ -14,15 +14,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const duplicated = await resumeRepository.duplicate(id, user.id);
+    const duplicated = await resumeRepository.duplicateOwned(user.id, id);
+    if (!duplicated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json(duplicated, { status: 201 });
   } catch (error) {
     console.error('POST /api/resume/[id]/duplicate error:', error);

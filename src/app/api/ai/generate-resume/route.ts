@@ -137,8 +137,7 @@ Respond with JSON only.`;
       ? `${jobTitle} - AI生成简历`
       : `${jobTitle} - AI Generated Resume`;
 
-    const newResume = await resumeRepository.create({
-      userId: user.id,
+    const newResume = await resumeRepository.createOwned(user.id, {
       title: resumeTitle,
       template: template || 'classic',
       language: lang,
@@ -156,7 +155,7 @@ Respond with JSON only.`;
       const type = sectionTypes[i];
       const content = generatedData[type];
 
-      await resumeRepository.createSection({
+      await resumeRepository.createSectionOwned(user.id, {
         resumeId: newResume.id,
         type,
         title: titles[type],
@@ -167,7 +166,7 @@ Respond with JSON only.`;
     }
 
     // Fetch the complete resume with sections
-    const completeResume = await resumeRepository.findById(newResume.id);
+    const completeResume = await resumeRepository.findOwnedById(user.id, newResume.id);
 
     return NextResponse.json({
       resumeId: newResume.id,

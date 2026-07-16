@@ -6,6 +6,9 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { translateInputSchema } from '@/lib/ai/translate-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { z } from 'zod/v4';
+import { resumeSections } from '@/lib/db/schema';
+
+type ResumeSectionRow = typeof resumeSections.$inferSelect;
 
 const LANGUAGE_NAMES: Record<string, string> = {
   zh: 'Simplified Chinese',
@@ -114,12 +117,9 @@ export async function POST(request: NextRequest) {
 
     const { resumeId, targetLanguage, sectionIds, mode } = parsed.data;
 
-    const resume = await resumeRepository.findById(resumeId);
+    const resume = await resumeRepository.findOwnedById(user.id, resumeId);
     if (!resume) {
       return new Response(JSON.stringify({ error: 'Resume not found' }), { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
 
     // In copy mode, duplicate the resume first and translate the copy
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
 
     if (mode === 'copy') {
       const newTitle = `${resume.title}-${LANGUAGE_NAMES[targetLanguage] || targetLanguage}`;
-      const duplicated = await resumeRepository.duplicate(resumeId, user.id, newTitle);
+      const duplicated = await resumeRepository.duplicateOwned(user.id, resumeId, newTitle);
       if (!duplicated) {
         return new Response(JSON.stringify({ error: 'Failed to duplicate resume' }), { status: 500 });
       }
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     }
 
     const allSections = sectionIds
-      ? workingSections.filter((s: any) => sectionIds.includes(s.id))
+      ? workingSections.filter((section: ResumeSectionRow) => sectionIds.includes(section.id))
       : workingSections;
 
     if (allSections.length === 0) {
@@ -150,28 +150,29 @@ export async function POST(request: NextRequest) {
     // Save stripped fields so we can merge them back after translation
     const strippedFields = new Map<string, Record<string, unknown>>();
 
-    const sectionsData = allSections.map((s: any) => {
-      const fieldsToStrip = STRIP_FIELDS[s.type];
-      let content = s.content;
+    const sectionsData = allSections.map((section: ResumeSectionRow) => {
+      const fieldsToStrip = STRIP_FIELDS[section.type];
+      let content = section.content;
 
-      if (fieldsToStrip && content && typeof content === 'object') {
+      if (fieldsToStrip && content && typeof content === 'object' && !Array.isArray(content)) {
         const saved: Record<string, unknown> = {};
-        content = { ...content };
+        const contentRecord: Record<string, unknown> = { ...content };
         for (const field of fieldsToStrip) {
-          if (field in content) {
-            saved[field] = content[field];
-            delete content[field];
+          if (field in contentRecord) {
+            saved[field] = contentRecord[field];
+            delete contentRecord[field];
           }
         }
         if (Object.keys(saved).length > 0) {
-          strippedFields.set(s.id, saved);
+          strippedFields.set(section.id, saved);
         }
+        content = contentRecord;
       }
 
       return {
-        sectionId: s.id,
-        type: s.type,
-        title: s.title,
+        sectionId: section.id,
+        type: section.type,
+        title: section.title,
         content,
       };
     });
@@ -201,16 +202,26 @@ export async function POST(request: NextRequest) {
             async (section) => {
               const translated = await translateSection(section, targetLanguage, model, aiConfig);
 
+              if (translated.sectionId !== section.sectionId) {
+                throw new Error('Translated section id does not match the requested section');
+              }
+
               // Merge back stripped fields (e.g. avatar)
               const saved = strippedFields.get(translated.sectionId);
               const content = saved
                 ? { ...translated.content, ...saved }
                 : translated.content;
 
-              await resumeRepository.updateSection(translated.sectionId, {
-                title: translated.title,
-                content,
-              });
+              const updated = await resumeRepository.updateSectionOwned(
+                user.id,
+                targetResumeId,
+                translated.sectionId,
+                {
+                  title: translated.title,
+                  content,
+                },
+              );
+              if (!updated) throw new Error('Translated section is no longer available');
 
               return { ...translated, content };
             },
@@ -236,16 +247,16 @@ export async function POST(request: NextRequest) {
           }
 
           // Update resume language
-          await resumeRepository.update(targetResumeId, { language: targetLanguage });
+          await resumeRepository.updateOwned(user.id, targetResumeId, { language: targetLanguage });
         } catch (err) {
           console.error('Unexpected error during translation:', err);
         }
 
         // Always send done and close — even if something above threw
         try {
-          const updatedResume = await resumeRepository.findById(targetResumeId);
+          const updatedResume = await resumeRepository.findOwnedById(user.id, targetResumeId);
           const updatedSections = sectionIds
-            ? updatedResume?.sections.filter((s: any) => sectionIds.includes(s.id))
+            ? updatedResume?.sections.filter((section: ResumeSectionRow) => sectionIds.includes(section.id))
             : updatedResume?.sections;
 
           send({

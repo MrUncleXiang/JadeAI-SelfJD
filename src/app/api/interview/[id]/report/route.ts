@@ -6,6 +6,7 @@ import { interviewRepository } from '@/lib/db/repositories/interview.repository'
 import { interviewReportSchema } from '@/lib/ai/interview-report-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { dbReady } from '@/lib/db';
+import type { InterviewerConfig } from '@/types/interview';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await dbReady;
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const user = await resolveUser(fingerprint);
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const report = await interviewRepository.findReportBySessionId(sessionId);
+  const report = await interviewRepository.findOwnedReportBySessionId(user.id, sessionId);
   if (!report) return NextResponse.json({ error: 'No report found' }, { status: 404 });
 
   return NextResponse.json(report);
@@ -28,22 +29,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const user = await resolveUser(fingerprint);
     if (!user) return new Response('Unauthorized', { status: 401 });
 
-    const session = await interviewRepository.findSession(sessionId);
-    if (!session || session.userId !== user.id) {
+    const session = await interviewRepository.findOwnedSession(user.id, sessionId);
+    if (!session) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const existing = await interviewRepository.findReportBySessionId(sessionId);
+    const existing = await interviewRepository.findOwnedReportBySessionId(user.id, sessionId);
     if (existing) return NextResponse.json(existing);
 
     const { model: modelId, locale = 'zh' } = await request.json();
     const aiConfig = extractAIConfig(request);
     const model = getModel(aiConfig, modelId);
 
-    const roundsWithMessages = await interviewRepository.findAllMessagesBySessionId(sessionId);
+    const roundsWithMessages = await interviewRepository.findOwnedAllMessagesBySessionId(user.id, sessionId);
+    if (!roundsWithMessages) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     const conversationLog = roundsWithMessages.map(({ round, messages }) => {
-      const config = round.interviewerConfig as any;
+      const config = round.interviewerConfig as InterviewerConfig;
       return {
         interviewerType: round.interviewerType,
         interviewerName: config.name,
@@ -55,8 +59,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         })),
       };
     });
-
-    const lang = locale === 'zh' ? '中文' : 'English';
 
     const reportPrompt = locale === 'zh'
       ? `你是一位拥有丰富面试评估经验的人才评估专家。请基于以下面试对话记录，对候选人进行系统化、结构化的评估分析，生成专业的面试评估报告。请以 JSON 格式输出。
@@ -163,7 +165,7 @@ DO NOT use alternative names like "comprehensiveScore", "capabilityScores", "dir
 
     const report = extractJson(text, interviewReportSchema);
 
-    const saved = await interviewRepository.createReport({
+    const saved = await interviewRepository.createOwnedReport(user.id, {
       sessionId,
       overallScore: report.overallScore,
       dimensionScores: report.dimensionScores,
@@ -171,6 +173,7 @@ DO NOT use alternative names like "comprehensiveScore", "capabilityScores", "dir
       overallFeedback: report.overallFeedback,
       improvementPlan: report.improvementPlan,
     });
+    if (!saved) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json(saved);
   } catch (error) {

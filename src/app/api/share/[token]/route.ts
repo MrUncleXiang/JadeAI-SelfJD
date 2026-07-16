@@ -3,6 +3,13 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { hashPassword } from '@/lib/utils/share';
 
+function toPublicResume(resume: Record<string, unknown>) {
+  const publicResume = { ...resume };
+  delete publicResume.userId;
+  delete publicResume.sharePassword;
+  return publicResume;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -12,8 +19,9 @@ export async function GET(
     const password = request.nextUrl.searchParams.get('password');
 
     // 1. Try new resume_shares table first
-    const share = await shareRepository.findByToken(token);
-    if (share) {
+    const bundle = await shareRepository.findPublicBundleByToken(token);
+    if (bundle) {
+      const { share, resume } = bundle;
       console.log('[share/token] found in resumeShares, isActive:', share.isActive, typeof share.isActive);
       if (!share.isActive) {
         return NextResponse.json({ error: 'This share link has been disabled' }, { status: 403 });
@@ -35,19 +43,13 @@ export async function GET(
         }
       }
 
-      await shareRepository.incrementViewCount(share.id);
+      await shareRepository.incrementPublicViewCount(share.id);
 
-      const resume = await resumeRepository.findById(share.resumeId);
-      if (!resume) {
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      }
-
-      const { userId, sharePassword, ...publicResume } = resume;
-      return NextResponse.json(publicResume);
+      return NextResponse.json(toPublicResume(resume));
     }
 
     // 2. Fallback to legacy resumes.shareToken
-    const resume = await resumeRepository.findByShareToken(token);
+    const resume = await resumeRepository.findPublicByLegacyShareToken(token);
     if (!resume) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -72,10 +74,9 @@ export async function GET(
       }
     }
 
-    await resumeRepository.incrementViewCount(resume.id);
+    await resumeRepository.incrementPublicViewCount(resume.id);
 
-    const { userId, sharePassword, ...publicResume } = resume;
-    return NextResponse.json(publicResume);
+    return NextResponse.json(toPublicResume(resume));
   } catch (error) {
     console.error('GET /api/share/[token] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

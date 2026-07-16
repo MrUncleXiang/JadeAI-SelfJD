@@ -41,12 +41,9 @@ export async function POST(request: NextRequest) {
     const { resumeId, jobDescription } = parsed.data;
 
     // Fetch the resume and verify ownership
-    const resume = await resumeRepository.findById(resumeId);
+    const resume = await resumeRepository.findOwnedById(user.id, resumeId);
     if (!resume) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const resumeContext = JSON.stringify(resume.sections);
@@ -66,7 +63,7 @@ export async function POST(request: NextRequest) {
     // Persist to database
     let historyId: string | undefined;
     try {
-      const saved = await analysisRepository.createJdAnalysis({
+      const saved = await analysisRepository.createOwnedJdAnalysis(user.id, {
         resumeId,
         jobDescription,
         result: analysisData,

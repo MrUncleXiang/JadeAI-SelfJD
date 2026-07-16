@@ -6,6 +6,7 @@ import { interviewRepository } from '@/lib/db/repositories/interview.repository'
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { buildInterviewSystemPrompt } from '@/lib/ai/interview-prompts';
 import { dbReady } from '@/lib/db';
+import type { InterviewerConfig } from '@/types/interview';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -15,27 +16,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const user = await resolveUser(fingerprint);
     if (!user) return new Response('Unauthorized', { status: 401 });
 
-    const session = await interviewRepository.findSession(sessionId);
-    if (!session || session.userId !== user.id) {
+    const session = await interviewRepository.findOwnedSession(user.id, sessionId);
+    if (!session) {
       return new Response('Not found', { status: 404 });
     }
 
     const { messages, roundId, model: modelId, locale = 'zh' } = await request.json();
 
-    const round = await interviewRepository.findRound(roundId);
-    if (!round || round.sessionId !== sessionId) {
+    const round = await interviewRepository.findOwnedRound(user.id, sessionId, roundId);
+    if (!round) {
       return new Response('Round not found', { status: 404 });
     }
 
     let resumeContent: string | undefined;
     if (session.resumeId) {
-      const resume = await resumeRepository.findById(session.resumeId as string);
+      const resume = await resumeRepository.findOwnedById(user.id, session.resumeId as string);
       if (resume) {
         resumeContent = JSON.stringify(resume.sections);
       }
     }
 
-    const interviewerConfig = round.interviewerConfig as any;
+    const interviewerConfig = round.interviewerConfig as InterviewerConfig;
 
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const textPart = lastMessage.parts?.find((p: { type: string }) => p.type === 'text');
         const content = textPart?.text || lastMessage.content || '';
         if (content) {
-          await interviewRepository.addMessage({
+          await interviewRepository.addOwnedMessage(user.id, sessionId, {
             roundId,
             role: 'candidate',
             content,
@@ -57,8 +58,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const modelMessages = await convertToModelMessages(messages);
 
     if (round.status === 'pending') {
-      await interviewRepository.updateRoundStatus(roundId, 'in_progress');
-      await interviewRepository.updateSessionStatus(sessionId, 'in_progress');
+      await interviewRepository.updateOwnedRoundStatus(user.id, sessionId, roundId, 'in_progress');
+      await interviewRepository.updateOwnedSessionStatus(user.id, sessionId, 'in_progress');
     }
 
     const systemPrompt = buildInterviewSystemPrompt({
@@ -76,29 +77,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       onFinish: async ({ text }) => {
         if (!text) return;
 
-        await interviewRepository.addMessage({
+        await interviewRepository.addOwnedMessage(user.id, sessionId, {
           roundId,
           role: 'interviewer',
           content: text,
         });
 
-        await interviewRepository.incrementQuestionCount(roundId);
+        await interviewRepository.incrementOwnedQuestionCount(user.id, sessionId, roundId);
 
         if (text.includes('[ROUND_COMPLETE]')) {
-          await interviewRepository.updateRoundStatus(roundId, 'completed');
-          await interviewRepository.setRoundSummary(roundId, {
+          await interviewRepository.updateOwnedRoundStatus(user.id, sessionId, roundId, 'completed');
+          await interviewRepository.setOwnedRoundSummary(user.id, sessionId, roundId, {
             score: 0,
             feedback: text.replace('[ROUND_COMPLETE]', '').trim(),
           });
 
-          const rounds = await interviewRepository.findRoundsBySessionId(sessionId);
+          const rounds = await interviewRepository.findOwnedRoundsBySessionId(user.id, sessionId) ?? [];
           const currentIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
           const nextRound = rounds[currentIndex + 1];
 
           if (nextRound) {
-            await interviewRepository.updateSessionRound(sessionId, currentIndex + 1);
+            await interviewRepository.updateOwnedSessionRound(user.id, sessionId, currentIndex + 1);
           } else {
-            await interviewRepository.updateSessionStatus(sessionId, 'completed');
+            await interviewRepository.updateOwnedSessionStatus(user.id, sessionId, 'completed');
           }
         }
       },

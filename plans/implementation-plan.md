@@ -65,7 +65,7 @@ Gate：
 4. [x] Admin 用户列表、禁用、恢复和最后管理员保护。
 5. [x] 账号、邀请、管理员操作和登录失败审计事件。
 6. [x] 统一 `ActorContext` 和账号密码 UI。
-7. [ ] 所有 Resume、Chat、Share、Interview Repository 改为用户作用域。
+7. [x] 所有 Resume、Chat、Share、Analysis、Interview 受保护 Route 改用用户作用域仓储，公共分享改用显式 Token 能力查询。
 8. [x] AI Chat 在加载 Resume 和创建模型请求前校验 Ownership。
 9. [x] 移除旧 NextAuth/Google 入口、生产指纹账号和自动 Demo Seed。
 10. [x] 登录/注册数据库限流、Origin 校验和会话撤销。

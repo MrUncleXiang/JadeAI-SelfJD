@@ -43,7 +43,7 @@ export const userRepository = {
     if (demoUser) {
       const demoResumes = await db.select().from(resumes).where(eq(resumes.userId, demoUser.id));
       for (const r of demoResumes) {
-        await resumeRepository.duplicate(r.id, id, r.title);
+        await resumeRepository.cloneSystemOwnedResume(demoUser.id, r.id, id, r.title);
       }
     } else {
       await createSampleResume(id);

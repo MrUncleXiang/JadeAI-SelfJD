@@ -21,13 +21,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const resume = await resumeRepository.findOwnedById(user.id, id);
+    if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const format = request.nextUrl.searchParams.get('format') || 'json';
     const title = resume.title || 'resume';

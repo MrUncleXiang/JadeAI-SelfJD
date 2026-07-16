@@ -15,12 +15,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const user = await resolveUser(fingerprint);
     if (!user) return new Response('Unauthorized', { status: 401 });
 
-    const session = await interviewRepository.findSession(sessionId);
-    if (!session || session.userId !== user.id) {
+    const session = await interviewRepository.findOwnedSession(user.id, sessionId);
+    if (!session) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const report = await interviewRepository.findReportBySessionId(sessionId);
+    const report = await interviewRepository.findOwnedReportBySessionId(user.id, sessionId);
     if (!report) {
       return NextResponse.json({ error: 'No report found' }, { status: 404 });
     }
@@ -29,7 +29,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const pdfBuffer = await generatePdf(html);
 
     const title = session.jobTitle || 'interview-report';
-    const date = new Date(session.createdAt as any).toISOString().slice(0, 10);
+    const createdAt = session.createdAt instanceof Date
+      ? session.createdAt
+      : new Date(session.createdAt);
+    const date = createdAt.toISOString().slice(0, 10);
     const filename = `${title}-${date}`;
 
     return new NextResponse(new Uint8Array(pdfBuffer), {

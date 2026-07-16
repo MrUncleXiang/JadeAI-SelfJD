@@ -26,23 +26,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  const session = await interviewRepository.createSession({
-    userId: user.id,
+  const session = await interviewRepository.createOwnedSession(user.id, {
     resumeId: resumeId || undefined,
     jobDescription,
     jobTitle,
     selectedInterviewers: interviewers,
   });
+  if (!session) {
+    return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+  }
 
   for (let i = 0; i < interviewers.length; i++) {
-    await interviewRepository.createRound({
-      sessionId: session!.id,
+    await interviewRepository.createOwnedRound(user.id, {
+      sessionId: session.id,
       interviewerType: interviewers[i].type,
       interviewerConfig: interviewers[i],
       sortOrder: i,
     });
   }
 
-  const rounds = await interviewRepository.findRoundsBySessionId(session!.id);
+  const rounds = await interviewRepository.findOwnedRoundsBySessionId(user.id, session.id);
   return NextResponse.json({ session, rounds }, { status: 201 });
 }

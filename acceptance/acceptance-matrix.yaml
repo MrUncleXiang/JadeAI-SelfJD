@@ -120,7 +120,10 @@ scenarios:
     automationStatus: partial
     automationEvidence:
       - src/lib/db/repositories/tenant-isolation.test.ts
+      - src/lib/db/repositories/tenant-route-guard.test.ts
       - src/app/api/ai/chat/route.test.ts
+      - src/app/api/ai/jd-analysis/route.test.ts
+      - src/app/api/interview/[id]/chat/route.test.ts
 
   - id: ACC-AUTH-006
     requirement: AUTH-006
@@ -406,7 +409,11 @@ scenarios:
     when: 交叉访问或继续会话
     then: 只有资源所有者可以读取和操作
     layers: [integration, e2e, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/db/repositories/tenant-isolation.test.ts
+      - src/app/api/interview/[id]/chat/route.test.ts
+      - src/lib/db/repositories/tenant-route-guard.test.ts
 
   - id: ACC-INT-002
     requirement: INT-002

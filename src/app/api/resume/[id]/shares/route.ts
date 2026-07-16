@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { generateShareToken, getShareUrl, hashPassword } from '@/lib/utils/share';
+import { resumeShares } from '@/lib/db/schema';
+
+type ResumeShareRow = typeof resumeShares.$inferSelect;
 
 export async function GET(
   request: NextRequest,
@@ -16,19 +18,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const shares = await shareRepository.findByResumeId(id);
-    const sharesWithUrl = shares.map((s: any) => ({
-      ...s,
-      shareUrl: getShareUrl(s.token, request),
-      hasPassword: !!s.password,
+    const shares = await shareRepository.findOwnedByResumeId(user.id, id);
+    if (!shares) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const sharesWithUrl = shares.map((share: ResumeShareRow) => ({
+      ...share,
+      shareUrl: getShareUrl(share.token, request),
+      hasPassword: !!share.password,
       password: undefined,
     }));
 
@@ -51,26 +46,19 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const body = await request.json().catch(() => ({}));
     const { label, password } = body as { label?: string; password?: string };
 
     const token = generateShareToken();
     const hashedPassword = password ? await hashPassword(password) : null;
 
-    const share = await shareRepository.create({
+    const share = await shareRepository.createOwned(user.id, {
       resumeId: id,
       token,
       label: label || '',
       password: hashedPassword,
     });
+    if (!share) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({
       ...share,

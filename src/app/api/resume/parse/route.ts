@@ -128,8 +128,7 @@ export async function POST(request: NextRequest) {
     const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
 
     // Create resume with parsed data
-    const resume = await resumeRepository.create({
-      userId: user.id,
+    const resume = await resumeRepository.createOwned(user.id, {
       title: resumeData.personalInfo?.fullName || '未命名简历',
       template,
       language,
@@ -142,7 +141,7 @@ export async function POST(request: NextRequest) {
     // Create sections from parsed data
     const sections = buildSections(resumeData, language);
     for (let i = 0; i < sections.length; i++) {
-      await resumeRepository.createSection({
+      await resumeRepository.createSectionOwned(user.id, {
         resumeId: resume.id,
         type: sections[i].type,
         title: sections[i].title,
@@ -151,7 +150,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const fullResume = await resumeRepository.findById(resume.id);
+    const fullResume = await resumeRepository.findOwnedById(user.id, resume.id);
     return NextResponse.json(fullResume, { status: 201 });
   } catch (error) {
     if (error instanceof AIConfigError) {

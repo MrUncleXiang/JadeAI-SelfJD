@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { hashPassword } from '@/lib/utils/share';
@@ -16,13 +15,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume || resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const share = await shareRepository.findById(shareId);
-    if (!share || share.resumeId !== id) {
+    const share = await shareRepository.findOwnedById(user.id, id, shareId);
+    if (!share) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
@@ -40,8 +34,8 @@ export async function PATCH(
     }
     if (isActive !== undefined) updates.isActive = isActive;
 
-    const updated = await shareRepository.update(shareId, updates);
-    console.log('[shares/PATCH] updated share:', shareId, 'isActive:', updated?.isActive, 'updates:', updates);
+    const updated = await shareRepository.updateOwned(user.id, id, shareId, updates);
+    if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({
       ...updated,
       hasPassword: !!updated?.password,
@@ -65,17 +59,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume || resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const share = await shareRepository.findById(shareId);
-    if (!share || share.resumeId !== id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    await shareRepository.delete(shareId);
+    const deleted = await shareRepository.deleteOwned(user.id, id, shareId);
+    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/resume/[id]/shares/[shareId] error:', error);

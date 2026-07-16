@@ -30,8 +30,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { title, template, language, sections, themeConfig } = body;
 
-    const resume = await resumeRepository.create({
-      userId: user.id,
+    const resume = await resumeRepository.createOwned(user.id, {
       title: title || '未命名简历',
       template: template || 'classic',
       language: language || 'zh',
@@ -43,7 +42,7 @@ export async function POST(request: NextRequest) {
         // Import mode: use provided sections, ignore original ids
         for (let i = 0; i < sections.length; i++) {
           const s = sections[i];
-          await resumeRepository.createSection({
+          await resumeRepository.createSectionOwned(user.id, {
             resumeId: resume.id,
             type: s.type,
             title: s.title,
@@ -70,7 +69,7 @@ export async function POST(request: NextRequest) {
             content = { categories: [] };
           }
 
-          await resumeRepository.createSection({
+          await resumeRepository.createSectionOwned(user.id, {
             resumeId: resume.id,
             type: s.type,
             title: sectionTitle,
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const fullResume = await resumeRepository.findById(resume.id);
+      const fullResume = await resumeRepository.findOwnedById(user.id, resume.id);
       return NextResponse.json(fullResume, { status: 201 });
     }
 

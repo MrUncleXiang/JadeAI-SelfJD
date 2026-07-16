@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
+import { grammarChecks } from '@/lib/db/schema';
+
+type GrammarCheckRow = typeof grammarChecks.$inferSelect;
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,25 +20,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'resumeId is required' }, { status: 400 });
     }
 
-    // Verify ownership
-    const resume = await resumeRepository.findById(resumeId);
-    if (!resume || resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
     // Single record detail
     if (id) {
-      const check = await analysisRepository.findGrammarCheckById(id);
-      if (!check || check.resumeId !== resumeId) {
+      const check = await analysisRepository.findOwnedGrammarCheckById(user.id, id, resumeId);
+      if (!check) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
       return NextResponse.json(check);
     }
 
     // List all
-    const checks = await analysisRepository.findGrammarChecksByResumeId(resumeId);
+    const checks = await analysisRepository.findOwnedGrammarChecksByResumeId(user.id, resumeId);
+    if (!checks) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const list = checks.map((c: any) => ({
+    const list = checks.map((c: GrammarCheckRow) => ({
       id: c.id,
       score: c.score,
       issueCount: c.issueCount,
@@ -63,16 +60,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const check = await analysisRepository.findGrammarCheckById(id);
-    if (!check) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    const resume = await resumeRepository.findById(check.resumeId);
-    if (!resume || resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    await analysisRepository.deleteGrammarCheck(id);
+    const deleted = await analysisRepository.deleteOwnedGrammarCheck(user.id, id);
+    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/ai/grammar-check/history error:', error);

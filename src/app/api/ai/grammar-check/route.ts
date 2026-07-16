@@ -6,6 +6,9 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { grammarCheckInputSchema, grammarCheckOutputSchema } from '@/lib/ai/grammar-check-schema';
 import { extractJson } from '@/lib/ai/extract-json';
+import { resumeSections } from '@/lib/db/schema';
+
+type ResumeSectionRow = typeof resumeSections.$inferSelect;
 
 const GRAMMAR_CHECK_PROMPT = `You are an expert resume reviewer and writing coach. Analyze the provided resume sections for writing quality issues.
 
@@ -53,17 +56,14 @@ export async function POST(request: NextRequest) {
     const { resumeId, sectionIds } = parsed.data;
 
     // Fetch the resume and verify ownership
-    const resume = await resumeRepository.findById(resumeId);
+    const resume = await resumeRepository.findOwnedById(user.id, resumeId);
     if (!resume) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Filter sections if specific IDs are provided
     const sectionsToCheck = sectionIds
-      ? resume.sections.filter((s: any) => sectionIds.includes(s.id))
+      ? resume.sections.filter((section: ResumeSectionRow) => sectionIds.includes(section.id))
       : resume.sections;
 
     if (sectionsToCheck.length === 0) {
@@ -71,11 +71,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Prepare sections data for AI analysis
-    const sectionsData = sectionsToCheck.map((s: any) => ({
-      sectionId: s.id,
-      sectionTitle: s.title,
-      type: s.type,
-      content: s.content,
+    const sectionsData = sectionsToCheck.map((section: ResumeSectionRow) => ({
+      sectionId: section.id,
+      sectionTitle: section.title,
+      type: section.type,
+      content: section.content,
     }));
 
     const aiConfig = extractAIConfig(request);
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     // Persist to database
     let historyId: string | undefined;
     try {
-      const saved = await analysisRepository.createGrammarCheck({
+      const saved = await analysisRepository.createOwnedGrammarCheck(user.id, {
         resumeId,
         result: checkResult,
         score: checkResult.score,

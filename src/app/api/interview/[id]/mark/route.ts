@@ -10,13 +10,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const user = await resolveUser(fingerprint);
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const session = await interviewRepository.findSession(sessionId);
-  if (!session || session.userId !== user.id) {
+  const session = await interviewRepository.findOwnedSession(user.id, sessionId);
+  if (!session) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const { messageId, marked } = await request.json();
-  await interviewRepository.updateMessageMetadata(messageId, { marked });
+  const updated = await interviewRepository.updateOwnedMessageMetadata(
+    user.id,
+    sessionId,
+    messageId,
+    { marked },
+  );
+  if (!updated) return NextResponse.json({ error: 'Message not found' }, { status: 404 });
 
   return NextResponse.json({ success: true });
 }

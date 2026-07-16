@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { resumeSections } from '@/lib/db/schema';
+
+type ResumeSectionRow = typeof resumeSections.$inferSelect;
 
 export async function GET(
   request: NextRequest,
@@ -14,13 +17,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const resume = await resumeRepository.findOwnedById(user.id, id);
+    if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json(resume);
   } catch (error) {
@@ -41,20 +39,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const resume = await resumeRepository.findOwnedById(user.id, id);
+    if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const body = await request.json();
     const { title, template, themeConfig, sections } = body;
 
     // Update resume metadata
     if (title || template || themeConfig) {
-      await resumeRepository.update(id, {
+      await resumeRepository.updateOwned(user.id, id, {
         ...(title && { title }),
         ...(template && { template }),
         ...(themeConfig && { themeConfig }),
@@ -64,20 +57,20 @@ export async function PUT(
     // Sync sections: create new, update existing, delete removed
     if (sections && Array.isArray(sections)) {
       const existingSections = resume.sections || [];
-      const existingIds = new Set(existingSections.map((s: any) => s.id));
-      const incomingIds = new Set(sections.map((s: any) => s.id));
+      const existingIds = new Set(existingSections.map((section: ResumeSectionRow) => section.id));
+      const incomingIds = new Set(sections.map((section: { id: string }) => section.id));
 
       // Delete sections that were removed by the user
       for (const existing of existingSections) {
         if (!incomingIds.has(existing.id)) {
-          await resumeRepository.deleteSection(existing.id);
+          await resumeRepository.deleteSectionOwned(user.id, id, existing.id);
         }
       }
 
       for (const section of sections) {
         if (existingIds.has(section.id)) {
           // Update existing section
-          await resumeRepository.updateSection(section.id, {
+          await resumeRepository.updateSectionOwned(user.id, id, section.id, {
             title: section.title,
             sortOrder: section.sortOrder,
             visible: section.visible,
@@ -85,7 +78,7 @@ export async function PUT(
           });
         } else {
           // Create new section added by the user
-          await resumeRepository.createSection({
+          await resumeRepository.createSectionOwned(user.id, {
             id: section.id,
             resumeId: id,
             type: section.type,
@@ -98,7 +91,7 @@ export async function PUT(
       }
     }
 
-    const updated = await resumeRepository.findById(id);
+    const updated = await resumeRepository.findOwnedById(user.id, id);
     return NextResponse.json(updated);
   } catch (error) {
     console.error('PUT /api/resume/[id] error:', error);
@@ -118,15 +111,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    await resumeRepository.delete(id);
+    const deleted = await resumeRepository.deleteOwned(user.id, id);
+    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/resume/[id] error:', error);

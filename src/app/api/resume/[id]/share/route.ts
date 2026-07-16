@@ -15,13 +15,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const resume = await resumeRepository.findOwnedById(user.id, id);
+    if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const body = await request.json().catch(() => ({}));
     const { password } = body as { password?: string };
@@ -30,7 +25,7 @@ export async function POST(
     const shareToken = resume.shareToken || generateShareToken();
     const hashedPassword = password ? await hashPassword(password) : resume.sharePassword;
 
-    await resumeRepository.updateShareSettings(id, {
+    await resumeRepository.updateOwnedShareSettings(user.id, id, {
       isPublic: true,
       shareToken,
       sharePassword: hashedPassword,
@@ -59,13 +54,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const resume = await resumeRepository.findOwnedById(user.id, id);
+    if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({
       isPublic: resume.isPublic,
@@ -92,15 +82,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resume = await resumeRepository.findById(id);
-    if (!resume) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const resume = await resumeRepository.findOwnedById(user.id, id);
+    if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    await resumeRepository.updateShareSettings(id, {
+    await resumeRepository.updateOwnedShareSettings(user.id, id, {
       isPublic: false,
       shareToken: null,
       sharePassword: null,

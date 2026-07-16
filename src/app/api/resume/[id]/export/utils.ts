@@ -2,14 +2,31 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import type {
   PersonalInfoContent,
-  SkillsContent,
-  SummaryContent,
+  QrCodeItem,
 } from '@/types/resume';
 
-export type ResumeWithSections = NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>>;
+export type ResumeWithSections = NonNullable<Awaited<ReturnType<typeof resumeRepository.findOwnedById>>>;
 export type Section = ResumeWithSections['sections'][number];
 
 // ─── Helpers ──────────────────────────────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isQrCodeItem(value: unknown): value is QrCodeItem {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.label === 'string'
+    && typeof value.url === 'string';
+}
+
+function toStringRecord(value: unknown): Record<string, string> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  );
+}
 
 export function esc(text: unknown): string {
   if (text == null) return '';
@@ -69,13 +86,17 @@ export function md(text: unknown): string {
 // ─── Section empty check ──────────────────────────────────────
 
 export function isSectionEmpty(section: Section): boolean {
-  const content = section.content as any;
-  if (section.type === 'summary') return !(content as SummaryContent).text;
+  const rawContent: unknown = section.content;
+  const content = isRecord(rawContent) ? rawContent : {};
+  if (section.type === 'summary') return typeof content.text !== 'string' || !content.text;
   if (section.type === 'skills') {
-    const categories = (content as SkillsContent).categories;
-    return !categories?.length || categories.every((cat: any) => !cat.skills?.length);
+    const categories = Array.isArray(content.categories) ? content.categories : [];
+    return categories.length === 0 || categories.every((category) => {
+      if (!isRecord(category)) return true;
+      return !Array.isArray(category.skills) || category.skills.length === 0;
+    });
   }
-  if ('items' in content) return !content.items?.length;
+  if ('items' in content) return !Array.isArray(content.items) || content.items.length === 0;
   return false;
 }
 
@@ -103,11 +124,14 @@ export function buildHighlights(highlights: string[] | undefined, liClass: strin
 // ─── QR codes inline HTML (SVGs pre-generated in builders.ts) ─
 
 export function buildQrCodesHtml(section: Section): string {
-  const c = section.content as any;
-  const svgs = (c._qrSvgs || {}) as Record<string, string>;
-  const items = (c.items || []).filter((q: any) => q.url?.trim() && svgs[q.id]);
+  const rawContent: unknown = section.content;
+  const content = isRecord(rawContent) ? rawContent : {};
+  const svgs = toStringRecord(content._qrSvgs);
+  const items = (Array.isArray(content.items) ? content.items : [])
+    .filter(isQrCodeItem)
+    .filter((item) => item.url.trim() && svgs[item.id]);
   if (items.length === 0) return '';
-  return `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px 24px;padding-top:4px">${items.map((qr: any) =>
+  return `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px 24px;padding-top:4px">${items.map((qr) =>
     `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:96px">${svgs[qr.id]}<span style="font-size:10px;color:#6b7280;line-height:1.2;text-align:center;word-break:break-all;max-width:96px">${esc(qr.label)}</span></div>`
   ).join('')}</div>`;
 }
