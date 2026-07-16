@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
+import { isAccountAuthEnabled } from './lib/config';
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -8,6 +9,7 @@ const intlMiddleware = createMiddleware(routing);
 const PUBLIC_PATHS = [
   '/',        // Landing page
   '/login',   // Login page
+  '/register', // Registration page (availability is enforced by the API)
   '/share',   // Public share links
 ];
 
@@ -23,8 +25,8 @@ export default async function middleware(request: NextRequest) {
   // Always run i18n middleware first
   const response = intlMiddleware(request);
 
-  // Only check auth when OAuth is enabled
-  const authEnabled = process.env.AUTH_ENABLED === 'true';
+  // Only check auth when account authentication is enabled.
+  const authEnabled = isAccountAuthEnabled();
   if (!authEnabled) return response;
 
   // Skip auth check for public paths and API routes
@@ -32,10 +34,9 @@ export default async function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/')) return response;
   if (isPublicPath(pathname)) return response;
 
-  // Check for NextAuth session token
-  const token =
-    request.cookies.get('authjs.session-token')?.value ||
-    request.cookies.get('__Secure-authjs.session-token')?.value;
+  // This is only a fast redirect guard. API routes always validate the opaque
+  // token hash, expiry, token version and user status against the database.
+  const token = request.cookies.get('jade_session')?.value;
 
   if (!token) {
     // Determine locale from the path or default

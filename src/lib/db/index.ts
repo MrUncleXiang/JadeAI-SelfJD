@@ -17,14 +17,21 @@ if (config.db.type === 'postgresql') {
   adapter = new SQLiteAdapter(process.env.SQLITE_PATH || './data/jade.db');
 }
 
-// Initialize (migrate + seed) — must complete before first query.
-// Store the promise so consumers can await it if needed.
-const _initPromise = adapter.initialize().catch((e) =>
-  console.error('[DB] Initialize failed:', e)
-);
+// Initialization is lazy so importing route modules during `next build` does
+// not connect to PostgreSQL or race multiple workers against one SQLite file.
+// The first real DB operation still fails closed if migration fails.
+let initPromise: Promise<void> | undefined;
+function initializeDatabase(): Promise<void> {
+  initPromise ??= adapter.initialize();
+  return initPromise;
+}
 
-/** Await this before any DB operation to ensure tables exist */
-export const dbReady = _initPromise;
+/** Await this before any DB operation to ensure tables exist. */
+export const dbReady: PromiseLike<void> = {
+  then(onFulfilled, onRejected) {
+    return initializeDatabase().then(onFulfilled, onRejected);
+  },
+};
 
 export const db = adapter.db;
 export { adapter };

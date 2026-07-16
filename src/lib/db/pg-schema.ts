@@ -3,21 +3,29 @@
  * Used ONLY by drizzle-kit for PG migration generation.
  * Runtime code still imports table objects from schema.ts.
  */
-import { pgTable, text, integer } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 const epochNow = sql`extract(epoch from now())::integer`;
 
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: text('username'),
+  usernameNormalized: text('username_normalized').unique(),
   email: text('email').unique(),
+  emailNormalized: text('email_normalized').unique(),
   name: text('name'),
   avatarUrl: text('avatar_url'),
   fingerprint: text('fingerprint').unique(),
   authType: text('auth_type').notNull(),
+  role: text('role').notNull().default('user'),
+  status: text('status').notNull().default('active'),
+  tokenVersion: integer('token_version').notNull().default(0),
+  lastLoginAt: integer('last_login_at'),
   settings: text('settings').default('{}'),
   createdAt: integer('created_at').notNull().default(epochNow),
   updatedAt: integer('updated_at').notNull().default(epochNow),
+  deletedAt: integer('deleted_at'),
 });
 
 export const authAccounts = pgTable('auth_accounts', {
@@ -32,6 +40,74 @@ export const authAccounts = pgTable('auth_accounts', {
   scope: text('scope'),
   createdAt: integer('created_at').notNull().default(epochNow),
 });
+
+export const passwordCredentials = pgTable('password_credentials', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  passwordHash: text('password_hash').notNull(),
+  passwordChangedAt: integer('password_changed_at').notNull().default(epochNow),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const authSessions = pgTable('auth_sessions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  tokenVersion: integer('token_version').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  lastSeenAt: integer('last_seen_at').notNull().default(epochNow),
+  userAgentHash: text('user_agent_hash'),
+  ipPrefix: text('ip_prefix'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  revokedAt: integer('revoked_at'),
+}, (table) => [
+  index('auth_sessions_user_id_idx').on(table.userId),
+  index('auth_sessions_expires_at_idx').on(table.expiresAt),
+]);
+
+export const authRateLimits = pgTable('auth_rate_limits', {
+  keyHash: text('key_hash').primaryKey(),
+  scope: text('scope').notNull(),
+  windowStartedAt: integer('window_started_at').notNull(),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  blockedUntil: integer('blocked_until'),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('auth_rate_limits_blocked_until_idx').on(table.blockedUntil),
+]);
+
+export const invitations = pgTable('invitations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  codeHash: text('code_hash').notNull().unique(),
+  maxUses: integer('max_uses').notNull().default(1),
+  useCount: integer('use_count').notNull().default(0),
+  expiresAt: integer('expires_at'),
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  disabledAt: integer('disabled_at'),
+}, (table) => [index('invitations_created_by_idx').on(table.createdBy)]);
+
+export const systemSettings = pgTable('system_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedBy: text('updated_by').references(() => users.id),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const auditEvents = pgTable('audit_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  actorUserId: text('actor_user_id').references(() => users.id),
+  action: text('action').notNull(),
+  targetType: text('target_type'),
+  targetId: text('target_id'),
+  outcome: text('outcome').notNull(),
+  requestId: text('request_id'),
+  metadata: text('metadata').notNull().default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  index('audit_events_actor_idx').on(table.actorUserId),
+  index('audit_events_created_at_idx').on(table.createdAt),
+]);
 
 export const resumes = pgTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),

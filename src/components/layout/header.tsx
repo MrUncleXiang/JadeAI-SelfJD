@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { Settings, Menu } from 'lucide-react';
+import { Settings, Menu, ShieldCheck } from 'lucide-react';
 import { LocaleSwitcher } from './locale-switcher';
 import { UserMenu } from './user-menu';
 import { Link, usePathname } from '@/i18n/routing';
@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useUIStore } from '@/stores/ui-store';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 
 const NAV_ITEMS: { href: string; i18nKey: string; match: string; tourId?: string }[] = [
   { href: '/dashboard', i18nKey: 'dashboard.nav', match: '/dashboard' },
@@ -21,6 +22,10 @@ export function Header() {
   const { openModal } = useUIStore();
   const t = useTranslations();
   const pathname = usePathname();
+  const { user } = useAuth();
+  const navItems = user?.role === 'admin'
+    ? [...NAV_ITEMS, { href: '/admin/users', i18nKey: 'admin.nav', match: '/admin' }]
+    : NAV_ITEMS;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-background/95 dark:supports-[backdrop-filter]:bg-background/60">
@@ -30,7 +35,7 @@ export function Header() {
             <Image src="/logo.svg" alt="JadeAI" width={120} height={36} priority />
           </Link>
           <nav className="hidden md:flex items-center gap-1">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const isActive = pathname.startsWith(item.match);
               return (
                 <Link
@@ -75,7 +80,7 @@ export function Header() {
               </SheetTrigger>
               <SheetContent side="right" className="w-64">
                 <nav className="flex flex-col gap-2 pt-8">
-                  {NAV_ITEMS.map((item) => {
+                  {navItems.map((item) => {
                     const isActive = pathname.startsWith(item.match);
                     return (
                       <Link
@@ -89,6 +94,7 @@ export function Header() {
                             : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
                         )}
                       >
+                        {item.match === '/admin' && <ShieldCheck className="mr-2 inline h-4 w-4" />}
                         {t(item.i18nKey)}
                       </Link>
                     );

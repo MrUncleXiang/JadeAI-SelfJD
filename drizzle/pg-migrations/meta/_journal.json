@@ -29,6 +29,20 @@
       "when": 1774587349177,
       "tag": "0003_true_kree",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784194806295,
+      "tag": "0004_youthful_bucky",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784198867279,
+      "tag": "0005_silly_zaladane",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { db } from '../index';
 import { users, resumes } from '../schema';
 import { resumeRepository } from './resume.repository';
 import { createSampleResume } from '../sample-resume';
+import { normalizeEmail } from '@/lib/auth/identifiers';
 
 export const userRepository = {
   async findById(id: string) {
@@ -11,7 +12,12 @@ export const userRepository = {
   },
 
   async findByEmail(email: string) {
-    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const normalized = normalizeEmail(email)?.normalized;
+    const result = await db
+      .select()
+      .from(users)
+      .where(normalized ? eq(users.emailNormalized, normalized) : eq(users.email, email))
+      .limit(1);
     return result[0] || null;
   },
 
@@ -48,7 +54,14 @@ export const userRepository = {
 
   async create(data: { id?: string; email?: string; name?: string; avatarUrl?: string; authType: 'oauth' | 'fingerprint'; fingerprint?: string }) {
     const id = data.id || crypto.randomUUID();
-    await db.insert(users).values({ ...data, id });
+    const normalizedEmail = data.email ? normalizeEmail(data.email) : null;
+    await db.insert(users).values({
+      ...data,
+      id,
+      ...(normalizedEmail
+        ? { email: normalizedEmail.value, emailNormalized: normalizedEmail.normalized }
+        : {}),
+    });
     return this.findById(id);
   },
 

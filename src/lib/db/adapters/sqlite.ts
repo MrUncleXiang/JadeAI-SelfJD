@@ -13,28 +13,28 @@ export class SQLiteAdapter implements DatabaseAdapter {
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.sqlite = new Database(path);
+    this.sqlite.pragma('busy_timeout = 5000');
     this.sqlite.pragma('journal_mode = WAL');
     this.sqlite.pragma('foreign_keys = ON');
     this.db = drizzle(this.sqlite, { schema });
-
-    // Auto-run migrations (synchronous for SQLite)
-    try {
-      migrate(this.db, { migrationsFolder: resolve(process.cwd(), 'drizzle/migrations') });
-    } catch (e) {
-      console.error('[DB] SQLite migration failed:', e);
-    }
   }
 
   async initialize(): Promise<void> {
-    try {
-      const row = this.sqlite.prepare('SELECT count(*) as count FROM users').get() as any;
-      if (row?.count === 0) {
-        const { seedDemoUser } = await import('../seed-demo');
-        await seedDemoUser(this.db);
-        console.log('[DB] SQLite auto-seed complete');
-      }
-    } catch (e) {
-      console.error('[DB] SQLite auto-seed failed:', e);
+    // Keep migration I/O behind dbReady. Next.js imports route modules in
+    // multiple build workers, and imports alone must not race to migrate the
+    // same SQLite file.
+    migrate(this.db, { migrationsFolder: resolve(process.cwd(), 'drizzle/migrations') });
+
+    if (process.env.SEED_DEMO_DATA !== 'true') return;
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SEED_DEMO_DATA must not be enabled in production');
+    }
+
+    const row = this.sqlite.prepare('SELECT count(*) as count FROM users').get() as { count?: number };
+    if (row?.count === 0) {
+      const { seedDemoUser } = await import('../seed-demo');
+      await seedDemoUser(this.db);
+      console.log('[DB] SQLite demo seed complete');
     }
   }
 

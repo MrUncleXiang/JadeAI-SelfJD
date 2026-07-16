@@ -1,5 +1,9 @@
 # JadeAI - 架构设计文档
 
+> **上游历史文档：** 本文件描述导入的 JadeAI v0.4.1 基线，包含已移除的
+> NextAuth/Google/指纹生产流程。二开后的权威架构请以 `docs/architecture/`、
+> `plans/implementation-plan.md` 和 `acceptance/acceptance-matrix.yaml` 为准。
+
 ## 1. 项目概述
 
 **JadeAI** 是一款 AI 驱动的智能简历生成器，用户可通过拖拉拽方式可视化创建简历，通过 AI 对话优化简历内容，支持 PDF 导出、多份简历管理、多语言界面（中文/英文）。基于 Next.js 全栈框架开发。

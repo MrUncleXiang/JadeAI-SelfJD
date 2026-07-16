@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
   title: JadeAI Career API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    Phase 0 initial contract. Paths marked x-implementation-status: planned are not
-    available in the upstream baseline yet.
+    Living API contract for the JadeAI Career fork. Paths marked
+    x-implementation-status: planned are not available yet.
 servers:
   - url: /
 security:
@@ -22,11 +22,24 @@ tags:
 
 paths:
   /api/auth/register:
+    get:
+      tags: [Auth]
+      operationId: getRegistrationAvailability
+      x-requirement-id: AUTH-002
+      x-implementation-status: implemented
+      security: []
+      responses:
+        '200':
+          description: Current self-registration mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationModeResponse'
     post:
       tags: [Auth]
       operationId: register
       x-requirement-id: AUTH-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: []
       requestBody:
         required: true
@@ -48,12 +61,47 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      x-requirement-id: AUTH-001
+      x-implementation-status: implemented
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated and session cookie created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      x-requirement-id: AUTH-001
+      x-implementation-status: implemented
+      responses:
+        '204':
+          description: Current session revoked and cookie cleared
+
   /api/me:
     get:
       tags: [Auth]
       operationId: getCurrentUser
       x-requirement-id: AUTH-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       responses:
         '200':
           description: Current user
@@ -67,7 +115,7 @@ paths:
       tags: [Auth]
       operationId: updateCurrentUser
       x-requirement-id: AUTH-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       requestBody:
         required: true
         content:
@@ -79,7 +127,7 @@ paths:
                 displayName:
                   type: string
                   minLength: 1
-                  maxLength: 120
+                  maxLength: 100
                 email:
                   type: [string, 'null']
                   format: email
@@ -98,7 +146,7 @@ paths:
       tags: [Auth]
       operationId: changePassword
       x-requirement-id: AUTH-004
-      x-implementation-status: planned
+      x-implementation-status: implemented
       requestBody:
         required: true
         content:
@@ -114,6 +162,7 @@ paths:
                 newPassword:
                   type: string
                   minLength: 12
+                  maxLength: 256
                   writeOnly: true
       responses:
         '204':
@@ -128,7 +177,7 @@ paths:
       tags: [Admin]
       operationId: listUsers
       x-requirement-id: AUTH-003
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -148,7 +197,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total]
+                required: [items, total, page, pageSize]
                 properties:
                   items:
                     type: array
@@ -157,6 +206,13 @@ paths:
                   total:
                     type: integer
                     minimum: 0
+                  page:
+                    type: integer
+                    minimum: 1
+                  pageSize:
+                    type: integer
+                    minimum: 1
+                    maximum: 100
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -165,7 +221,7 @@ paths:
       tags: [Admin]
       operationId: updateUserByAdmin
       x-requirement-id: AUTH-003
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/UserId'
       requestBody:
@@ -191,6 +247,111 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /api/admin/registration:
+    get:
+      tags: [Admin]
+      operationId: getRegistrationMode
+      x-requirement-id: AUTH-002
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Registration mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationModeResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Admin]
+      operationId: setRegistrationMode
+      x-requirement-id: AUTH-002
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationModeResponse'
+      responses:
+        '200':
+          description: Registration mode updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationModeResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/invitations:
+    get:
+      tags: [Admin]
+      operationId: listInvitations
+      x-requirement-id: AUTH-002
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Invitation metadata without plaintext codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invitation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Admin]
+      operationId: createInvitation
+      x-requirement-id: AUTH-002
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                maxUses:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                expiresInDays:
+                  type: [integer, 'null']
+                  minimum: 1
+                  maximum: 365
+      responses:
+        '201':
+          description: Invitation created; plaintext code is returned only once
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Invitation'
+                  - type: object
+                    required: [code]
+                    properties:
+                      code:
+                        type: string
+                        writeOnly: true
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/invitations/{invitationId}:
+    delete:
+      tags: [Admin]
+      operationId: disableInvitation
+      x-requirement-id: AUTH-002
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '204':
+          description: Invitation disabled
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/llm-profiles:
     get:
@@ -691,7 +852,7 @@ components:
     cookieSession:
       type: apiKey
       in: cookie
-      name: __Host-jadeai-session
+      name: jade_session
 
   parameters:
     Page:
@@ -711,6 +872,13 @@ components:
         default: 20
     UserId:
       name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InvitationId:
+      name: invitationId
       in: path
       required: true
       schema:
@@ -805,6 +973,12 @@ components:
             $ref: '#/components/schemas/Error'
     RateLimited:
       description: Too many requests
+      headers:
+        Retry-After:
+          description: Seconds until another attempt is allowed
+          schema:
+            type: integer
+            minimum: 1
       content:
         application/json:
           schema:
@@ -831,18 +1005,49 @@ components:
         username:
           type: string
           minLength: 3
-          maxLength: 64
+          maxLength: 32
         email:
-          type: string
+          type: [string, 'null']
           format: email
+        displayName:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
         password:
           type: string
           minLength: 12
-          maxLength: 1024
+          maxLength: 256
           writeOnly: true
         invitationCode:
-          type: string
+          type: [string, 'null']
           writeOnly: true
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 254
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+
+    RegistrationMode:
+      type: string
+      enum: [closed, invite, open]
+
+    RegistrationModeResponse:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          $ref: '#/components/schemas/RegistrationMode'
 
     UserRole:
       type: string
@@ -855,34 +1060,87 @@ components:
     CurrentUser:
       type: object
       additionalProperties: false
-      required: [id, username, displayName, role, status]
+      required: [id, username, email, displayName, avatarUrl, authType, role, status]
       properties:
         id:
           type: string
           format: uuid
         username:
-          type: string
+          type: [string, 'null']
         email:
           type: [string, 'null']
           format: email
         displayName:
           type: string
+        avatarUrl:
+          type: [string, 'null']
+          format: uri
+        authType:
+          type: string
+          enum: [password, oauth, fingerprint]
         role:
           $ref: '#/components/schemas/UserRole'
         status:
           $ref: '#/components/schemas/UserStatus'
 
     AdminUserSummary:
-      allOf:
-        - $ref: '#/components/schemas/CurrentUser'
-        - type: object
-          properties:
-            createdAt:
-              type: string
-              format: date-time
-            lastLoginAt:
-              type: [string, 'null']
-              format: date-time
+      type: object
+      additionalProperties: false
+      required: [id, username, email, displayName, avatarUrl, authType, role, status, createdAt, lastLoginAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: [string, 'null']
+        email:
+          type: [string, 'null']
+          format: email
+        displayName:
+          type: string
+        avatarUrl:
+          type: [string, 'null']
+          format: uri
+        authType:
+          type: string
+          enum: [password, oauth, fingerprint]
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        lastLoginAt:
+          type: [string, 'null']
+          format: date-time
+
+    Invitation:
+      type: object
+      additionalProperties: false
+      required: [id, maxUses, useCount, expiresAt, createdBy, createdAt, disabledAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        maxUses:
+          type: integer
+          minimum: 1
+        useCount:
+          type: integer
+          minimum: 0
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+        createdBy:
+          type: [string, 'null']
+          format: uuid
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        disabledAt:
+          type: [string, 'null']
+          format: date-time
 
     LlmProfileInput:
       type: object

@@ -1,40 +1,36 @@
-import { auth } from './config';
+import { cookies } from 'next/headers';
 import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
+import { SESSION_COOKIE_NAME, readSessionToken } from './http';
+import { authService } from './service';
 
 export async function getCurrentUserId(): Promise<string | null> {
   if (config.auth.enabled) {
-    const session = await auth();
-    return session?.user?.id || null;
+    const cookieStore = await cookies();
+    const actor = await authService.resolveSession(cookieStore.get(SESSION_COOKIE_NAME)?.value || null);
+    return actor?.userId || null;
   }
   // In fingerprint mode, userId is resolved from the request header
   return null;
 }
 
-export async function resolveUser(fingerprint?: string | null) {
+export async function resolveUser(credential?: string | null) {
   // Ensure DB tables exist before any query
   await dbReady;
 
   if (config.auth.enabled) {
-    const session = await auth();
-    if (!session?.user?.id) return null;
-
-    // User was created during sign-in (jwt callback), just look up
-    let user = await userRepository.findById(session.user.id);
-
-    // Fallback: ID may differ if token was issued before DB creation
-    if (!user && session.user.email) {
-      user = await userRepository.findByEmail(session.user.email);
-    }
-
-    return user;
+    if (!credential) return null;
+    const actor = await authService.resolveSession(credential);
+    return actor ? userRepository.findById(actor.userId) : null;
   }
 
-  if (!fingerprint) return null;
-  return userRepository.upsertByFingerprint(fingerprint);
+  if (!config.auth.fingerprintEnabled || !credential) return null;
+  return userRepository.upsertByFingerprint(credential);
 }
 
 export function getUserIdFromRequest(request: Request): string | null {
+  if (config.auth.enabled) return readSessionToken(request);
+  if (!config.auth.fingerprintEnabled) return null;
   return request.headers.get('x-fingerprint') || null;
 }

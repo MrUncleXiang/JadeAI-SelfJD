@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { Link } from '@/i18n/routing';
 import { Menu, Star } from 'lucide-react';
@@ -15,6 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
+import { useAuth } from '@/hooks/use-auth';
 
 const GITHUB_REPO = 'twwch/JadeAI';
 
@@ -39,11 +39,11 @@ export function LandingHeader() {
   const t = useTranslations('landing.header');
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-  const { data: session } = useSession();
+  const { isAuthenticated } = useAuth();
   const stars = useGitHubStars();
   const { authEnabled } = useRuntimeConfig();
 
-  const isLoggedIn = authEnabled && !!session?.user;
+  const isLoggedIn = authEnabled && isAuthenticated;
   const ctaLabel = isLoggedIn ? t('dashboard') : t('getStarted');
 
   useEffect(() => {

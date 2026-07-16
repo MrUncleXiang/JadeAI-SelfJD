@@ -58,7 +58,11 @@ scenarios:
     when: 注册、登录和退出
     then: 正确凭证创建安全会话，错误凭证返回统一错误
     layers: [unit, integration, e2e, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/auth/service.test.ts
+      - src/app/api/auth/auth-routes.test.ts
+      - scripts/test-postgres-integration.ts
 
   - id: ACC-AUTH-002
     requirement: AUTH-002
@@ -69,7 +73,11 @@ scenarios:
     when: 普通用户提交注册
     then: 仅符合当前模式且邀请有效的请求成功
     layers: [unit, integration, e2e]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/auth/service.test.ts
+      - src/lib/auth/admin-service.test.ts
+      - src/app/api/admin/admin-routes.test.ts
 
   - id: ACC-AUTH-003
     requirement: AUTH-003
@@ -80,7 +88,10 @@ scenarios:
     when: 管理员禁用、恢复或修改角色
     then: 合法操作写入审计且系统始终保留活动管理员
     layers: [integration, e2e, concurrency]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/auth/admin-service.test.ts
+      - src/app/api/admin/admin-routes.test.ts
 
   - id: ACC-AUTH-004
     requirement: AUTH-004
@@ -91,7 +102,11 @@ scenarios:
     when: 修改密码、禁用用户或管理员撤销会话
     then: 所有旧会话在下一次请求时失效
     layers: [integration, e2e, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/auth/service.test.ts
+      - src/app/api/auth/auth-routes.test.ts
+      - scripts/test-postgres-integration.ts
 
   - id: ACC-AUTH-005
     requirement: AUTH-005
@@ -102,7 +117,10 @@ scenarios:
     when: 通过 API、AI Chat、后台任务、导出和面试访问
     then: 在产生外部调用或数据变化前被拒绝
     layers: [integration, e2e, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/db/repositories/tenant-isolation.test.ts
+      - src/app/api/ai/chat/route.test.ts
 
   - id: ACC-AUTH-006
     requirement: AUTH-006
@@ -410,7 +428,11 @@ scenarios:
     when: 操作成功或失败
     then: 可按请求 ID 定位且日志无秘密或完整私有正文
     layers: [integration, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/auth/service.test.ts
+      - src/lib/auth/admin-service.test.ts
+      - src/app/api/admin/admin-routes.test.ts
 
   - id: ACC-OPS-002
     requirement: OPS-002
@@ -421,7 +443,10 @@ scenarios:
     when: 执行迁移、失败恢复和重放
     then: 结果一致，失败不会启动不完整服务
     layers: [integration, migration, disaster-recovery]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - scripts/test-sqlite-migrations.ts
+      - scripts/test-postgres-integration.ts
 
   - id: ACC-SEC-001
     requirement: SEC-001
@@ -432,7 +457,12 @@ scenarios:
     when: 扫描存储、日志并模拟 CSRF
     then: 秘密不泄露，伪造请求失败
     layers: [unit, integration, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/auth/password.test.ts
+      - src/lib/auth/http.test.ts
+      - src/lib/auth/service.test.ts
+      - src/app/api/auth/auth-routes.test.ts
 
   - id: ACC-SEC-002
     requirement: SEC-002

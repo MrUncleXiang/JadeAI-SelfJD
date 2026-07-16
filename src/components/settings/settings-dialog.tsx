@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useLocale } from 'next-intl';
 import { useTheme } from 'next-themes';
-import { Settings, Cpu, Paintbrush, PenTool, Eye, EyeOff, Sun, Moon, Monitor, ChevronsUpDown, Check, Loader2 } from 'lucide-react';
+import { Settings, Cpu, Paintbrush, PenTool, Eye, EyeOff, Sun, Moon, Monitor, ChevronsUpDown, Check, Loader2, UserRound } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,8 @@ import { useTourStore } from '@/stores/tour-store';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { locales, localeNames } from '@/i18n/config';
 import { cn } from '@/lib/utils';
+import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
+import { AccountSettings } from './account-settings';
 
 const AI_PROVIDERS: { value: AIProvider; label: string }[] = [
   { value: 'openai', label: 'OpenAI' },
@@ -46,6 +48,7 @@ export function SettingsDialog() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme: currentTheme, setTheme } = useTheme();
+  const { authEnabled } = useRuntimeConfig();
   const { activeModal, closeModal, settingsTab, setSettingsTab } = useUIStore();
   const {
     aiProvider,
@@ -140,7 +143,7 @@ export function SettingsDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent className="sm:max-w-[540px] p-0 gap-0">
+      <DialogContent className="max-h-[90vh] overflow-hidden p-0 gap-0 sm:max-w-[620px]">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-zinc-500" />
@@ -150,7 +153,7 @@ export function SettingsDialog() {
 
         <Tabs value={settingsTab} onValueChange={setSettingsTab} className="mt-4">
           <div className="px-6">
-            <TabsList className="w-full">
+            <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
               <TabsTrigger value="ai" className="flex-1 gap-1.5 cursor-pointer">
                 <Cpu className="h-3.5 w-3.5" />
                 {t('ai.title')}
@@ -163,6 +166,12 @@ export function SettingsDialog() {
                 <PenTool className="h-3.5 w-3.5" />
                 {t('editorTab.title')}
               </TabsTrigger>
+              {authEnabled && (
+                <TabsTrigger value="account" className="flex-1 gap-1.5 cursor-pointer">
+                  <UserRound className="h-3.5 w-3.5" />
+                  {t('account.title')}
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -403,6 +412,12 @@ export function SettingsDialog() {
               </Button>
             </div>
           </TabsContent>
+
+          {authEnabled && (
+            <TabsContent value="account" className="max-h-[65vh] overflow-y-auto px-6 pb-6 pt-4">
+              <AccountSettings />
+            </TabsContent>
+          )}
         </Tabs>
       </DialogContent>
     </Dialog>

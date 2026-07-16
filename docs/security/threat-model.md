@@ -31,7 +31,7 @@
 | 跨租户直接对象引用 | 读取或修改其他用户简历 | 用户作用域仓储、执行前二次验证 | AUTH-005 |
 | AI Chat 越权 Resume ID | LLM 读取或写入他人简历 | 调用 LLM 前验证 Resume 所有权 | AUTH-005、AI-001 |
 | 管理员越权读取正文 | 内部隐私泄露 | 管理后台默认只显示元数据，支持访问需理由与审计 | AUTH-003、OPS-001 |
-| 密码暴力破解 | 账号接管 | Argon2id、统一错误、限流、Session 轮换 | AUTH-001、SEC-001 |
+| 密码暴力破解 | 账号接管 | 参数化 scrypt、统一错误、数据库限流、Session 轮换 | AUTH-001、SEC-001 |
 | Session 盗用和固定 | 账号接管 | HttpOnly Cookie、登录旋转、Token Version、CSRF | AUTH-004、SEC-001 |
 | LLM Key 泄露 | 费用和数据风险 | 服务端 AES-GCM、脱敏日志、客户端不持久化 | LLM-002、SEC-001 |
 | BaseURL SSRF | 访问内网或云元数据 | DNS/IP 校验、重定向复检、管理员 Allowlist | LLM-005 |

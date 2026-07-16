@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 0 active
+状态：Phase 1 active
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -59,20 +59,24 @@ Gate：
 
 实现：
 
-1. 正式 PostgreSQL Schema 和迁移基线。
-2. 用户名、可选邮箱、密码凭证和数据库 Session。
-3. 注册模式、邀请、密码修改和重置。
-4. Admin 用户列表、禁用、恢复和角色保护。
-5. 审计事件。
-6. 统一 `ActorContext`。
-7. 所有 Resume、Chat、Share、Interview Repository 改为用户作用域。
-8. 修复 AI Chat 在加载 Resume 和创建模型请求前的 Ownership 校验。
-9. 移除生产指纹账号和自动 Demo Seed；仅测试 Fixture 可使用。
+1. [x] PostgreSQL/SQLite 账号 Schema、旧库冲突保留策略和迁移重放。
+2. [x] 用户名、可选邮箱、密码凭证和数据库 Session。
+3. [x] 注册模式、邀请和密码修改；邮件密码重置暂不进入首个可运行切片。
+4. [x] Admin 用户列表、禁用、恢复和最后管理员保护。
+5. [x] 账号、邀请、管理员操作和登录失败审计事件。
+6. [x] 统一 `ActorContext` 和账号密码 UI。
+7. [ ] 所有 Resume、Chat、Share、Interview Repository 改为用户作用域。
+8. [x] AI Chat 在加载 Resume 和创建模型请求前校验 Ownership。
+9. [x] 移除旧 NextAuth/Google 入口、生产指纹账号和自动 Demo Seed。
+10. [x] 登录/注册数据库限流、Origin 校验和会话撤销。
+11. [x] PostgreSQL 旧库迁移、登录和 Session 撤销集成验收。
+12. [ ] Playwright E2E 和全资源租户参数化验收。
 
 自动测试：
 
 - Auth Service Unit。
 - PostgreSQL Integration。
+- SQLite 空库/旧库 Migration Replay。
 - 两用户跨租户 Route 参数化测试。
 - Playwright 注册/邀请/登录/退出/禁用。
 - Session 撤销、并发 Last Admin、CSRF、限流。

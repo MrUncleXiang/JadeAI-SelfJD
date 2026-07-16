@@ -167,7 +167,7 @@ The following resume sections support Markdown syntax:
 
 - **Bilingual UI** — Full Chinese (zh) and English (en) interface
 - **Dark Mode** — Light, dark, and system theme support
-- **Flexible Auth** — Google OAuth or browser fingerprint (zero-config)
+- **Account Auth** — Username/password accounts, invitations, database sessions, and admin controls
 - **Dual Database** — SQLite (default, zero-config) or PostgreSQL
 
 ## Tech Stack
@@ -179,7 +179,7 @@ The following resume sections support Markdown syntax:
 | Drag & Drop | @dnd-kit |
 | State | Zustand |
 | Database | Drizzle ORM (SQLite / PostgreSQL) |
-| Auth | NextAuth.js v5 + FingerprintJS |
+| Auth | JadeAI account service + opaque database sessions |
 | AI | Vercel AI SDK v6 + OpenAI / Anthropic |
 | PDF | Puppeteer Core + @sparticuz/chromium |
 | i18n | next-intl |
@@ -187,57 +187,17 @@ The following resume sections support Markdown syntax:
 
 ## Getting Started
 
-### Docker (Recommended)
+### Docker
 
-```bash
-# Generate a secret key first
-openssl rand -base64 32
-
-docker run -d -p 3000:3000 \
-  -e AUTH_SECRET=<your-generated-secret> \
-  -v jadeai-data:/app/data \
-  twwch/jadeai:latest
-```
-
-Open [http://localhost:3000](http://localhost:3000). Database auto-migrates and seeds on first start.
-
-> **`AUTH_SECRET`** is required for session encryption. Generate one with `openssl rand -base64 32`.
-
-> **AI Configuration:** No server-side AI env vars needed. Each user configures their own API Key, Base URL, and Model in **Settings > AI** within the app.
-
-<details>
-<summary>With PostgreSQL</summary>
-
-```bash
-docker run -d -p 3000:3000 \
-  -e AUTH_SECRET=<your-generated-secret> \
-  -e DB_TYPE=postgresql \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/jadeai \
-  twwch/jadeai:latest
-```
-
-</details>
-
-<details>
-<summary>With Google OAuth</summary>
-
-```bash
-docker run -d -p 3000:3000 \
-  -e AUTH_ENABLED=true \
-  -e AUTH_SECRET=your-secret \
-  -e GOOGLE_CLIENT_ID=xxx \
-  -e GOOGLE_CLIENT_SECRET=xxx \
-  -v jadeai-data:/app/data \
-  twwch/jadeai:latest
-```
-
-</details>
+The upstream `twwch/jadeai` image does **not** contain the changes in this fork. A reviewed
+JadeAI Career image and first-admin container bootstrap flow will be published only after the
+Phase 1 PostgreSQL/migration gate passes. Use local development for the current branch.
 
 ### Local Development
 
 #### Prerequisites
 
-- Node.js 18+
+- Node.js 20.9+
 - pnpm 9+
 
 #### Installation
@@ -258,23 +218,26 @@ Edit `.env.local`:
 # Database (defaults to SQLite, no config needed)
 DB_TYPE=sqlite
 
-# Auth (defaults to fingerprint mode, no config needed)
-AUTH_ENABLED=false
+# Account authentication
+AUTH_ENABLED=true
+REGISTRATION_MODE=closed
+SESSION_TTL_DAYS=30
+ENABLE_FINGERPRINT_AUTH=false
 ```
 
 > **AI Configuration:** No server-side env vars needed. Each user configures their own API Key, Base URL, and Model in **Settings > AI** within the app.
 
-See `.env.example` for all available options (Google OAuth, PostgreSQL, etc.).
+See `.env.example` for all available options.
 
 #### Initialize Database & Run
 
 ```bash
-# Generate and run migrations
-pnpm db:generate
-pnpm db:migrate
-
-# (Optional) Seed with sample data
-pnpm db:seed
+# Migrations run automatically when the database adapter initializes.
+# Create the first administrator; the password is read from stdin and is not
+# exposed in shell history or the process list.
+read -s JADE_PASSWORD
+printf %s "$JADE_PASSWORD" | pnpm auth:bootstrap-admin -- --username admin
+unset JADE_PASSWORD
 
 # Start dev server
 pnpm dev
@@ -286,13 +249,15 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `AUTH_SECRET` | Yes | — | Secret key for session encryption |
 | `DB_TYPE` | No | `sqlite` | Database type: `sqlite` or `postgresql` |
 | `DATABASE_URL` | When PostgreSQL | — | PostgreSQL connection string |
 | `SQLITE_PATH` | No | `./data/jade.db` | SQLite database file path |
-| `AUTH_ENABLED` | No | `false` | Enable Google OAuth (`true`) or use fingerprint mode (`false`) |
-| `GOOGLE_CLIENT_ID` | When OAuth | — | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | When OAuth | — | Google OAuth client secret |
+| `AUTH_ENABLED` | No | `true` | Account authentication; only explicit `false` in development enables the legacy fallback path |
+| `REGISTRATION_MODE` | No | `closed` | Initial mode: `closed`, `invite`, or `open` |
+| `SESSION_TTL_DAYS` | No | `30` | Session lifetime, clamped to 1–90 days |
+| `TRUST_PROXY_HEADERS` | No | `false` | Trust proxy-supplied client IP headers for coarse auth rate limits; enable only behind a sanitizing reverse proxy |
+| `ENABLE_FINGERPRINT_AUTH` | No | `false` | Development-only legacy fallback; ignored in production |
+| `SEED_DEMO_DATA` | No | `false` | Explicit development fixture; rejected in production |
 | `APP_NAME` | No | `JadeAI` | Application display name |
 | `DEFAULT_LOCALE` | No | `zh` | Default language: `zh` or `en` |
 
@@ -305,11 +270,16 @@ Open [http://localhost:3000](http://localhost:3000).
 | `pnpm start` | Start production server |
 | `pnpm lint` | Run ESLint |
 | `pnpm type-check` | TypeScript type checking |
+| `pnpm test` | Run unit and route tests |
+| `pnpm test:migration` | Replay fresh and legacy SQLite migrations |
+| `pnpm test:integration` | Run destructive PostgreSQL acceptance against an explicitly marked local test database |
 | `pnpm db:generate` | Generate Drizzle migrations (SQLite) |
 | `pnpm db:generate:pg` | Generate Drizzle migrations (PostgreSQL) |
 | `pnpm db:migrate` | Execute database migrations |
 | `pnpm db:studio` | Open Drizzle Studio (database GUI) |
 | `pnpm db:seed` | Seed database with sample data |
+| `pnpm auth:bootstrap-admin` | Create the first administrator (password via stdin) |
+| `pnpm spec:check` | Validate requirements, OpenAPI traceability, and acceptance specs |
 
 ## Project Structure
 
@@ -334,7 +304,7 @@ src/
 │       ├── resume/             # Resume CRUD, export, parse, share
 │       ├── share/              # Public share access
 │       ├── user/               # User profile & settings
-│       └── auth/               # NextAuth handlers
+│       └── auth/               # Account registration/login/logout handlers
 ├── components/
 │   ├── ui/                     # shadcn/ui base components
 │   ├── editor/                 # Editor canvas, sections, fields, dialogs
@@ -344,7 +314,7 @@ src/
 │   └── layout/                 # Header, theme provider, locale switcher
 ├── lib/
 │   ├── db/                     # Schema, repositories, migrations, adapters
-│   ├── auth/                   # Auth configuration
+│   ├── auth/                   # Account, session, admin, and security services
 │   └── ai/                     # AI prompts, tools, model config
 ├── hooks/                      # Custom React hooks (7 hooks)
 ├── stores/                     # Zustand stores (resume, editor, settings, UI, tour)
@@ -449,7 +419,7 @@ Contributions are welcome! Here's how to get started:
 <details>
 <summary><b>How does AI configuration work?</b></summary>
 
-JadeAI does not require server-side AI API keys. Each user configures their own AI provider (OpenAI, Anthropic, or custom endpoint), API key, and model in **Settings > AI** within the app. API keys are stored in the browser's local storage and are never sent to the server for storage.
+The current compatibility UI lets each user configure an OpenAI-compatible, Anthropic, or custom endpoint in **Settings > AI**. During Phase 2 this fork will migrate those settings to encrypted, server-side, per-user LLM profiles; until that gate is complete, API keys remain in the browser's local storage.
 
 </details>
 
@@ -463,7 +433,7 @@ Yes. Set the `DB_TYPE` environment variable to `sqlite` or `postgresql`. SQLite 
 <details>
 <summary><b>How does authentication work without OAuth?</b></summary>
 
-When `AUTH_ENABLED=false` (default), JadeAI uses browser fingerprinting via FingerprintJS. A unique fingerprint ID is generated for each browser and used as the user identifier. No login screen is shown — users can start building resumes immediately.
+Account/password authentication is enabled by default and is always enforced in production. For local compatibility testing only, set both `AUTH_ENABLED=false` and `ENABLE_FINGERPRINT_AUTH=true` to enable the legacy browser-fingerprint flow.
 
 </details>
 
