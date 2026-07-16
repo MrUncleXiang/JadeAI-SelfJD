@@ -16,6 +16,7 @@
     "test:integration": "tsx scripts/test-postgres-integration.ts",
     "test:integration:postgres": "tsx scripts/test-postgres-integration.ts",
     "test:migration": "tsx scripts/test-sqlite-migrations.ts",
+    "test:e2e": "playwright test",
     "type-check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:generate:pg": "drizzle-kit generate --config drizzle-pg.config.ts",
@@ -72,6 +73,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "1.51.1",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",

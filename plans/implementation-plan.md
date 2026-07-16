@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 1 active
+状态：Phase 1 自动化验收完成，等待人工安全/迁移评审
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -70,7 +70,7 @@ Gate：
 9. [x] 移除旧 NextAuth/Google 入口、生产指纹账号和自动 Demo Seed。
 10. [x] 登录/注册数据库限流、Origin 校验和会话撤销。
 11. [x] PostgreSQL 旧库迁移、登录和 Session 撤销集成验收。
-12. [ ] Playwright E2E 和全资源租户参数化验收。
+12. [x] Playwright E2E 和全资源租户参数化验收。
 
 自动测试：
 
@@ -84,6 +84,13 @@ Gate：
 Gate：所有现有测试和 Phase 1 安全测试通过。
 
 人工 Gate：Schema、密码参数、Bootstrap Admin 和迁移方案评审。
+
+自动化证据（2026-07-16）：
+
+- `pnpm test:e2e`：3 个真实浏览器场景通过，覆盖 closed/open/invite 注册、登录/退出、禁用、Session 失效、CSRF、Last Admin 和跨租户 Resume 读写/复制/删除/导出。
+- `pnpm test`：17 个测试文件、80 个测试通过；全资源 Route Guard 和仓储租户参数化测试包含 Resume、Chat、Share、Analysis、Interview。
+- `pnpm test:migration`、PostgreSQL `pnpm test:integration`、`pnpm type-check`、`pnpm spec:check` 和 `pnpm build` 通过。
+- 本阶段新增/修改文件通过 ESLint；上游模板代码仍有既存全量 Lint 债务，未通过放宽规则或批量无关修改掩盖。
 
 ## 5. Phase 2：用户级 LLM 档案
 

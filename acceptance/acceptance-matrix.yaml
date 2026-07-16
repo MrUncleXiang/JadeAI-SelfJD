@@ -58,11 +58,12 @@ scenarios:
     when: 注册、登录和退出
     then: 正确凭证创建安全会话，错误凭证返回统一错误
     layers: [unit, integration, e2e, security]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/auth/service.test.ts
       - src/app/api/auth/auth-routes.test.ts
       - scripts/test-postgres-integration.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AUTH-002
     requirement: AUTH-002
@@ -73,11 +74,12 @@ scenarios:
     when: 普通用户提交注册
     then: 仅符合当前模式且邀请有效的请求成功
     layers: [unit, integration, e2e]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/auth/service.test.ts
       - src/lib/auth/admin-service.test.ts
       - src/app/api/admin/admin-routes.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AUTH-003
     requirement: AUTH-003
@@ -88,10 +90,11 @@ scenarios:
     when: 管理员禁用、恢复或修改角色
     then: 合法操作写入审计且系统始终保留活动管理员
     layers: [integration, e2e, concurrency]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/auth/admin-service.test.ts
       - src/app/api/admin/admin-routes.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AUTH-004
     requirement: AUTH-004
@@ -102,11 +105,12 @@ scenarios:
     when: 修改密码、禁用用户或管理员撤销会话
     then: 所有旧会话在下一次请求时失效
     layers: [integration, e2e, security]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/auth/service.test.ts
       - src/app/api/auth/auth-routes.test.ts
       - scripts/test-postgres-integration.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AUTH-005
     requirement: AUTH-005
@@ -117,13 +121,14 @@ scenarios:
     when: 通过 API、AI Chat、后台任务、导出和面试访问
     then: 在产生外部调用或数据变化前被拒绝
     layers: [integration, e2e, security]
-    automationStatus: partial
+    automationStatus: automated
     automationEvidence:
       - src/lib/db/repositories/tenant-isolation.test.ts
       - src/lib/db/repositories/tenant-route-guard.test.ts
       - src/app/api/ai/chat/route.test.ts
       - src/app/api/ai/jd-analysis/route.test.ts
       - src/app/api/interview/[id]/chat/route.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-AUTH-006
     requirement: AUTH-006
