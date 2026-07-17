@@ -235,6 +235,8 @@ DB_TYPE=sqlite
 AUTH_ENABLED=true
 REGISTRATION_MODE=closed
 SESSION_TTL_DAYS=30
+AUTH_URL=http://localhost:3000
+AUTH_COOKIE_SECURE=true
 ENABLE_FINGERPRINT_AUTH=false
 
 # 用户保存加密 LLM 档案或 GitHub PAT 连接前必须配置
@@ -274,6 +276,8 @@ pnpm dev
 | `AUTH_ENABLED` | 否 | `true` | 账号认证；生产环境始终 Fail Closed，本地显式设为 `false` 才可进入兼容路径 |
 | `REGISTRATION_MODE` | 否 | `closed` | 初始注册模式：`closed`、`invite` 或 `open` |
 | `SESSION_TTL_DAYS` | 否 | `30` | Session 有效期，限制在 1–90 天 |
+| `AUTH_URL` | standalone 公网部署时 | — | 浏览器访问服务的精确 Origin，用于认证状态变更的同源校验 |
+| `AUTH_COOKIE_SECURE` | 否 | 生产环境为 `true` | 仅临时直连 HTTP 部署可显式设为 `false`；正式环境应使用 HTTPS |
 | `TRUST_PROXY_HEADERS` | 否 | `false` | 信任代理写入的客户端 IP Header；仅在反向代理会清除伪造 Header 时启用 |
 | `ENABLE_FINGERPRINT_AUTH` | 否 | `false` | 仅本地开发可显式启用的旧指纹兼容模式 |
 | `SEED_DEMO_DATA` | 否 | `false` | 显式开发 Fixture；生产环境禁止启用 |

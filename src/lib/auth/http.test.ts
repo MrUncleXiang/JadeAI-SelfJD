@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-import { getRequestMetadata, hasTrustedOrigin, readSessionToken, sessionExpiresAt } from './http';
+import {
+  getRequestMetadata,
+  hasTrustedOrigin,
+  readSessionToken,
+  sessionCookieSecure,
+  sessionExpiresAt,
+} from './http';
 
 describe('auth HTTP boundary', () => {
   it('reads only the named session cookie and tolerates malformed encoding', () => {
@@ -26,6 +32,29 @@ describe('auth HTTP boundary', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('accepts only the exact configured public origin for standalone deployments', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('AUTH_URL', 'https://resume.example/app');
+    try {
+      const requestUrl = 'http://localhost:3000/api/auth/login';
+      expect(hasTrustedOrigin(new NextRequest(requestUrl, {
+        headers: { origin: 'https://resume.example' },
+      }))).toBe(true);
+      expect(hasTrustedOrigin(new NextRequest(requestUrl, {
+        headers: { origin: 'https://evil.example' },
+      }))).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('keeps production cookies secure unless an HTTP-only deployment explicitly opts out', () => {
+    expect(sessionCookieSecure('production', undefined)).toBe(true);
+    expect(sessionCookieSecure('development', undefined)).toBe(false);
+    expect(sessionCookieSecure('production', 'false')).toBe(false);
+    expect(sessionCookieSecure('development', 'true')).toBe(true);
   });
 
   it('bounds session lifetime and stores only coarse IP metadata', () => {

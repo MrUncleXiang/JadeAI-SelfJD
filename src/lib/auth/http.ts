@@ -4,6 +4,15 @@ import type { NextRequest, NextResponse } from 'next/server';
 export const SESSION_COOKIE_NAME = 'jade_session';
 const DEFAULT_SESSION_TTL_DAYS = 30;
 
+export function sessionCookieSecure(
+  nodeEnv = process.env.NODE_ENV,
+  override = process.env.AUTH_COOKIE_SECURE,
+): boolean {
+  if (override === 'true') return true;
+  if (override === 'false') return false;
+  return nodeEnv === 'production';
+}
+
 function sessionTtlSeconds(): number {
   const configured = Number(process.env.SESSION_TTL_DAYS || DEFAULT_SESSION_TTL_DAYS);
   const days = Number.isFinite(configured) ? Math.min(Math.max(configured, 1), 90) : DEFAULT_SESSION_TTL_DAYS;
@@ -39,7 +48,7 @@ export function setSessionCookie(response: NextResponse, token: string, expiresA
     value: token,
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: sessionCookieSecure(),
     path: '/',
     expires: expiresAt,
   });
@@ -51,7 +60,7 @@ export function clearSessionCookie(response: NextResponse): void {
     value: '',
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: sessionCookieSecure(),
     path: '/',
     expires: new Date(0),
   });
@@ -61,7 +70,15 @@ export function hasTrustedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return process.env.NODE_ENV !== 'production';
   try {
-    return new URL(origin).origin === request.nextUrl.origin;
+    const suppliedOrigin = new URL(origin).origin;
+    if (suppliedOrigin === request.nextUrl.origin) return true;
+
+    // A standalone Next.js server can expose request.nextUrl as localhost even
+    // when the browser reached an explicitly configured public origin.
+    const configuredOrigin = process.env.AUTH_URL
+      ? new URL(process.env.AUTH_URL).origin
+      : null;
+    return suppliedOrigin === configuredOrigin;
   } catch {
     return false;
   }

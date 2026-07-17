@@ -8,6 +8,7 @@
     "build:export-css": "tsx scripts/build-export-css.ts",
     "prebuild": "tsx scripts/build-export-css.ts",
     "build": "next build",
+    "postbuild": "node scripts/copy-standalone-assets.mjs",
     "start": "next start",
     "lint": "eslint",
     "spec:check": "node scripts/validate-specs.mjs",

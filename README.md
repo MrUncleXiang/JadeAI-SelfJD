@@ -229,6 +229,8 @@ DB_TYPE=sqlite
 AUTH_ENABLED=true
 REGISTRATION_MODE=closed
 SESSION_TTL_DAYS=30
+AUTH_URL=http://localhost:3000
+AUTH_COOKIE_SECURE=true
 ENABLE_FINGERPRINT_AUTH=false
 
 # Required before users can save encrypted LLM profiles or GitHub PAT connections
@@ -270,6 +272,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `AUTH_ENABLED` | No | `true` | Account authentication; only explicit `false` in development enables the legacy fallback path |
 | `REGISTRATION_MODE` | No | `closed` | Initial mode: `closed`, `invite`, or `open` |
 | `SESSION_TTL_DAYS` | No | `30` | Session lifetime, clamped to 1–90 days |
+| `AUTH_URL` | Public standalone deployment | — | Exact browser-facing origin used for same-origin checks on authentication state changes |
+| `AUTH_COOKIE_SECURE` | No | `true` in production | Set to `false` only for a temporary direct-HTTP deployment; production should use HTTPS |
 | `TRUST_PROXY_HEADERS` | No | `false` | Trust proxy-supplied client IP headers for coarse auth rate limits; enable only behind a sanitizing reverse proxy |
 | `ENABLE_FINGERPRINT_AUTH` | No | `false` | Development-only legacy fallback; ignored in production |
 | `SEED_DEMO_DATA` | No | `false` | Explicit development fixture; rejected in production |
