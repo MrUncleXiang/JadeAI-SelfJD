@@ -151,7 +151,7 @@ Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 7. [x] 将现有 Chat Tool 改造成显式“提出变更”，普通对话禁止直接写库。
 8. [ ] 提案编辑后重校验及显式拒绝动作。
 9. [ ] 将旧翻译覆盖模式和 AI 初始简历生成迁移到 Change Set/受控导入边界。
-10. [ ] 接入真实数据源：Phase 4 Approved Fact/Forbidden Claim 已完成；Phase 6 JD Requirement 待实现。
+10. [ ] 接入真实数据源：Phase 4 Approved Fact/Forbidden Claim 和 Phase 6A 文本 JD Requirement 已完成；Phase 6C 匹配与定向 ResumePatch 待实现。
 
 自动测试：
 
@@ -169,7 +169,7 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - AI Chat 已完全移除仓储写入 Tool；“生成提案”与普通聊天分离，提案持久化不会修改在线简历。
 - 真实浏览器已覆盖 `candidate -> 审阅 -> 只应用选中项 -> 恢复 Version 1`，并验证 Change Set 历史仍可查询。
 - SQLite 空库/旧库迁移和真实 PostgreSQL 临时实例均已覆盖新增三张表及 Apply/Restore 流程。
-- Gate 仍为 **partial**：Phase 4 已提供 AI-003 的真实事实证据闭环；上游遗留 `/api/ai/translate` 与 `/api/ai/generate-resume` 尚未迁移，Phase 6 JD Requirement 也尚未接入。
+- Gate 仍为 **partial**：Phase 4 已提供 AI-003 的真实事实证据闭环，Phase 6A 已接入可审核的文本 JD Requirement；上游遗留 `/api/ai/translate` 与 `/api/ai/generate-resume` 尚未迁移，Phase 6C 的事实匹配与定向 ResumePatch 仍待实现。
 
 自动化证据（2026-07-16）：
 
@@ -336,7 +336,7 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - [x] 重新解析或编辑自动撤销确认；只有 `confirmed` 状态可供后续阶段使用。
 - [x] 单元/Repository 验收覆盖去重、来源定位、租户隔离、审核与确认门禁。
 - [x] 真实浏览器 E2E 覆盖保存、人工修正、确认状态和租户 API。
-- [ ] 生产部署验收。
+- [x] 生产部署验收：`8783d06` 已部署至 `http://43.138.159.58:3000`，未登录访问根路径会跳转至账号登录页；认证 API、JD 工作区、SQLite 迁移和公网监听验收通过。
 - [ ] Phase 6B：PDF、DOCX、图片安全导入。
 - [ ] Phase 6C：Approved Fact 匹配、缺口分析和定向 ResumePatch。
 
