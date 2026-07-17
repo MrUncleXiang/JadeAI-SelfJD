@@ -188,17 +188,27 @@ export function ResumeChangeReview({
     [changeSets, selectedChangeSetId],
   );
 
+  // Concurrent refreshes can replace the change-set object with equivalent data. Key the
+  // default selection by semantic operation state so those responses do not undo user choices.
+  const operationSelectionSeed = JSON.stringify(activeChangeSet ? {
+    id: activeChangeSet.id,
+    applicable: isApplicable(activeChangeSet.status),
+    operationIds: activeChangeSet.operations
+      .filter((operation) => operation.result === 'pending')
+      .map((operation) => operation.operationId),
+  } : null);
+
   useEffect(() => {
-    if (!activeChangeSet || !isApplicable(activeChangeSet.status)) {
+    const seed = JSON.parse(operationSelectionSeed) as {
+      applicable: boolean;
+      operationIds: string[];
+    } | null;
+    if (!seed?.applicable) {
       setSelectedOperationIds(new Set());
       return;
     }
-    setSelectedOperationIds(new Set(
-      activeChangeSet.operations
-        .filter((operation) => operation.result === 'pending')
-        .map((operation) => operation.operationId),
-    ));
-  }, [activeChangeSet]);
+    setSelectedOperationIds(new Set(seed.operationIds));
+  }, [operationSelectionSeed]);
 
   const pendingCount = changeSets.filter((changeSet) => isApplicable(changeSet.status)).length;
 
