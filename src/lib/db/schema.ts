@@ -192,7 +192,9 @@ export const githubInstallations = sqliteTable('github_installations', {
 export const sourceRepositories = sqliteTable('source_repositories', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  sourceType: text('source_type', { enum: ['local-workresume', 'uploaded-workresume', 'github'] }).notNull(),
+  sourceType: text('source_type', {
+    enum: ['local-workresume', 'uploaded-workresume', 'github-public', 'github'],
+  }).notNull(),
   sourceConnectionId: text('source_connection_id'),
   externalRepositoryId: text('external_repository_id').notNull(),
   fullName: text('full_name').notNull(),

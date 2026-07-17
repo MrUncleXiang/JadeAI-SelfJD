@@ -49,11 +49,18 @@ GitHub App 的现有只读实现保留并明确标记为可选高级入口；无
 - 上传只接受带相对路径的白名单文本文件；ZIP 在具备流式解压、Zip Slip、符号链接、
   文件数和解压总量门禁后再启用。
 - 相同 Revision 与解析器版本幂等；新内容创建新快照，不覆盖旧证据。
-- 上传来源不宣称自动同步；GitHub App/PAT 才能检查远端更新。
+- 上传来源不宣称自动同步；公共 URL 支持手动检查，PAT 支持手动/定时轮询，
+  GitHub App 可额外使用 Webhook。
 
 ## 影响
 
 - Phase 5 拆为默认可用的来源接入和可选 GitHub App Gate。
 - GitHub App 真实安装 E2E 不再阻塞未启用 App 的 MVP 发布。
 - 数据模型逐步把 Git 专用的 `commitSha` 表达迁移为通用不可变 Revision；兼容期保留旧字段。
-- 上传入口先实现 WorkResume v2 文件/目录导入，再实现公共 URL 和 PAT Adapter。
+- 实施顺序为 WorkResume v2 文件/目录导入、公共 URL Adapter，再实现 PAT Adapter。
+
+## 实施状态
+
+- WorkResume v2 浏览器目录上传已实现。
+- 无凭证公共 GitHub URL 导入与手动 HEAD 检查已实现。
+- Fine-grained PAT 私有仓库 Adapter 待实现；GitHub App 仍为可选高级模式。

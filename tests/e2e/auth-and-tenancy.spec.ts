@@ -254,6 +254,8 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   await expect(page.getByRole('heading', { name: 'Career Knowledge' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Knowledge' })).toBeVisible();
   await expect(page.getByText('Upload personal information source').first()).toBeVisible();
+  await expect(page.getByText('Import public GitHub repository').first()).toBeVisible();
+  await expect(page.getByPlaceholder('https://github.com/owner/repository')).toBeVisible();
   await expect(page.getByText('GitHub App advanced connection (optional)').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
   await expect(page.getByText('Short-lived installation tokens stay within one request')).toBeVisible();
@@ -264,6 +266,9 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   const facts = await browserJson<unknown[]>(page, '/api/career-facts');
   expect(facts.status).toBe(200);
   expect(Array.isArray(facts.body)).toBe(true);
+  const publicSources = await browserJson<unknown[]>(page, '/api/sources/github-public');
+  expect(publicSources.status).toBe(200);
+  expect(Array.isArray(publicSources.body)).toBe(true);
 });
 
 test('browser directory upload creates tenant-scoped career facts', async ({ page }) => {

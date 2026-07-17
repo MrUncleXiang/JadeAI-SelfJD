@@ -108,13 +108,16 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 
 ### `source_repositories`
 
-- `user_id/source_type`；当前支持 `local-workresume`、`uploaded-workresume`、`github`。
-- `source_connection_id` 对本地/浏览器上传为空，GitHub App 同步时关联授权连接。
+- `user_id/source_type`；当前支持 `local-workresume`、`uploaded-workresume`、`github-public`、`github`。
+- `source_connection_id` 对本地、浏览器上传和无凭证公共 GitHub 为空，GitHub App 同步时
+  关联授权连接。
 - 外部不可变 Repository ID、`full_name`、默认分支。
 - 是否被用户选中、最近 HEAD SHA 和最近同步时间。
 - `(user_id, source_type, external_repository_id)` 唯一；本地来源使用稳定内容寻址 ID，不保存本机绝对路径。
 - 浏览器上传首切每用户使用一个逻辑 `primary` 来源；再次上传更新展示名和最后 Revision，
   不覆盖历史快照。
+- 公共 GitHub 按 GitHub 不可变 Repository ID 去重，保存规范 `full_name`、默认分支和
+  最近导入 Commit，不保存凭证。
 
 ### `source_snapshots`
 
@@ -124,7 +127,7 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 - `(source_repository_id, commit_sha, parser_id, parser_version)` 唯一；解析器升级可对相同
   Revision 形成新的不可变解析快照。
 - 状态：pending、processing、ready、failed。
-- 后续在公共 URL/PAT 落地时迁移为显式 `revision_kind + revision_id`；兼容字段在完成双写、
+- 后续在 PAT 落地和来源模式稳定后迁移为显式 `revision_kind + revision_id`；兼容字段在完成双写、
   回填和回滚验证前保留。
 
 ### `source_documents`
@@ -145,6 +148,8 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 - 不保存完整 Webhook Payload、Installation Access Token 或 GitHub App 私钥。
 - 浏览器上传是同步 HTTP 导入，不创建伪造的远程 `sync_job`；它通过请求上限、用户限流和
   `(source, revision, parser)` 唯一约束获得有界与幂等语义。
+- 公共 GitHub URL 首切同样是同步有界 HTTP 导入；它先比较默认分支 HEAD，再依靠
+  `(source, commit, parser)` 唯一约束幂等，不与 PAT/App 的后台 Job 混用。
 
 ## 5. 职业知识库
 

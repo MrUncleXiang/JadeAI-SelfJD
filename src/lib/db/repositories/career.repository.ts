@@ -562,6 +562,13 @@ export const careerRepository = {
     return rows[0] || null;
   },
 
+  async listSourceRepositoriesOwned(userId: string, sourceType: CareerSourceType) {
+    return db.select().from(sourceRepositories).where(and(
+      eq(sourceRepositories.userId, userId),
+      eq(sourceRepositories.sourceType, sourceType),
+    )).orderBy(desc(sourceRepositories.updatedAt), sourceRepositories.fullName);
+  },
+
   async findLatestReadySnapshotOwned(userId: string, sourceRepositoryId: string) {
     const repositories = await db.select({ lastHeadSha: sourceRepositories.lastHeadSha })
       .from(sourceRepositories).where(and(

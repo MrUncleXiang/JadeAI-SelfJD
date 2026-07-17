@@ -431,6 +431,7 @@ scenarios:
     automationStatus: partial
     automationEvidence:
       - src/lib/github/sync.test.ts
+      - src/lib/github/public-source.test.ts
       - src/lib/github/security.test.ts
       - src/lib/career/workresume-v2.test.ts
       - src/lib/db/repositories/career.repository.test.ts
@@ -447,6 +448,7 @@ scenarios:
     automationStatus: partial
     automationEvidence:
       - src/lib/github/sync.test.ts
+      - src/lib/github/public-source.test.ts
       - src/lib/github/webhook.test.ts
       - src/app/api/github/github-routes.test.ts
       - scripts/reconcile-github-sync.ts
@@ -463,6 +465,7 @@ scenarios:
     automationStatus: partial
     automationEvidence:
       - src/lib/github/sync.test.ts
+      - src/lib/github/public-source.test.ts
       - src/lib/db/repositories/career.repository.test.ts
       - src/app/api/career-facts/career-fact-routes.test.ts
 
@@ -477,8 +480,10 @@ scenarios:
     layers: [unit, integration, security]
     automationStatus: partial
     automationEvidence:
+      - src/lib/github/public-url.test.ts
       - src/lib/github/security.test.ts
       - src/lib/github/client.test.ts
+      - src/lib/github/public-source.test.ts
       - src/lib/github/sync.test.ts
       - src/lib/github/webhook.test.ts
 
@@ -491,7 +496,13 @@ scenarios:
     when: 用户在不提供凭证的情况下导入
     then: 只有允许的公共 GitHub 仓库被解析到不可变 Repository ID 和 Commit，且不会请求任意主机或私网地址
     layers: [unit, contract, integration, e2e, security]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/github/public-url.test.ts
+      - src/lib/github/client.test.ts
+      - src/lib/github/public-source.test.ts
+      - src/app/api/sources/github-public/route.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-GH-007
     requirement: GH-007

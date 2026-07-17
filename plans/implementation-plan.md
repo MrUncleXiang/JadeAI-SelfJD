@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 5B 文件/目录来源已实现且自动化门禁已通过；Phase 5C 公共 URL 和 Fine-grained PAT 待实现；GitHub App 为可选高级模式
+状态：Phase 5B 文件/目录来源和 Phase 5C 公共 URL 已实现；Fine-grained PAT 待实现；GitHub App 为可选高级模式
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -244,18 +244,24 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 
 ### 8.3 Phase 5C：远程仓库的简化连接
 
-1. [ ] 公共 GitHub URL 规范化和固定 GitHub API Adapter，不执行任意 URL Clone。
+1. [x] 公共 GitHub URL 规范化和固定 GitHub API Adapter，不执行任意 URL Clone。
 2. [ ] 用户级 Fine-grained PAT 加密保存、明确仓库选择、手动同步和定时轮询。
-3. [ ] 公共 URL、PAT 和 App 共用安全扫描、WorkResume 解析、快照、事实审核和幂等语义。
-4. [ ] 公共 URL SSRF/无凭证 Contract，PAT 密文/撤销/脱敏安全测试和浏览器 E2E。
+3. [x] 公共 URL 与 App 共用安全扫描、WorkResume 解析、快照、事实审核和幂等语义。
+4. [ ] PAT Adapter 接入同一安全扫描、解析、快照和事实审核管线。
+5. [x] 公共 URL SSRF/无凭证 Contract、增量 Blob、租户 API 和浏览器 E2E。
+6. [ ] PAT 密文/撤销/脱敏安全测试和浏览器 E2E。
 
 当前进度（2026-07-17）：
 
 - 默认 MVP 不需要 GitHub App；当前账号登录仍是用户名/密码，所有 GitHub 凭证只属于来源连接。
 - 文件夹上传已经打通 UI -> 受保护 API -> 安全解析 -> 不可变快照 -> Draft Fact 的窄端到端链路。
 - 相同上传 Revision 返回幂等结果；选中文档变化时创建子快照，并将缺失 Blob 对应旧证据标为 Stale。
+- 公共 GitHub URL 已打通知识库 UI -> 受保护 API -> 固定无凭证 GitHub API ->
+  增量 Blob -> 共用安全解析与 Draft Fact 的窄端到端链路。
+- 相同公共仓库 HEAD 重复检查不读取 Tree/Blob；单 Blob 改变时其余文档按 Git Blob SHA 复用，
+  并将旧证据标为 Stale。
 - App 模式本地 Mock、迁移、同步/Webhook、DTO 脱敏和 UI 已完成；真实 App Gate 只约束启用该模式的部署。
-- 公共 URL 和 Fine-grained PAT 尚未实现，因此 GH-002、GH-003、GH-005 至 GH-007 仍是后续 Gate，
+- Fine-grained PAT 尚未实现，因此 GH-007 以及 GH-002、GH-003、GH-005 的 PAT 分支仍是后续 Gate，
   Phase 5 整体不能标记完成。
 - 上游既存全量 ESLint 债务继续单独跟踪，不通过放宽规则或无关批量修改掩盖。
 
@@ -266,6 +272,17 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - `pnpm test:migration`、一次性真实 PostgreSQL 临时容器 `pnpm test:integration`、`pnpm type-check`、`pnpm spec:check` 和 `pnpm build` 通过。
 - Phase 5B 新增/修改 TypeScript 文件通过聚焦 ESLint；全量 ESLint 仍受上游既存债务约束。
 - 私有 `MyUnityResume` 浏览器上传适配器只读检查：108 个上传文件、38 个忽略文件、19 个选中文档、46 条事实、142 条证据、445 条声明；聚合 Revision `sha256:bb1dbd6e2dc95a5b89efce2de58050a4ea52e68ddbcec99f97104154cb3c6335`，无警告代码且未输出个人正文。
+
+Phase 5C 公共 URL 自动化证据（2026-07-17）：
+
+- `pnpm test`：43 个测试文件、219 个测试通过；其中公共 URL/无凭证 Client/导入服务/路由
+  聚焦测试为 4 个文件、32 个测试。
+- `pnpm test:e2e`：7 个真实 Chromium 场景通过；知识库页面显示公共 URL 入口，且受保护的
+  `GET /api/sources/github-public` 返回当前用户来源列表。
+- `pnpm test:migration`、一次性 PostgreSQL 18 临时容器 `pnpm test:integration`、`pnpm type-check`、
+  `pnpm spec:check` 和 `pnpm build` 通过。
+- Phase 5C 新增/修改 TypeScript 文件通过聚焦 ESLint；构建和 E2E 产物验收后已清理，
+  未修改生产安装 `/home/ubuntu/apps/JadeAI`。
 
 ## 9. Phase 6：JD 与定向简历
 

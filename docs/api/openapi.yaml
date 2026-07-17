@@ -765,6 +765,80 @@ paths:
         '413':
           description: Payload exceeds one MiB
 
+  /api/sources/github-public:
+    get:
+      tags: [Knowledge]
+      operationId: listPublicGitHubSources
+      x-requirement-id: GH-006
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Current user's imported public GitHub sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicGitHubSource'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Knowledge]
+      operationId: importPublicGitHubSource
+      x-requirement-id: GH-006
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicGitHubImportRequest'
+      responses:
+        '200':
+          description: The repository HEAD was already imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicGitHubImportResult'
+        '201':
+          description: A new immutable public GitHub revision and reviewable facts were imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicGitHubImportResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: JSON request exceeds the authentication API body boundary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type is not application/json
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          description: GitHub returned an invalid response or was unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/sources/workresume-upload:
     get:
       tags: [Knowledge]
@@ -1734,6 +1808,91 @@ components:
               type: string
               enum: [AUTH_FAILED, MODEL_NOT_FOUND, RATE_LIMITED, TIMEOUT, OUTBOUND_BLOCKED, PROVIDER_ERROR, INVALID_RESPONSE, UNSUPPORTED]
         latencyMs:
+          type: integer
+          minimum: 0
+
+    PublicGitHubSource:
+      type: object
+      additionalProperties: false
+      required: [id, kind, fullName, repositoryUrl, defaultBranch, lastRevision, lastImportedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          const: github-public
+        fullName:
+          type: string
+        repositoryUrl:
+          type: string
+          format: uri
+          pattern: '^https://github\.com/[^/]+/[^/]+$'
+        defaultBranch:
+          type: string
+        lastRevision:
+          type: [string, 'null']
+          pattern: '^(?:[a-f0-9]{40}|[a-f0-9]{64})$'
+        lastImportedAt:
+          type: [string, 'null']
+          format: date-time
+
+    PublicGitHubImportRequest:
+      type: object
+      additionalProperties: false
+      required: [repositoryUrl]
+      properties:
+        repositoryUrl:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 300
+
+    PublicGitHubImportResult:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - alreadyImported
+        - fetchedBlobs
+        - reusedBlobs
+        - ignoredDocuments
+        - documentsCreated
+        - factsCreated
+        - factsReused
+        - evidenceCreated
+        - claimsCreated
+        - evidenceMarkedStale
+      properties:
+        source:
+          $ref: '#/components/schemas/PublicGitHubSource'
+        alreadyImported:
+          type: boolean
+        fetchedBlobs:
+          type: integer
+          minimum: 0
+        reusedBlobs:
+          type: integer
+          minimum: 0
+        ignoredDocuments:
+          type: integer
+          minimum: 0
+        documentsCreated:
+          type: integer
+          minimum: 0
+        factsCreated:
+          type: integer
+          minimum: 0
+        factsReused:
+          type: integer
+          minimum: 0
+        evidenceCreated:
+          type: integer
+          minimum: 0
+        claimsCreated:
+          type: integer
+          minimum: 0
+        evidenceMarkedStale:
           type: integer
           minimum: 0
 

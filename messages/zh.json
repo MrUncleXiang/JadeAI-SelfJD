@@ -1098,6 +1098,25 @@
       "importSummary": "已检查 {files} 个文件，识别 {facts} 条职业事实。",
       "importFailed": "个人信息库导入失败"
     },
+    "publicGithub": {
+      "title": "导入公开 GitHub 仓库",
+      "noCredential": "无需凭证",
+      "description": "粘贴公开仓库地址即可导入 WorkResume v2 内容。再次检查会解析默认分支当前 Commit，仅在内容更新时创建新的不可变版本。",
+      "placeholder": "https://github.com/owner/repository",
+      "import": "导入公开仓库",
+      "securityNote": "仅接受规范 github.com 仓库地址；服务端无凭证访问固定 GitHub API、拒绝重定向，并执行与目录上传相同的路径、大小、密钥和提示注入检查。",
+      "empty": "尚未导入公开 GitHub 个人信息仓库。",
+      "defaultBranch": "默认分支：{branch}",
+      "commit": "已导入提交 {value}",
+      "notImported": "尚未导入",
+      "lastImported": "最近导入：{value}",
+      "checkUpdates": "检查更新",
+      "requestFailed": "公开 GitHub 来源读取失败",
+      "importSucceeded": "公开 GitHub 仓库已导入",
+      "alreadyImported": "默认分支没有变化，无需重复导入",
+      "importSummary": "已读取 {blobs} 个变化文件，识别 {facts} 条职业事实。",
+      "importFailed": "公开 GitHub 仓库导入失败"
+    },
     "github": {
       "title": "GitHub App 高级连接（可选）",
       "description": "需要后台自动同步或 Webhook 更新时，可通过只读 GitHub App 授权选择私有或公开仓库；该能力不是文件上传的前置条件。",

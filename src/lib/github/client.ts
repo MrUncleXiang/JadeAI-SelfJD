@@ -13,6 +13,7 @@ import type {
 } from './types';
 
 const API_VERSION = '2022-11-28';
+const PUBLIC_API_BASE_URL = 'https://api.github.com';
 const MAX_JSON_BYTES = 25 * 1024 * 1024;
 const MAX_BLOB_RESPONSE_BYTES = 2 * 1024 * 1024;
 
@@ -280,6 +281,100 @@ export class GitHubAppClient {
       `${repositoryPath(fullName)}/git/blobs/${encodeURIComponent(blobSha)}`,
       token,
       {},
+      MAX_BLOB_RESPONSE_BYTES,
+    ));
+    if (body.encoding !== 'base64') throw new GitHubApiError('INVALID_RESPONSE', 502);
+    const size = body.size;
+    if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) {
+      throw new GitHubApiError('INVALID_RESPONSE', 502);
+    }
+    return { sha: string(body.sha), size, encoding: 'base64', content: string(body.content) };
+  }
+}
+
+export class GitHubPublicClient {
+  private readonly fetchImplementation: typeof fetch;
+  private readonly timeoutMs: number;
+
+  constructor(options: GitHubClientOptions = {}) {
+    this.fetchImplementation = options.fetch || fetch;
+    this.timeoutMs = options.timeoutMs || 15_000;
+  }
+
+  private async request(path: string, maxBytes = MAX_JSON_BYTES): Promise<unknown> {
+    let response: Response;
+    try {
+      response = await this.fetchImplementation(`${PUBLIC_API_BASE_URL}${path}`, {
+        cache: 'no-store',
+        redirect: 'error',
+        signal: AbortSignal.timeout(this.timeoutMs),
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'JadeAI-Career',
+          'X-GitHub-Api-Version': API_VERSION,
+        },
+      });
+    } catch (error) {
+      if (error instanceof GitHubApiError) throw error;
+      throw new GitHubApiError('NETWORK_ERROR', 502);
+    }
+    if (!response.ok) {
+      if (response.status === 401) throw new GitHubApiError('AUTH_FAILED', 401);
+      if (response.status === 404) throw new GitHubApiError('REPOSITORY_NOT_FOUND', 404);
+      if (response.status === 429 || (
+        response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0'
+      )) {
+        throw new GitHubApiError('RATE_LIMITED', 429, retryDate(response));
+      }
+      if (response.status === 403) throw new GitHubApiError('PERMISSION_DENIED', 403);
+      throw new GitHubApiError('INVALID_RESPONSE', 502);
+    }
+    return boundedJson(response, maxBytes);
+  }
+
+  async getRepository(fullName: string): Promise<GitHubRepository> {
+    return parseRepository(await this.request(repositoryPath(fullName)));
+  }
+
+  async getCommit(fullName: string, ref: string): Promise<GitHubCommit> {
+    const body = record(await this.request(
+      `${repositoryPath(fullName)}/commits/${encodeURIComponent(ref)}`,
+    ));
+    const commit = record(body.commit);
+    const tree = record(commit.tree);
+    return { sha: string(body.sha), treeSha: string(tree.sha) };
+  }
+
+  async getTree(fullName: string, treeSha: string): Promise<GitHubTree> {
+    const body = record(await this.request(
+      `${repositoryPath(fullName)}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`,
+    ));
+    if (!Array.isArray(body.tree)) throw new GitHubApiError('INVALID_RESPONSE', 502);
+    const entries: GitHubTreeEntry[] = body.tree.map((value) => {
+      const item = record(value);
+      if (!['blob', 'tree', 'commit'].includes(String(item.type))) {
+        throw new GitHubApiError('INVALID_RESPONSE', 502);
+      }
+      return {
+        path: string(item.path),
+        mode: string(item.mode),
+        type: item.type as GitHubTreeEntry['type'],
+        sha: string(item.sha),
+        size: typeof item.size === 'number' && Number.isSafeInteger(item.size) ? item.size : null,
+      };
+    });
+    const tree: GitHubTree = {
+      sha: string(body.sha),
+      truncated: body.truncated === true,
+      entries,
+    };
+    if (tree.truncated) throw new GitHubApiError('TREE_TRUNCATED', 422);
+    return tree;
+  }
+
+  async getBlob(fullName: string, blobSha: string): Promise<GitHubBlob> {
+    const body = record(await this.request(
+      `${repositoryPath(fullName)}/git/blobs/${encodeURIComponent(blobSha)}`,
       MAX_BLOB_RESPONSE_BYTES,
     ));
     if (body.encoding !== 'base64') throw new GitHubApiError('INVALID_RESPONSE', 502);

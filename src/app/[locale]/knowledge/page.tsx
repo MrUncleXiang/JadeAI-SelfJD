@@ -18,6 +18,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { GitHubSourceCard } from '@/components/knowledge/github-source-card';
+import { PublicGitHubSourceCard } from '@/components/knowledge/public-github-source-card';
 import { WorkResumeUploadCard } from '@/components/knowledge/workresume-upload-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -299,6 +300,8 @@ export default function KnowledgePage() {
       </div>
 
       <WorkResumeUploadCard onFactsChanged={load} />
+
+      <PublicGitHubSourceCard onFactsChanged={load} />
 
       <GitHubSourceCard onFactsChanged={load} />
 

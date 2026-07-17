@@ -13,7 +13,11 @@ export const CAREER_FACT_STATUSES = ['draft', 'approved', 'rejected', 'supersede
 export type CareerFactType = typeof CAREER_FACT_TYPES[number];
 export type CareerFactStatus = typeof CAREER_FACT_STATUSES[number];
 export type CareerFactClaimType = 'allowed' | 'forbidden';
-export type CareerSourceType = 'local-workresume' | 'uploaded-workresume' | 'github';
+export type CareerSourceType =
+  | 'local-workresume'
+  | 'uploaded-workresume'
+  | 'github-public'
+  | 'github';
 
 export interface CareerFactClaimInput {
   type: CareerFactClaimType;

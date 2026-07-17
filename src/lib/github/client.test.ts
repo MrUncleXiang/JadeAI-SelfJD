@@ -3,7 +3,12 @@ import { createHash, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { GitHubAppConfig } from './config';
-import { decodeAndVerifyGitHubBlob, GitHubApiError, GitHubAppClient } from './client';
+import {
+  decodeAndVerifyGitHubBlob,
+  GitHubApiError,
+  GitHubAppClient,
+  GitHubPublicClient,
+} from './client';
 
 function testConfig(): GitHubAppConfig {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -81,6 +86,43 @@ describe('GitHub App client', () => {
     }));
     const client = new GitHubAppClient(testConfig(), { fetch: fetchMock });
     await expect(client.getRepository('token', '91')).rejects.toEqual(
+      expect.objectContaining<Partial<GitHubApiError>>({ code: 'RATE_LIMITED', status: 429 }),
+    );
+  });
+});
+
+describe('public GitHub client', () => {
+  it('uses only the fixed GitHub API origin and sends no credential', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json({
+      id: 91,
+      node_id: 'R_91',
+      name: 'career-facts',
+      full_name: 'alice/career-facts',
+      private: false,
+      default_branch: 'main',
+      archived: false,
+      disabled: false,
+    }));
+    const client = new GitHubPublicClient({ fetch: fetchMock });
+    await expect(client.getRepository('alice/career-facts')).resolves.toMatchObject({
+      id: '91',
+      fullName: 'alice/career-facts',
+      private: false,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.github.com/repos/alice/career-facts');
+    expect(init?.cache).toBe('no-store');
+    expect(init?.redirect).toBe('error');
+    expect(new Headers(init?.headers).has('authorization')).toBe(false);
+  });
+
+  it('maps anonymous API rate limiting to a stable retryable error', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json({}, {
+      status: 403,
+      headers: { 'x-ratelimit-remaining': '0', 'retry-after': '60' },
+    }));
+    const client = new GitHubPublicClient({ fetch: fetchMock });
+    await expect(client.getRepository('alice/career-facts')).rejects.toEqual(
       expect.objectContaining<Partial<GitHubApiError>>({ code: 'RATE_LIMITED', status: 429 }),
     );
   });

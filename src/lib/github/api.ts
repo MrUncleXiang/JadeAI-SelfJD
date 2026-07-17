@@ -3,10 +3,12 @@ import { NextResponse } from 'next/server';
 import { authErrorResponse } from '@/lib/auth/api';
 
 import { GitHubServiceError } from './service';
+import { PublicGitHubSourceError } from './public-source';
 import { GitHubSyncError } from './sync';
 
 const ERROR_MESSAGES: Record<string, string> = {
   GITHUB_NOT_CONFIGURED: 'GitHub App integration is not configured.',
+  INVALID_REPOSITORY_URL: 'Repository URL must be a canonical https://github.com/owner/repository URL.',
   INVALID_RETURN_PATH: 'The return path is invalid.',
   INVALID_CONNECTION_STATE: 'The GitHub connection state is invalid or expired.',
   INSTALLATION_NOT_FOUND: 'The GitHub App installation was not found.',
@@ -18,12 +20,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   GITHUB_RATE_LIMITED: 'GitHub API rate limit reached.',
   REPOSITORY_NOT_FOUND: 'GitHub repository not found.',
   REPOSITORY_INACCESSIBLE: 'GitHub repository is inaccessible.',
+  REPOSITORY_NOT_PUBLIC: 'Repository is not publicly readable without a credential.',
   INSTALLATION_REVOKED: 'GitHub App installation was revoked.',
   REPOSITORY_TOO_LARGE: 'Repository exceeds the supported synchronization limits.',
   UNSUPPORTED_LAYOUT: 'Repository does not contain a supported WorkResume v2 layout.',
   SECRET_DETECTED: 'A required source document was blocked by the secret policy.',
   PARSER_VALIDATION_FAILED: 'Repository source validation failed.',
   SYNC_FAILED: 'GitHub synchronization failed.',
+  TOO_MANY_ATTEMPTS: 'Too many repository import attempts. Try again later.',
 };
 
 export function dateString(value: Date | number | string | null): string | null {
@@ -35,7 +39,9 @@ export function dateString(value: Date | number | string | null): string | null 
 }
 
 export function githubErrorResponse(error: unknown, requestId: string): NextResponse {
-  if (!(error instanceof GitHubServiceError) && !(error instanceof GitHubSyncError)) {
+  if (!(error instanceof GitHubServiceError)
+    && !(error instanceof GitHubSyncError)
+    && !(error instanceof PublicGitHubSourceError)) {
     return authErrorResponse(error, requestId);
   }
   const response = NextResponse.json({

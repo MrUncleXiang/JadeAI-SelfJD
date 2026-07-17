@@ -1098,6 +1098,25 @@
       "importSummary": "Checked {files} files and identified {facts} career facts.",
       "importFailed": "Personal information source import failed"
     },
+    "publicGithub": {
+      "title": "Import public GitHub repository",
+      "noCredential": "No credential",
+      "description": "Paste a public repository URL to import WorkResume v2 content. Rechecking resolves the current default-branch commit and imports only a new immutable revision.",
+      "placeholder": "https://github.com/owner/repository",
+      "import": "Import public repository",
+      "securityNote": "Only canonical github.com repository URLs are accepted. The server calls the fixed GitHub API origin without credentials, rejects redirects, and applies the same path, size, secret, and prompt-injection controls as directory upload.",
+      "empty": "No public GitHub personal information repository imported yet.",
+      "defaultBranch": "Default branch: {branch}",
+      "commit": "Imported commit {value}",
+      "notImported": "Not imported yet",
+      "lastImported": "Last imported: {value}",
+      "checkUpdates": "Check updates",
+      "requestFailed": "Failed to load public GitHub sources",
+      "importSucceeded": "Public GitHub repository imported",
+      "alreadyImported": "The default branch is unchanged; no duplicate import was created",
+      "importSummary": "Fetched {blobs} changed files and identified {facts} career facts.",
+      "importFailed": "Public GitHub repository import failed"
+    },
     "github": {
       "title": "GitHub App advanced connection (optional)",
       "description": "When background synchronization or webhook updates are needed, authorize a read-only GitHub App and select private or public repositories. File upload does not depend on this feature.",
