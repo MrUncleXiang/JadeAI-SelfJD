@@ -18,10 +18,11 @@ Build professional resumes with drag-and-drop editing, real-time AI optimization
 
 ---
 
-> **Fork status:** Account/password authentication, administration, database sessions,
-> tenant isolation, and encrypted per-user LLM profiles are implemented on the current
-> JadeAI Career branch. GitHub App synchronization and the reviewed AI resume patch flow
-> remain later phases. The upstream public Docker image does not include these changes.
+> **Fork status:** The current JadeAI Career branch implements account/password authentication,
+> tenant isolation, encrypted per-user LLM profiles, reviewed AI resume patches, a career
+> knowledge base, and local GitHub App synchronization. A real GitHub App/private-repository
+> gate is still required before production use. The upstream public Docker image does not
+> include these changes.
 
 ## Community
 
@@ -270,6 +271,10 @@ Open [http://localhost:3000](http://localhost:3000).
 | `TRUST_PROXY_HEADERS` | No | `false` | Trust proxy-supplied client IP headers for coarse auth rate limits; enable only behind a sanitizing reverse proxy |
 | `ENABLE_FINGERPRINT_AUTH` | No | `false` | Development-only legacy fallback; ignored in production |
 | `SEED_DEMO_DATA` | No | `false` | Explicit development fixture; rejected in production |
+| `GITHUB_APP_ID` | For GitHub sync | — | Numeric GitHub App ID |
+| `GITHUB_APP_SLUG` | For GitHub sync | — | GitHub App slug used to build the installation URL |
+| `GITHUB_APP_PRIVATE_KEY` | For GitHub sync | — | PEM private key supplied only through deployment secrets |
+| `GITHUB_WEBHOOK_SECRET` | For GitHub sync | — | Secret used to validate raw webhook request bodies |
 | `APP_NAME` | No | `JadeAI` | Application display name |
 | `DEFAULT_LOCALE` | No | `zh` | Default language: `zh` or `en` |
 
@@ -291,6 +296,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `pnpm db:studio` | Open Drizzle Studio (database GUI) |
 | `pnpm db:seed` | Seed database with sample data |
 | `pnpm auth:bootstrap-admin` | Create the first administrator (password via stdin) |
+| `pnpm github:reconcile` | Check selected GitHub repositories and process due sync jobs |
 | `pnpm spec:check` | Validate requirements, OpenAPI traceability, and acceptance specs |
 
 ## Project Structure

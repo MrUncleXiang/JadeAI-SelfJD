@@ -141,6 +141,53 @@ export const llmFeatureBindings = pgTable('llm_feature_bindings', {
   index('llm_feature_bindings_profile_id_idx').on(table.llmProfileId),
 ]);
 
+export const sourceConnections = pgTable('source_connections', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),
+  status: text('status').notNull().default('pending'),
+  lastSyncedAt: integer('last_synced_at'),
+  lastErrorCode: text('last_error_code'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('source_connections_user_provider_idx').on(table.userId, table.provider),
+]);
+
+export const githubConnectionStates = pgTable('github_connection_states', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceConnectionId: text('source_connection_id').notNull()
+    .references(() => sourceConnections.id, { onDelete: 'cascade' }),
+  stateHash: text('state_hash').notNull().unique(),
+  returnPath: text('return_path').notNull().default('/knowledge'),
+  expiresAt: integer('expires_at').notNull(),
+  consumedAt: integer('consumed_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  index('github_connection_states_user_idx').on(table.userId),
+  index('github_connection_states_expires_at_idx').on(table.expiresAt),
+]);
+
+export const githubInstallations = pgTable('github_installations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceConnectionId: text('source_connection_id').notNull().unique()
+    .references(() => sourceConnections.id, { onDelete: 'cascade' }),
+  installationId: text('installation_id').notNull().unique(),
+  accountId: text('account_id').notNull(),
+  accountLogin: text('account_login').notNull(),
+  accountType: text('account_type').notNull(),
+  repositorySelection: text('repository_selection').notNull(),
+  permissions: text('permissions').notNull().default('{}'),
+  suspendedAt: integer('suspended_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('github_installations_user_idx').on(table.userId),
+  index('github_installations_account_idx').on(table.accountId),
+]);
+
 export const sourceRepositories = pgTable('source_repositories', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -158,6 +205,7 @@ export const sourceRepositories = pgTable('source_repositories', {
   uniqueIndex('source_repositories_user_source_external_uq')
     .on(table.userId, table.sourceType, table.externalRepositoryId),
   index('source_repositories_user_id_idx').on(table.userId),
+  index('source_repositories_connection_selected_idx').on(table.sourceConnectionId, table.selected),
 ]);
 
 export const sourceSnapshots = pgTable('source_snapshots', {
@@ -175,7 +223,8 @@ export const sourceSnapshots = pgTable('source_snapshots', {
   createdAt: integer('created_at').notNull().default(epochNow),
   completedAt: integer('completed_at'),
 }, (table) => [
-  uniqueIndex('source_snapshots_repository_commit_uq').on(table.sourceRepositoryId, table.commitSha),
+  uniqueIndex('source_snapshots_repository_commit_uq')
+    .on(table.sourceRepositoryId, table.commitSha, table.parserId, table.parserVersion),
   index('source_snapshots_user_id_idx').on(table.userId),
 ]);
 
@@ -191,12 +240,60 @@ export const sourceDocuments = pgTable('source_documents', {
   sizeBytes: integer('size_bytes').notNull(),
   textContent: text('text_content'),
   parseStatus: text('parse_status').notNull().default('ready'),
+  securityFindings: text('security_findings').notNull().default('[]'),
+  llmEligible: integer('llm_eligible').notNull().default(1),
   parserId: text('parser_id').notNull(),
   parserVersion: text('parser_version').notNull(),
   createdAt: integer('created_at').notNull().default(epochNow),
 }, (table) => [
   uniqueIndex('source_documents_snapshot_path_uq').on(table.sourceSnapshotId, table.path),
   index('source_documents_user_id_idx').on(table.userId),
+]);
+
+export const syncJobs = pgTable('sync_jobs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceConnectionId: text('source_connection_id').notNull()
+    .references(() => sourceConnections.id, { onDelete: 'cascade' }),
+  sourceRepositoryId: text('source_repository_id')
+    .references(() => sourceRepositories.id, { onDelete: 'set null' }),
+  trigger: text('trigger').notNull(),
+  status: text('status').notNull().default('queued'),
+  idempotencyKey: text('idempotency_key').notNull().unique(),
+  requestedCommitSha: text('requested_commit_sha'),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  requestId: text('request_id'),
+  webhookDeliveryId: text('webhook_delivery_id'),
+  nextAttemptAt: integer('next_attempt_at'),
+  startedAt: integer('started_at'),
+  completedAt: integer('completed_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('sync_jobs_user_status_idx').on(table.userId, table.status),
+  index('sync_jobs_repository_created_idx').on(table.sourceRepositoryId, table.createdAt),
+  index('sync_jobs_next_attempt_idx').on(table.status, table.nextAttemptAt),
+]);
+
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  deliveryId: text('delivery_id').primaryKey(),
+  eventType: text('event_type').notNull(),
+  installationId: text('installation_id'),
+  repositoryExternalId: text('repository_external_id'),
+  ref: text('ref'),
+  beforeSha: text('before_sha'),
+  afterSha: text('after_sha'),
+  payloadHash: text('payload_hash').notNull(),
+  status: text('status').notNull().default('accepted'),
+  syncJobId: text('sync_job_id').references(() => syncJobs.id, { onDelete: 'set null' }),
+  errorCode: text('error_code'),
+  receivedAt: integer('received_at').notNull().default(epochNow),
+  processedAt: integer('processed_at'),
+}, (table) => [
+  index('webhook_deliveries_installation_idx').on(table.installationId, table.receivedAt),
+  index('webhook_deliveries_repository_idx').on(table.repositoryExternalId, table.receivedAt),
 ]);
 
 export const careerFacts = pgTable('career_facts', {

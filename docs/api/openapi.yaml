@@ -546,26 +546,89 @@ paths:
       tags: [GitHub]
       operationId: beginGithubConnection
       x-requirement-id: GH-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                returnPath:
+                  type: string
+                  maxLength: 512
       responses:
-        '200':
+        '201':
           description: Short-lived GitHub App installation URL
           content:
             application/json:
               schema:
-                type: object
-                required: [redirectUrl]
-                properties:
-                  redirectUrl:
-                    type: string
-                    format: uri
+                $ref: '#/components/schemas/GitHubConnectionStart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/github/callback:
+    get:
+      tags: [GitHub]
+      operationId: completeGithubConnection
+      x-requirement-id: GH-001
+      x-implementation-status: implemented
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: installation_id
+          in: query
+          schema:
+            type: string
+            pattern: '^\d{1,30}$'
+        - name: setup_action
+          in: query
+          schema:
+            type: string
+      responses:
+        '307':
+          description: Redirect to the validated locale knowledge page with a connection result
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/github/connections:
+    get:
+      tags: [GitHub]
+      operationId: listGithubConnections
+      x-requirement-id: GH-001
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Current user's GitHub connections and recent sync summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GitHubConnectionSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/github/repositories:
     get:
       tags: [GitHub]
       operationId: listGithubRepositories
       x-requirement-id: GH-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
+      parameters:
+        - name: connectionId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: Repositories available to the current user connection
@@ -574,14 +637,59 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/SourceRepository'
+                  $ref: '#/components/schemas/GitHubAvailableRepository'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [GitHub]
+      operationId: selectGithubRepositories
+      x-requirement-id: GH-001
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [connectionId, repositoryIds]
+              properties:
+                connectionId:
+                  type: string
+                  format: uuid
+                repositoryIds:
+                  type: array
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    type: string
+                    pattern: '^\d{1,30}$'
+      responses:
+        '200':
+          description: Persisted user-owned repository selection
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GitHubSelectedRepository'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
   /api/github/repositories/{repositoryId}/sync:
     post:
       tags: [GitHub]
       operationId: syncGithubRepository
       x-requirement-id: GH-003
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/RepositoryId'
       responses:
@@ -590,7 +698,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Job'
+                $ref: '#/components/schemas/GitHubSyncAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/github/sync-jobs/{jobId}:
+    get:
+      tags: [GitHub]
+      operationId: getGithubSyncJob
+      x-requirement-id: GH-003
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Current user's GitHub sync job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubSyncJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -599,7 +731,7 @@ paths:
       tags: [GitHub]
       operationId: receiveGithubWebhook
       x-requirement-id: GH-003
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: []
       parameters:
         - name: X-Hub-Signature-256
@@ -625,9 +757,13 @@ paths:
               type: object
       responses:
         '202':
-          description: Accepted or already processed
+          description: Signature-verified event accepted, ignored, or already processed
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           description: Invalid signature
+        '413':
+          description: Payload exceeds one MiB
 
   /api/career-facts:
     get:
@@ -1501,6 +1637,243 @@ components:
         latencyMs:
           type: integer
           minimum: 0
+
+    GitHubConnectionStart:
+      type: object
+      additionalProperties: false
+      required: [connectionId, installationUrl, expiresAt]
+      properties:
+        connectionId:
+          type: string
+          format: uuid
+        installationUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+
+    GitHubInstallationSummary:
+      type: object
+      additionalProperties: false
+      required: [accountLogin, accountType, repositorySelection, suspendedAt]
+      properties:
+        accountLogin:
+          type: string
+        accountType:
+          type: string
+          enum: [user, organization]
+        repositorySelection:
+          type: string
+          enum: [all, selected]
+        suspendedAt:
+          type: [string, 'null']
+          format: date-time
+
+    GitHubSelectedRepository:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - externalRepositoryId
+        - fullName
+        - defaultBranch
+        - selected
+        - lastHeadSha
+        - lastSyncedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        externalRepositoryId:
+          type: string
+          pattern: '^\d{1,30}$'
+        fullName:
+          type: string
+        defaultBranch:
+          type: string
+        selected:
+          type: boolean
+        lastHeadSha:
+          type: [string, 'null']
+        lastSyncedAt:
+          type: [string, 'null']
+          format: date-time
+
+    GitHubAvailableRepository:
+      type: object
+      additionalProperties: false
+      required: [id, name, fullName, private, defaultBranch, archived, disabled, selected]
+      properties:
+        id:
+          type: string
+          pattern: '^\d{1,30}$'
+        name:
+          type: string
+        fullName:
+          type: string
+        private:
+          type: boolean
+        defaultBranch:
+          type: string
+        archived:
+          type: boolean
+        disabled:
+          type: boolean
+        selected:
+          type: boolean
+
+    GitHubSyncJobStatus:
+      type: string
+      enum: [queued, running, retrying, succeeded, failed, cancelled]
+
+    GitHubSyncJobSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceRepositoryId
+        - trigger
+        - status
+        - requestedCommitSha
+        - attemptCount
+        - errorCode
+        - createdAt
+        - completedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceRepositoryId:
+          type: [string, 'null']
+        trigger:
+          type: string
+          enum: [initial, manual, webhook, scheduled]
+        status:
+          $ref: '#/components/schemas/GitHubSyncJobStatus'
+        requestedCommitSha:
+          type: [string, 'null']
+        attemptCount:
+          type: integer
+          minimum: 0
+        errorCode:
+          type: [string, 'null']
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+
+    GitHubConnectionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - lastSyncedAt
+        - lastErrorCode
+        - createdAt
+        - updatedAt
+        - installation
+        - repositories
+        - recentJobs
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, active, suspended, revoked, error]
+        lastSyncedAt:
+          type: [string, 'null']
+          format: date-time
+        lastErrorCode:
+          type: [string, 'null']
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+        installation:
+          oneOf:
+            - $ref: '#/components/schemas/GitHubInstallationSummary'
+            - type: 'null'
+        repositories:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitHubSelectedRepository'
+        recentJobs:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/GitHubSyncJobSummary'
+
+    GitHubSyncAccepted:
+      type: object
+      additionalProperties: false
+      required: [jobId, status, created, requeued]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/GitHubSyncJobStatus'
+        created:
+          type: boolean
+        requeued:
+          type: boolean
+
+    GitHubSyncJob:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceRepositoryId
+        - trigger
+        - status
+        - requestedCommitSha
+        - attemptCount
+        - errorCode
+        - nextAttemptAt
+        - startedAt
+        - completedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceRepositoryId:
+          type: [string, 'null']
+        trigger:
+          type: string
+          enum: [initial, manual, webhook, scheduled]
+        status:
+          $ref: '#/components/schemas/GitHubSyncJobStatus'
+        requestedCommitSha:
+          type: [string, 'null']
+        attemptCount:
+          type: integer
+          minimum: 0
+        errorCode:
+          type: [string, 'null']
+        nextAttemptAt:
+          type: [string, 'null']
+          format: date-time
+        startedAt:
+          type: [string, 'null']
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
 
     SourceRepository:
       type: object

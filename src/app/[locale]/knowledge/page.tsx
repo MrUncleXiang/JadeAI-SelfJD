@@ -17,6 +17,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
+import { GitHubSourceCard } from '@/components/knowledge/github-source-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -295,6 +296,8 @@ export default function KnowledgePage() {
           </Button>
         </div>
       </div>
+
+      <GitHubSourceCard onFactsChanged={load} />
 
       <Card>
         <CardContent className="flex flex-wrap gap-3 pt-6">

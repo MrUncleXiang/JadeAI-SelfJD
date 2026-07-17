@@ -90,8 +90,14 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 来源连接的统一父记录：
 
 - `id/user_id`。
-- `type`，首期仅 `github`。
+- `provider`，首期仅 `github`。
 - `status`、`last_synced_at`、`last_error_code`。
+
+### `github_connection_states`
+
+- `user_id/source_connection_id`。
+- 一次性随机 State 的 SHA-256 哈希、受限 Return Path、到期和消费时间。
+- 明文 State 只返回给浏览器，不写入数据库。
 
 ### `github_installations`
 
@@ -112,7 +118,8 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 
 - `user_id/source_repository_id`。
 - Commit SHA、Tree SHA、父快照、创建时间。
-- 同仓库同 Commit SHA 唯一。
+- `(source_repository_id, commit_sha, parser_id, parser_version)` 唯一；解析器升级可对相同
+  Commit 形成新的不可变解析快照。
 - 状态：pending、processing、ready、failed。
 
 ### `source_documents`
@@ -121,13 +128,16 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 - 路径、Git Blob SHA、内容哈希、MIME、大小。
 - 对象存储位置或受控文本内容。
 - 解析状态、解析器 ID 和解析器版本。
+- `security_findings` 保存脱敏风险代码；`llm_eligible` 决定文档能否进入模型上下文。
 - `(source_snapshot_id, path)` 唯一。
 
 ### `sync_jobs` 和 `webhook_deliveries`
 
-- Job 保存类型、状态、尝试次数、幂等键、错误代码和时间。
-- Webhook Delivery ID 唯一，保存事件类型、验签结果和处理状态。
-- 载荷只保留完成处理所需字段，完整载荷按保留策略删除。
+- Job 保存触发类型、状态、尝试次数、`repository + commit + parser` 幂等键、目标 Commit、
+  错误代码、重试时间和请求关联 ID。
+- Webhook Delivery ID 唯一，保存事件类型、Payload 哈希、Installation/Repository ID、必要
+  Commit/Ref 和处理状态；验签失败在任何数据库写入前拒绝。
+- 不保存完整 Webhook Payload、Installation Access Token 或 GitHub App 私钥。
 
 ## 5. 职业知识库
 
@@ -245,7 +255,7 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 - `users(lower(username))` 唯一。
 - 非空 `users(lower(email))` 唯一。
 - `auth_identities(provider_type, provider_subject)` 唯一。
-- `source_snapshots(source_repository_id, commit_sha)` 唯一。
+- `source_snapshots(source_repository_id, commit_sha, parser_id, parser_version)` 唯一。
 - `source_documents(source_snapshot_id, path)` 唯一。
 - `webhook_deliveries(delivery_id)` 唯一。
 - `resume_versions(resume_id, version_number)` 唯一。

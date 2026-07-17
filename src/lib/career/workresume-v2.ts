@@ -28,8 +28,16 @@ const CONFIG_FILE = 'WorkResume.config.json';
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TOTAL_BYTES = 12 * 1024 * 1024;
 const MAX_DOCUMENTS = 500;
-const ALLOWED_EXTENSIONS = new Set(['.json', '.md', '.txt']);
+const ALLOWED_EXTENSIONS = new Set(['.json', '.md', '.txt', '.yaml', '.yml']);
 const SECRET_NAME = /(^|[._-])(\.env|id_rsa|id_ed25519|credentials?|secrets?|private[_-]?key)([._-]|$)/i;
+const SECRET_FINDING_CODES = new Set([
+  'private_key',
+  'github_token',
+  'aws_access_key',
+  'api_token',
+  'credential_assignment',
+  'secret_filename',
+]);
 
 type JsonRecord = Record<string, unknown>;
 
@@ -85,6 +93,7 @@ export class WorkResumeImportError extends Error {
     | 'IMPORT_TOO_LARGE'
     | 'TOO_MANY_DOCUMENTS'
     | 'BINARY_FILE_BLOCKED'
+    | 'DOCUMENT_INTEGRITY_FAILED'
     | 'GIT_METADATA_UNAVAILABLE'
     | 'DOCUMENT_NOT_TRACKED'
     | 'WORKTREE_DIRTY'
@@ -135,6 +144,8 @@ function mimeTypeFor(relativePath: string): string {
   switch (path.posix.extname(relativePath).toLowerCase()) {
     case '.json': return 'application/json';
     case '.md': return 'text/markdown';
+    case '.yaml':
+    case '.yml': return 'application/yaml';
     default: return 'text/plain';
   }
 }
@@ -351,6 +362,129 @@ function buildFacts(capabilityPath: string, terms: CapabilityTerm[]) {
   return [...skillFacts, ...projectFacts];
 }
 
+function validateDocumentForParsing(document: SourceDocumentImportInput): SourceDocumentImportInput {
+  const documentPath = normalizeRelativePath(document.path);
+  if (SECRET_NAME.test(path.posix.basename(documentPath))) {
+    throw new WorkResumeImportError('SECRET_FILE_BLOCKED');
+  }
+  if (document.securityFindings?.some(
+    (item) => item.severity === 'blocked' && SECRET_FINDING_CODES.has(item.code),
+  )) {
+    throw new WorkResumeImportError('SECRET_FILE_BLOCKED');
+  }
+  if (!ALLOWED_EXTENSIONS.has(path.posix.extname(documentPath).toLowerCase())) {
+    throw new WorkResumeImportError('UNSUPPORTED_FILE');
+  }
+  if (document.parseStatus === 'ignored' || document.parseStatus === 'failed' || document.llmEligible === false) {
+    throw new WorkResumeImportError('DOCUMENT_INTEGRITY_FAILED');
+  }
+  if (typeof document.textContent !== 'string') {
+    throw new WorkResumeImportError('DOCUMENT_INTEGRITY_FAILED');
+  }
+  const sizeBytes = Buffer.byteLength(document.textContent, 'utf8');
+  if (sizeBytes > MAX_FILE_BYTES) throw new WorkResumeImportError('FILE_TOO_LARGE');
+  if (document.sizeBytes !== sizeBytes || document.contentHash !== sha256Text(document.textContent)) {
+    throw new WorkResumeImportError('DOCUMENT_INTEGRITY_FAILED');
+  }
+  return { ...document, path: documentPath };
+}
+
+export function parseWorkResumeV2Documents(
+  inputDocuments: readonly SourceDocumentImportInput[],
+): ParsedWorkResumeV2 {
+  const available = new Map<string, SourceDocumentImportInput>();
+  for (const input of inputDocuments) {
+    const documentPath = normalizeRelativePath(input.path);
+    if (available.has(documentPath)) throw new WorkResumeImportError('INVALID_CONFIG');
+    available.set(documentPath, { ...input, path: documentPath });
+  }
+  const rawConfigDocument = available.get(CONFIG_FILE);
+  if (!rawConfigDocument) throw new WorkResumeImportError('CONFIG_NOT_FOUND');
+  let configDocument: SourceDocumentImportInput;
+  try {
+    configDocument = validateDocumentForParsing(rawConfigDocument);
+  } catch (error) {
+    if (error instanceof WorkResumeImportError && error.code === 'DOCUMENT_INTEGRITY_FAILED') {
+      throw new WorkResumeImportError('CONFIG_NOT_FOUND');
+    }
+    throw error;
+  }
+  const config = parseJsonDocument(configDocument, 'INVALID_CONFIG');
+  if (config.schemaVersion !== 2 || !isRecord(config.paths)) {
+    throw new WorkResumeImportError('INVALID_CONFIG');
+  }
+  const paths = config.paths;
+  const capabilityPath = normalizeRelativePath(requiredString(paths.capabilityPool, 'INVALID_CONFIG'));
+  const selectedPaths = new Set<string>([CONFIG_FILE, capabilityPath]);
+  for (const key of ['jdTermPool', 'jdMapping', 'jdMappingView'] as const) {
+    if (typeof paths[key] === 'string' && paths[key]) selectedPaths.add(normalizeRelativePath(paths[key]));
+  }
+  for (const key of ['projectEvidenceDirectory', 'positioningDirectory'] as const) {
+    if (typeof paths[key] !== 'string' || !paths[key]) continue;
+    const directory = normalizeRelativePath(paths[key]).replace(/\/$/, '');
+    for (const candidate of available.keys()) {
+      if (candidate.startsWith(`${directory}/`)
+        && ALLOWED_EXTENSIONS.has(path.posix.extname(candidate).toLowerCase())) {
+        selectedPaths.add(candidate);
+      }
+    }
+  }
+  if (selectedPaths.size > MAX_DOCUMENTS) throw new WorkResumeImportError('TOO_MANY_DOCUMENTS');
+
+  const documents: SourceDocumentImportInput[] = [];
+  let totalBytes = 0;
+  for (const documentPath of [...selectedPaths].sort()) {
+    const candidate = available.get(documentPath);
+    if (!candidate) {
+      throw new WorkResumeImportError(
+        documentPath === capabilityPath ? 'INVALID_CAPABILITY_POOL' : 'CONFIG_NOT_FOUND',
+      );
+    }
+    let document: SourceDocumentImportInput;
+    try {
+      document = validateDocumentForParsing(candidate);
+    } catch (error) {
+      if (error instanceof WorkResumeImportError
+        && error.code === 'DOCUMENT_INTEGRITY_FAILED'
+        && documentPath === capabilityPath) {
+        throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
+      }
+      throw error;
+    }
+    totalBytes += document.sizeBytes;
+    if (totalBytes > MAX_TOTAL_BYTES) throw new WorkResumeImportError('IMPORT_TOO_LARGE');
+    documents.push(document);
+  }
+  const capabilityDocument = documents.find((document) => document.path === capabilityPath);
+  if (!capabilityDocument) throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
+  const pool = parseJsonDocument(capabilityDocument, 'INVALID_CAPABILITY_POOL');
+  if (pool.schemaVersion !== 1 || pool.poolType !== 'verified-capability-terms' || !Array.isArray(pool.terms)) {
+    throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
+  }
+  const terms = pool.terms.map(parseCapabilityTerm);
+  const ids = new Set<string>();
+  for (const term of terms) {
+    if (ids.has(term.id)) throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
+    ids.add(term.id);
+  }
+  const facts = buildFacts(capabilityPath, terms);
+  if (facts.some((fact) => fact.evidence.length === 0)) {
+    throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
+  }
+  return {
+    parserId: WORKRESUME_PARSER_ID,
+    parserVersion: WORKRESUME_PARSER_VERSION,
+    documents,
+    facts,
+    aggregateHash: contentHash({
+      parser: WORKRESUME_PARSER_LABEL,
+      documents: documents.map(({ path: documentPath, contentHash: hash }) => ({ path: documentPath, hash })),
+      facts: facts.map((fact) => ({ canonicalKey: fact.canonicalKey, contentHash: fact.contentHash })),
+    }),
+    warnings: [],
+  };
+}
+
 export async function parseWorkResumeV2(rootValue: string): Promise<ParsedWorkResumeV2> {
   const root = await realpath(rootValue).catch(() => null);
   if (!root) throw new WorkResumeImportError('ROOT_NOT_FOUND');
@@ -392,34 +526,7 @@ export async function parseWorkResumeV2(rootValue: string): Promise<ParsedWorkRe
     if (totalBytes > MAX_TOTAL_BYTES) throw new WorkResumeImportError('IMPORT_TOO_LARGE');
     documents.push(document);
   }
-  const capabilityDocument = documents.find((document) => document.path === capabilityPath);
-  if (!capabilityDocument) throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
-  const pool = parseJsonDocument(capabilityDocument, 'INVALID_CAPABILITY_POOL');
-  if (pool.schemaVersion !== 1 || pool.poolType !== 'verified-capability-terms' || !Array.isArray(pool.terms)) {
-    throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
-  }
-  const terms = pool.terms.map(parseCapabilityTerm);
-  const ids = new Set<string>();
-  for (const term of terms) {
-    if (ids.has(term.id)) throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
-    ids.add(term.id);
-  }
-  const facts = buildFacts(capabilityPath, terms);
-  if (facts.some((fact) => fact.evidence.length === 0)) {
-    throw new WorkResumeImportError('INVALID_CAPABILITY_POOL');
-  }
-  return {
-    parserId: WORKRESUME_PARSER_ID,
-    parserVersion: WORKRESUME_PARSER_VERSION,
-    documents,
-    facts,
-    aggregateHash: contentHash({
-      parser: WORKRESUME_PARSER_LABEL,
-      documents: documents.map(({ path: documentPath, contentHash: hash }) => ({ path: documentPath, hash })),
-      facts: facts.map((fact) => ({ canonicalKey: fact.canonicalKey, contentHash: fact.contentHash })),
-    }),
-    warnings: [],
-  };
+  return parseWorkResumeV2Documents(documents);
 }
 
 async function git(root: string, args: string[]) {

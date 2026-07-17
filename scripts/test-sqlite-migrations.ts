@@ -85,9 +85,14 @@ function testFreshInstall(): void {
     'resume_versions',
     'resume_change_sets',
     'resume_change_operations',
+    'source_connections',
+    'github_connection_states',
+    'github_installations',
     'source_repositories',
     'source_snapshots',
     'source_documents',
+    'sync_jobs',
+    'webhook_deliveries',
     'career_facts',
     'career_fact_evidence',
     'career_fact_claims',
@@ -96,6 +101,23 @@ function testFreshInstall(): void {
   ]) {
     assert(tables.has(table), `fresh migration is missing table ${table}`);
   }
+  const documentColumns = new Set(
+    (sqlite.prepare('PRAGMA table_info(source_documents)').all() as Array<{ name: string }>)
+      .map((row) => row.name),
+  );
+  assert(documentColumns.has('security_findings'));
+  assert(documentColumns.has('llm_eligible'));
+  const githubColumns = sqlite.prepare(`
+    SELECT m.name AS table_name, p.name AS column_name
+    FROM sqlite_master AS m, pragma_table_info(m.name) AS p
+    WHERE m.type = 'table'
+      AND m.name IN ('source_connections', 'github_connection_states', 'github_installations', 'sync_jobs', 'webhook_deliveries')
+  `).all() as Array<{ table_name: string; column_name: string }>;
+  assert.equal(
+    githubColumns.some((column) => /(?:access_)?token|private_key/i.test(column.column_name)),
+    false,
+    'GitHub credentials must not be persisted in application tables',
+  );
   assertHealthy(sqlite);
   sqlite.close();
 }
@@ -145,9 +167,14 @@ function testLegacyUpgrade(): void {
     'resume_versions',
     'resume_change_sets',
     'resume_change_operations',
+    'source_connections',
+    'github_connection_states',
+    'github_installations',
     'source_repositories',
     'source_snapshots',
     'source_documents',
+    'sync_jobs',
+    'webhook_deliveries',
     'career_facts',
     'career_fact_evidence',
     'career_fact_claims',

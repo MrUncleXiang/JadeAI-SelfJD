@@ -24,6 +24,7 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/lib/db/seed.ts",
     "auth:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
+    "github:reconcile": "tsx scripts/reconcile-github-sync.ts",
     "workresume:inspect": "tsx scripts/inspect-workresume.ts",
     "workresume:import": "tsx scripts/import-workresume.ts"
   },

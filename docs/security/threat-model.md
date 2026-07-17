@@ -37,9 +37,11 @@
 | BaseURL SSRF | 访问内网或云元数据 | DNS/IP 校验、实际请求 IP Pinning、拒绝重定向、管理员 Allowlist | LLM-005 |
 | 恶意 LLM Provider | 收集上传内容 | UI 明示目标 Provider，按 Feature 最小上下文 | LLM-003、LLM-004 |
 | GitHub App 权限过大 | 私有仓库泄露或写入 | 只读 Contents、选择仓库、短期 Token | GH-001 |
-| Webhook 伪造或重放 | 伪同步和任务耗尽 | HMAC 验签、Delivery ID 唯一、速率限制 | GH-003 |
+| GitHub Callback 劫持或开放重定向 | 把安装绑定到错误用户或钓鱼跳转 | State 只存哈希、10 分钟一次性消费、绑定当前 Session、回跳路径 Allowlist | GH-001 |
+| Installation Token 泄露 | 私有仓库被持续读取 | Token 按任务生成且不持久化、不进入 DTO/审计/日志 | GH-001、GH-005 |
+| Webhook 伪造或重放 | 伪同步和任务耗尽 | 一 MiB 请求上限、HMAC 验签、Delivery ID 与 Payload Hash 冲突检查 | GH-003 |
 | 仓库 Prompt Injection | 绕过规则或泄露秘密 | 数据边界、无工具解析、Schema 与证据验证 | GH-005 |
-| 仓库 Secret 进入 LLM | 凭证泄露 | 路径过滤、Secret Scan、片段最小化 | GH-005 |
+| 仓库 Secret 进入数据库或 LLM | 凭证泄露 | Tree 路径阻断、正文 Secret Scan、秘密正文不落库、必需文档命中则拒绝快照 | GH-005 |
 | 路径穿越和解压炸弹 | 文件覆盖、资源耗尽 | Magic 校验、路径规范化、资源限制 | JD-002、SEC-002 |
 | 恶意 PDF/DOCX | 代码执行 | 不执行宏/脚本、受限 Worker、库更新策略 | JD-002 |
 | LLM 幻觉经历 | 简历造假 | Approved Fact、Forbidden Claim、人工应用 | AI-003 |
@@ -87,8 +89,8 @@
 - 默认不把真实 `MyUnityResume` 内容放入公开仓库或 CI。
 - CI 使用合成且去标识化 Fixture。
 - 原始 LLM 输出按最短必要时间保留，可配置关闭。
-- 用户断开 GitHub 后不能继续拉取仓库。
-- 用户删除连接时可分别选择删除快照和保留已审核事实。
+- 用户撤销 GitHub App Installation 或仓库授权后不能继续拉取仓库。
+- 后续连接删除功能必须允许用户分别选择删除来源快照或保留已审核事实；Phase 5 尚未提供站内删除入口。
 - 分享简历使用独立发布快照，之后内部版本更新不自动暴露。
 
 ## 8. 安全门禁

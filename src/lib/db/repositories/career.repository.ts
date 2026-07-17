@@ -553,6 +553,7 @@ export const careerRepository = {
       id: crypto.randomUUID(),
       userId: input.userId,
       sourceType: input.repository.sourceType,
+      sourceConnectionId: input.repository.sourceConnectionId || null,
       externalRepositoryId: input.repository.externalRepositoryId,
       fullName: input.repository.fullName,
       defaultBranch: input.repository.defaultBranch,
@@ -571,6 +572,8 @@ export const careerRepository = {
         const existingSnapshot = tx.select().from(sourceSnapshots).where(and(
           eq(sourceSnapshots.sourceRepositoryId, repository.id),
           eq(sourceSnapshots.commitSha, input.commitSha),
+          eq(sourceSnapshots.parserId, input.parserId),
+          eq(sourceSnapshots.parserVersion, input.parserVersion),
         )).limit(1).get();
         if (existingSnapshot?.status === 'ready') {
           return { repositoryId: repository.id, snapshotId: existingSnapshot.id, alreadyImported: true,
@@ -580,7 +583,8 @@ export const careerRepository = {
         const snapshotId = crypto.randomUUID();
         tx.insert(sourceSnapshots).values({
           id: snapshotId, userId: input.userId, sourceRepositoryId: repository.id,
-          commitSha: input.commitSha, treeSha: input.treeSha || null, status: 'processing',
+          commitSha: input.commitSha, treeSha: input.treeSha || null,
+          parentSnapshotId: input.parentSnapshotId || null, status: 'processing',
           parserId: input.parserId, parserVersion: input.parserVersion,
         }).run();
         const documentIds = new Map<string, string>();
@@ -593,6 +597,8 @@ export const careerRepository = {
             contentHash: document.contentHash, mimeType: document.mimeType,
             sizeBytes: document.sizeBytes, textContent: document.textContent || null,
             parseStatus: document.parseStatus || 'ready',
+            securityFindings: document.securityFindings || [],
+            llmEligible: document.llmEligible ?? true,
             parserId: input.parserId, parserVersion: input.parserVersion,
           }).run();
         }
@@ -648,6 +654,7 @@ export const careerRepository = {
         tx.update(sourceRepositories).set({
           fullName: input.repository.fullName,
           defaultBranch: input.repository.defaultBranch,
+          sourceConnectionId: input.repository.sourceConnectionId || repository.sourceConnectionId,
           lastHeadSha: input.commitSha,
           lastSyncedAt: new Date(),
           updatedAt: new Date(),
@@ -669,6 +676,8 @@ export const careerRepository = {
       const existingSnapshots = await tx.select().from(sourceSnapshots).where(and(
         eq(sourceSnapshots.sourceRepositoryId, repository.id),
         eq(sourceSnapshots.commitSha, input.commitSha),
+        eq(sourceSnapshots.parserId, input.parserId),
+        eq(sourceSnapshots.parserVersion, input.parserVersion),
       )).limit(1);
       if (existingSnapshots[0]?.status === 'ready') {
         return { repositoryId: repository.id, snapshotId: existingSnapshots[0].id, alreadyImported: true,
@@ -678,7 +687,8 @@ export const careerRepository = {
       const snapshotId = crypto.randomUUID();
       await tx.insert(sourceSnapshots).values({
         id: snapshotId, userId: input.userId, sourceRepositoryId: repository.id,
-        commitSha: input.commitSha, treeSha: input.treeSha || null, status: 'processing',
+        commitSha: input.commitSha, treeSha: input.treeSha || null,
+        parentSnapshotId: input.parentSnapshotId || null, status: 'processing',
         parserId: input.parserId, parserVersion: input.parserVersion,
       });
       const documentIds = new Map<string, string>();
@@ -691,6 +701,8 @@ export const careerRepository = {
           contentHash: document.contentHash, mimeType: document.mimeType,
           sizeBytes: document.sizeBytes, textContent: document.textContent || null,
           parseStatus: document.parseStatus || 'ready' as const,
+          securityFindings: document.securityFindings || [],
+          llmEligible: document.llmEligible ?? true,
           parserId: input.parserId, parserVersion: input.parserVersion,
         } satisfies typeof sourceDocuments.$inferInsert;
       });
@@ -754,6 +766,7 @@ export const careerRepository = {
       await tx.update(sourceRepositories).set({
         fullName: input.repository.fullName,
         defaultBranch: input.repository.defaultBranch,
+        sourceConnectionId: input.repository.sourceConnectionId || repository.sourceConnectionId,
         lastHeadSha: input.commitSha,
         lastSyncedAt: new Date(),
         updatedAt: new Date(),
@@ -761,6 +774,34 @@ export const careerRepository = {
       return { repositoryId: repository.id, snapshotId, alreadyImported: false,
         documentsCreated: input.documents.length, factsCreated, factsReused, evidenceCreated, claimsCreated };
     });
+  },
+
+  async markEvidenceStaleForMissingBlobsOwned(
+    userId: string,
+    sourceRepositoryId: string,
+    currentBlobShas: ReadonlySet<string>,
+  ) {
+    const rows = await db.select({
+      id: sourceDocuments.id,
+      blobSha: sourceDocuments.blobSha,
+    }).from(sourceDocuments).innerJoin(
+      sourceSnapshots,
+      eq(sourceSnapshots.id, sourceDocuments.sourceSnapshotId),
+    ).where(and(
+      eq(sourceDocuments.userId, userId),
+      eq(sourceSnapshots.userId, userId),
+      eq(sourceSnapshots.sourceRepositoryId, sourceRepositoryId),
+      eq(sourceSnapshots.status, 'ready'),
+    ));
+    const staleDocumentIds = rows.flatMap((row: { id: string; blobSha: string | null }) => (
+      row.blobSha && !currentBlobShas.has(row.blobSha) ? [row.id] : []
+    ));
+    if (staleDocumentIds.length === 0) return 0;
+    const result = await db.update(careerFactEvidence).set({ stale: true }).where(and(
+      eq(careerFactEvidence.userId, userId),
+      inArray(careerFactEvidence.sourceDocumentId, staleDocumentIds),
+    ));
+    return Number((result as { changes?: number }).changes || staleDocumentIds.length);
   },
 
   async loadPolicyOwned(userId: string): Promise<CareerKnowledgePolicy> {

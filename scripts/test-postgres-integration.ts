@@ -128,9 +128,14 @@ async function main(): Promise<void> {
           'resume_versions',
           'resume_change_sets',
           'resume_change_operations',
+          'source_connections',
+          'github_connection_states',
+          'github_installations',
           'source_repositories',
           'source_snapshots',
           'source_documents',
+          'sync_jobs',
+          'webhook_deliveries',
           'career_facts',
           'career_fact_evidence',
           'career_fact_claims',
@@ -147,14 +152,42 @@ async function main(): Promise<void> {
         'career_fact_relations',
         'career_facts',
         'fact_review_events',
+        'github_connection_states',
+        'github_installations',
         'resume_change_operations',
         'resume_change_sets',
         'resume_versions',
+        'source_connections',
         'source_documents',
         'source_repositories',
         'source_snapshots',
+        'sync_jobs',
+        'webhook_deliveries',
       ],
     );
+    const documentColumns = await client<{ column_name: string }[]>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'source_documents'
+        AND column_name IN ('security_findings', 'llm_eligible')
+      ORDER BY column_name
+    `;
+    assert.deepEqual(documentColumns.map((row) => row.column_name), ['llm_eligible', 'security_findings']);
+    const persistedCredentialColumns = await client<{ table_name: string; column_name: string }[]>`
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN (
+          'source_connections',
+          'github_connection_states',
+          'github_installations',
+          'sync_jobs',
+          'webhook_deliveries'
+        )
+        AND column_name ~* '(access_)?token|private_key'
+    `;
+    assert.equal(persistedCredentialColumns.length, 0);
   } finally {
     await client.end();
     rmSync(workdir, { recursive: true, force: true });

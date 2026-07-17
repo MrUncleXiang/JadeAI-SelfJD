@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 4 职业知识库、WorkResume v2 和 ResumePatch 证据闭环已实现，阶段 Gate 已通过；下一阶段为 Phase 5 GitHub App 与增量同步
+状态：Phase 5 GitHub App 与增量同步的本地实现和自动化验收已完成；等待真实 GitHub App、测试私有仓库和正式 Fork Remote 的人工 Gate
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -223,14 +223,16 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 
 实现：
 
-1. GitHub App Setup Callback、Pending State 和 Repository Selection。
-2. Installation 元数据和短期 Token 获取。
-3. GitHub API Client、条件请求和限流处理。
-4. 首次同步、Blob 校验和适配器调度。
-5. Webhook 验签、Delivery 去重和后台队列。
-6. Push 增量、定时对账和手动同步。
-7. 路径过滤、Secret Scan 和 Prompt Injection 防护。
-8. 同步状态和错误 UI。
+1. [x] GitHub App Setup Callback、哈希 Pending State 和 Repository Selection。
+2. [x] Installation 元数据和短期 Token 获取；Token 不进入仓储参数或数据库。
+3. [x] 有界 GitHub API Client、Git Blob SHA 校验、超时、限流和稳定错误映射。
+4. [x] 首次同步、不可变 Snapshot、WorkResume v2 适配器和只下载变化 Blob。
+5. [x] Webhook 原始请求体验签、Delivery 去重、数据库 Job 和安装生命周期。
+6. [x] Push 增量、`github:reconcile` 定时补偿和手动检查更新。
+7. [x] 路径/大小/编码过滤、Secret Scan、Prompt Injection 隔离和上次良好快照保留。
+8. [x] 知识库页面的授权、仓库选择、同步状态、错误和轮询 UI。
+9. [x] SQLite/PostgreSQL 前向迁移、旧库重放断言和无 GitHub Credential 列检查。
+10. [ ] 真实 GitHub App + 测试私有仓库浏览器/Webhook E2E。
 
 自动测试：
 
@@ -241,6 +243,23 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - 恶意仓库 Fixture。
 
 人工 Gate：用户创建测试 GitHub App，并对一个测试私有仓库完成 E2E。
+
+当前进度（2026-07-17）：
+
+- GitHub App 权限限定为 Metadata/Contents Read，安装绑定按用户隔离且 State 10 分钟一次性消费。
+- 首次、手动、Webhook 和定时任务共享 `repository + commit + parser` 幂等键；仓库重命名按
+  Blob SHA 复用，删除文件只把旧证据标为 Stale。
+- `.env`、密钥文件、构建目录和超限文件从 Tree 阶段阻断；正文秘密不落明文，提示注入文档
+  不具备 LLM 使用资格。
+- Webhook 覆盖 Push、Installation、Installation Repositories 和 Repository 生命周期；错误
+  签名不写数据库，重复 Delivery 不重复入队。
+- 正文 Secret 不保存明文；WorkResume 必需文档命中 Secret 时稳定返回 `SECRET_DETECTED`，
+  不创建新快照并保留上一个良好快照。
+- `pnpm test`：38 个测试文件、180 个测试通过；`pnpm test:e2e`：6 个真实浏览器场景通过。
+- `pnpm test:migration`、真实临时 PostgreSQL `pnpm test:integration`、`pnpm type-check`、
+  `pnpm spec:check` 和 `pnpm build` 通过；本阶段新增/修改 TypeScript 文件通过 ESLint。
+- 本地 Mock GitHub、SQLite 迁移、API DTO 脱敏和 UI 已完成；真实外部安装 Gate 尚未执行，
+  因此 Phase 5 暂不标记为生产就绪。上游既存全量 ESLint 债务仍单独跟踪，不以放宽规则掩盖。
 
 ## 9. Phase 6：JD 与定向简历
 

@@ -1,6 +1,6 @@
 version: 1
 product: JadeAI Career
-updatedAt: 2026-07-16
+updatedAt: 2026-07-17
 
 scope:
   deployment: self-hosted-single-instance
@@ -382,7 +382,15 @@ scenarios:
     when: 用户连接并列出仓库
     then: 只显示可访问仓库且不保存安装令牌
     layers: [contract, integration, e2e, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/github/service.test.ts
+      - src/lib/db/repositories/github.repository.test.ts
+      - src/app/api/github/github-routes.test.ts
+      - src/components/knowledge/github-source-card.tsx
+      - tests/e2e/auth-and-tenancy.spec.ts
+      - scripts/test-sqlite-migrations.ts
+      - scripts/test-postgres-integration.ts
 
   - id: ACC-GH-002
     requirement: GH-002
@@ -391,9 +399,14 @@ scenarios:
     title: GitHub 首次同步
     given: 包含允许和禁止文件的测试仓库
     when: 执行首次同步
-    then: 只创建允许的校验快照、文档和 Draft Fact
+    then: 允许内容形成校验快照和 Draft Fact；禁止文件仅保留无正文的安全元数据
     layers: [contract, integration, e2e]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/github/sync.test.ts
+      - src/lib/github/security.test.ts
+      - src/lib/career/workresume-v2.test.ts
+      - src/lib/db/repositories/career.repository.test.ts
 
   - id: ACC-GH-003
     requirement: GH-003
@@ -402,9 +415,14 @@ scenarios:
     title: GitHub 增量与幂等
     given: 相同 SHA、单文件变更和重复 Webhook
     when: 同步和重放事件
-    then: 相同 SHA 不重复，只有变化 Blob 重解析
+    then: 相同 SHA 不重复；只有变化 Blob 重新下载和安全检查，未变化文档按 Blob SHA 复用
     layers: [unit, integration, contract]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/github/sync.test.ts
+      - src/lib/github/webhook.test.ts
+      - src/app/api/github/github-routes.test.ts
+      - scripts/reconcile-github-sync.ts
 
   - id: ACC-GH-004
     requirement: GH-004
@@ -415,7 +433,11 @@ scenarios:
     when: 仓库后续更新
     then: 旧事实仍指向原 Commit 快照，新内容形成新来源
     layers: [integration, e2e]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/github/sync.test.ts
+      - src/lib/db/repositories/career.repository.test.ts
+      - src/app/api/career-facts/career-fact-routes.test.ts
 
   - id: ACC-GH-005
     requirement: GH-005
@@ -426,7 +448,12 @@ scenarios:
     when: 同步和解析
     then: 危险内容被过滤且不能触发外部工具或越权
     layers: [unit, integration, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/github/security.test.ts
+      - src/lib/github/client.test.ts
+      - src/lib/github/sync.test.ts
+      - src/lib/github/webhook.test.ts
 
   - id: ACC-JD-001
     requirement: JD-001

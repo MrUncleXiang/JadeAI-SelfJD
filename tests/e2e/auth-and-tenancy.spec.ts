@@ -247,6 +247,9 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   await expect(page).toHaveURL(/\/en\/knowledge$/);
   await expect(page.getByRole('heading', { name: 'Career Knowledge' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Knowledge' })).toBeVisible();
+  await expect(page.getByText('GitHub personal information repositories', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
+  await expect(page.getByText('Short-lived installation tokens stay within one request')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible();
   await expect(page.getByText('Review status')).toBeVisible();
   await expect(page.getByText('Fact type')).toBeVisible();

@@ -18,9 +18,9 @@
 
 ---
 
-> **二开状态：** 当前 JadeAI Career 分支已实现账号密码、管理员、数据库会话、租户隔离
-> 和用户级加密 LLM 档案。GitHub App 同步与需用户确认的 AI 简历变更协议仍属于后续阶段。
-> 上游公开 Docker 镜像不包含这些二开改动。
+> **二开状态：** 当前 JadeAI Career 分支已实现账号密码、租户隔离、用户级加密 LLM 档案、
+> 需用户确认的 AI 简历变更、职业事实库和 GitHub App 本地同步实现。投入生产前仍需使用真实
+> GitHub App 与测试私有仓库完成人工 Gate。上游公开 Docker 镜像不包含这些二开改动。
 
 ## 交流群
 
@@ -275,6 +275,10 @@ pnpm dev
 | `TRUST_PROXY_HEADERS` | 否 | `false` | 信任代理写入的客户端 IP Header；仅在反向代理会清除伪造 Header 时启用 |
 | `ENABLE_FINGERPRINT_AUTH` | 否 | `false` | 仅本地开发可显式启用的旧指纹兼容模式 |
 | `SEED_DEMO_DATA` | 否 | `false` | 显式开发 Fixture；生产环境禁止启用 |
+| `GITHUB_APP_ID` | 使用 GitHub 同步时 | — | GitHub App 数字 ID |
+| `GITHUB_APP_SLUG` | 使用 GitHub 同步时 | — | 用于构造安装地址的 GitHub App Slug |
+| `GITHUB_APP_PRIVATE_KEY` | 使用 GitHub 同步时 | — | 只通过部署 Secret 提供的 PEM 私钥 |
+| `GITHUB_WEBHOOK_SECRET` | 使用 GitHub 同步时 | — | 校验 Webhook 原始请求体的 Secret |
 | `APP_NAME` | 否 | `JadeAI` | 应用显示名称 |
 | `DEFAULT_LOCALE` | 否 | `zh` | 默认语言：`zh` 或 `en` |
 
@@ -296,6 +300,8 @@ pnpm dev
 | `pnpm db:studio` | 打开 Drizzle Studio（数据库 GUI） |
 | `pnpm db:seed` | 填充示例数据 |
 | `pnpm auth:bootstrap-admin` | 通过 stdin 创建首个管理员 |
+| `pnpm github:reconcile` | 检查已选择 GitHub 仓库并处理到期同步任务 |
+| `pnpm spec:check` | 校验需求、OpenAPI 追踪和自动验收规格 |
 
 ## 项目结构
 

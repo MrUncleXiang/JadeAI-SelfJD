@@ -47,6 +47,11 @@ export interface SourceDocumentImportInput {
   sizeBytes: number;
   textContent?: string | null;
   parseStatus?: 'ready' | 'ignored' | 'failed';
+  securityFindings?: Array<{
+    code: string;
+    severity: 'info' | 'warning' | 'blocked';
+  }>;
+  llmEligible?: boolean;
 }
 
 export interface CareerSnapshotImportInput {
@@ -56,9 +61,11 @@ export interface CareerSnapshotImportInput {
     externalRepositoryId: string;
     fullName: string;
     defaultBranch: string;
+    sourceConnectionId?: string | null;
   };
   commitSha: string;
   treeSha?: string | null;
+  parentSnapshotId?: string | null;
   parserId: string;
   parserVersion: string;
   documents: SourceDocumentImportInput[];
