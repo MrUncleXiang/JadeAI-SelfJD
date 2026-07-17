@@ -765,6 +765,105 @@ paths:
         '413':
           description: Payload exceeds one MiB
 
+  /api/sources/workresume-upload:
+    get:
+      tags: [Knowledge]
+      operationId: getWorkResumeUploadSource
+      x-requirement-id: KB-003
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Current user's browser-upload source, or null before the first import
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [source]
+                properties:
+                  source:
+                    oneOf:
+                      - $ref: '#/components/schemas/WorkResumeUploadSource'
+                      - type: 'null'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Knowledge]
+      operationId: importWorkResumeUpload
+      x-requirement-id: KB-003
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [schemaVersion, paths, files]
+              properties:
+                schemaVersion:
+                  type: string
+                  const: '1'
+                sourceName:
+                  type: string
+                  maxLength: 120
+                paths:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: string
+                    maxLength: 1024
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: string
+                    format: binary
+            encoding:
+              paths:
+                style: form
+                explode: true
+              files:
+                style: form
+                explode: true
+      responses:
+        '200':
+          description: The exact source revision was already imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkResumeUploadResult'
+        '201':
+          description: A new immutable upload revision and reviewable facts were imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkResumeUploadResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          description: File count or payload size exceeds the upload boundary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type is not multipart/form-data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
   /api/career-facts:
     get:
       tags: [Knowledge]
@@ -1635,6 +1734,74 @@ components:
               type: string
               enum: [AUTH_FAILED, MODEL_NOT_FOUND, RATE_LIMITED, TIMEOUT, OUTBOUND_BLOCKED, PROVIDER_ERROR, INVALID_RESPONSE, UNSUPPORTED]
         latencyMs:
+          type: integer
+          minimum: 0
+
+    WorkResumeUploadSource:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, lastRevision, lastImportedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          const: uploaded-workresume
+        name:
+          type: string
+        lastRevision:
+          type: [string, 'null']
+          pattern: '^[a-f0-9]{64}$'
+        lastImportedAt:
+          type: [string, 'null']
+          format: date-time
+
+    WorkResumeUploadResult:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - snapshotId
+        - alreadyImported
+        - uploadedFiles
+        - ignoredFiles
+        - documentsCreated
+        - factsCreated
+        - factsReused
+        - evidenceCreated
+        - claimsCreated
+        - evidenceMarkedStale
+      properties:
+        source:
+          $ref: '#/components/schemas/WorkResumeUploadSource'
+        snapshotId:
+          type: string
+          format: uuid
+        alreadyImported:
+          type: boolean
+        uploadedFiles:
+          type: integer
+          minimum: 1
+        ignoredFiles:
+          type: integer
+          minimum: 0
+        documentsCreated:
+          type: integer
+          minimum: 0
+        factsCreated:
+          type: integer
+          minimum: 0
+        factsReused:
+          type: integer
+          minimum: 0
+        evidenceCreated:
+          type: integer
+          minimum: 0
+        claimsCreated:
+          type: integer
+          minimum: 0
+        evidenceMarkedStale:
           type: integer
           minimum: 0
 

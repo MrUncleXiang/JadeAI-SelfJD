@@ -25,12 +25,15 @@
 | AI-004 | Must | Tool Calling 与 JSON 降级兼容 | Tool 不可用时 JSON 模式仍能完成流程 |
 | KB-001 | Must | 规范化职业事实与证据模型 | 事实、来源快照、位置和内容哈希可查询 |
 | KB-002 | Must | 事实审核和跨简历复用 | Draft 不自动入正式简历，Approved 可复用 |
+| KB-003 | Must | 文件或目录上传个人信息来源 | 无 GitHub 配置也可导入；相同内容幂等，新内容形成新快照 |
 | MYR-001 | Must | WorkResume schemaVersion 2 专用导入器 | 本地固定样例可稳定导入且来源可追踪 |
-| GH-001 | Must | GitHub App 授权并选择只读仓库 | 未选择仓库不可访问，不持久化安装令牌 |
-| GH-002 | Must | 首次仓库同步 | 按路径和类型策略创建快照、文档及待审事实 |
-| GH-003 | Must | Webhook、定时和手动增量同步 | 相同 SHA 幂等，变化文件增量处理 |
+| GH-001 | Should | 可选 GitHub App 授权并选择只读仓库 | 未配置 App 不阻断 MVP；启用后不持久化安装令牌 |
+| GH-002 | Must | 所有 GitHub 模式共用首次仓库同步 | 按路径和类型策略创建快照、文档及待审事实 |
+| GH-003 | Must | 按连接模式检查和增量同步 | 公共 URL 手动；PAT 轮询；App 支持 Webhook；相同 SHA 幂等 |
 | GH-004 | Must | Commit、路径、哈希和解析器版本溯源 | 每条导入事实可定位到不可变来源 |
-| GH-005 | Must | 仓库内容安全边界 | 密钥、构建目录、超大文件及提示注入被隔离 |
+| GH-005 | Must | GitHub URL、凭证和仓库内容安全边界 | 阻止 SSRF、Token 泄漏、密钥、超大文件及提示注入 |
+| GH-006 | Must | 无凭证公共 GitHub URL 导入 | 只接受规范仓库 URL，并解析到不可变 Commit |
+| GH-007 | Must | Fine-grained PAT 私有仓库连接 | PAT 加密保存，只读且明文不进入 API、日志和任务载荷 |
 | JD-001 | Must | 粘贴文本 JD 并结构化 | 标题、职责、硬技能、软技能和优先项可审核 |
 | JD-002 | Must | PDF、DOCX 和图片 JD 导入 | 支持白名单格式，解析失败可重试或人工修正 |
 | JD-003 | Must | JD 要求和已审核事实匹配 | 输出匹配、缺口、依据和禁止夸大项 |
@@ -50,7 +53,7 @@
 | Phase 2 | LLM-001 至 LLM-005 |
 | Phase 3 | RES-003、AI-001 至 AI-004 |
 | Phase 4 | KB-001、KB-002、MYR-001 |
-| Phase 5 | GH-001 至 GH-005 |
+| Phase 5 | KB-003、GH-001 至 GH-007 |
 | Phase 6 | JD-001 至 JD-004、RES-002 |
 | Phase 7 | INT-001、INT-002、RES-001 |
 | Phase 8 | OPS-002、SEC-002 和全量发布门禁 |

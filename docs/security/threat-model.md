@@ -1,13 +1,14 @@
 # 威胁模型
 
-版本：0.1
+版本：0.2
 适用范围：账号、LLM、简历、GitHub、职业知识库、JD、导出和面试。
 
 ## 1. 资产
 
 - 用户账号、密码哈希、Session 和身份绑定。
 - 用户 LLM API Key 与模型配置。
-- GitHub App 私钥、Webhook Secret 和 Installation 元数据。
+- 用户 Fine-grained PAT 的密文和连接元数据。
+- 启用可选高级模式时的 GitHub App 私钥、Webhook Secret 和 Installation 元数据。
 - 私有仓库内容、Commit 快照和解析出的职业事实。
 - 简历、版本、JD、面试消息和报告。
 - 管理员权限、审计日志和加密主密钥。
@@ -18,7 +19,7 @@
 2. Next.js 服务端与 PostgreSQL。
 3. Web 服务与 Worker。
 4. 系统与用户配置的 LLM BaseURL。
-5. 系统与 GitHub API/Webhook。
+5. 系统与固定 GitHub API；启用 GitHub App 时还包括 Webhook。
 6. 系统与上传文件、仓库文件及其解析器。
 7. 内部证据与对外导出文件。
 
@@ -36,13 +37,16 @@
 | LLM Key 泄露 | 费用和数据风险 | 服务端 AES-GCM、脱敏日志、客户端不持久化 | LLM-002、SEC-001 |
 | BaseURL SSRF | 访问内网或云元数据 | DNS/IP 校验、实际请求 IP Pinning、拒绝重定向、管理员 Allowlist | LLM-005 |
 | 恶意 LLM Provider | 收集上传内容 | UI 明示目标 Provider，按 Feature 最小上下文 | LLM-003、LLM-004 |
+| 上传路径穿越、文件洪泛或超限正文 | 文件覆盖、内存/CPU 耗尽 | 浏览器相对路径规范化、扩展名白名单、文件数/单文件/总量/请求体限制，不写临时路径 | KB-003、SEC-002 |
+| 公共仓库 URL SSRF 或任意 Clone | 访问内网、执行 Git 配置或耗尽资源 | 只接受规范 GitHub 仓库 URL，调用固定 GitHub API，禁止任意 URL Clone 和重定向第二跳 | GH-005、GH-006 |
+| Fine-grained PAT 泄露或越权复用 | 私有仓库持续泄露 | 只接受最小只读 Fine-grained PAT、服务端版本化加密、任务只传连接 ID、响应/日志脱敏 | GH-005、GH-007 |
 | GitHub App 权限过大 | 私有仓库泄露或写入 | 只读 Contents、选择仓库、短期 Token | GH-001 |
 | GitHub Callback 劫持或开放重定向 | 把安装绑定到错误用户或钓鱼跳转 | State 只存哈希、10 分钟一次性消费、绑定当前 Session、回跳路径 Allowlist | GH-001 |
 | Installation Token 泄露 | 私有仓库被持续读取 | Token 按任务生成且不持久化、不进入 DTO/审计/日志 | GH-001、GH-005 |
 | Webhook 伪造或重放 | 伪同步和任务耗尽 | 一 MiB 请求上限、HMAC 验签、Delivery ID 与 Payload Hash 冲突检查 | GH-003 |
 | 仓库 Prompt Injection | 绕过规则或泄露秘密 | 数据边界、无工具解析、Schema 与证据验证 | GH-005 |
 | 仓库 Secret 进入数据库或 LLM | 凭证泄露 | Tree 路径阻断、正文 Secret Scan、秘密正文不落库、必需文档命中则拒绝快照 | GH-005 |
-| 路径穿越和解压炸弹 | 文件覆盖、资源耗尽 | Magic 校验、路径规范化、资源限制 | JD-002、SEC-002 |
+| JD 压缩容器路径穿越和解压炸弹 | 文件覆盖、资源耗尽 | Magic 校验、流式解压、路径规范化、压缩比与资源限制 | JD-002、SEC-002 |
 | 恶意 PDF/DOCX | 代码执行 | 不执行宏/脚本、受限 Worker、库更新策略 | JD-002 |
 | LLM 幻觉经历 | 简历造假 | Approved Fact、Forbidden Claim、人工应用 | AI-003 |
 | 部分写入 | 简历损坏 | 事务应用、版本快照、冲突哈希 | AI-002、RES-003 |
@@ -71,7 +75,8 @@
 - 数据库保存 Ciphertext、IV、Authentication Tag 和 Key Version。
 - 主密钥仅来自部署 Secret，不进入数据库或 Git。
 - 支持新写入使用新 Key Version，后台逐步重加密旧记录。
-- GitHub App 私钥和 Webhook Secret 使用部署 Secret 管理。
+- Fine-grained PAT 使用与 LLM Key 相同等级的带版本 AES-GCM 服务端加密。
+- GitHub App 私钥和 Webhook Secret 仅在启用该模式时使用部署 Secret 管理。
 - 密钥解密只发生在发起外部请求的服务端边界。
 
 ## 6. Prompt Injection 控制
@@ -89,7 +94,7 @@
 - 默认不把真实 `MyUnityResume` 内容放入公开仓库或 CI。
 - CI 使用合成且去标识化 Fixture。
 - 原始 LLM 输出按最短必要时间保留，可配置关闭。
-- 用户撤销 GitHub App Installation 或仓库授权后不能继续拉取仓库。
+- 用户删除/撤销 PAT 连接，或撤销 GitHub App Installation/仓库授权后，系统不能继续拉取仓库。
 - 后续连接删除功能必须允许用户分别选择删除来源快照或保留已审核事实；Phase 5 尚未提供站内删除入口。
 - 分享简历使用独立发布快照，之后内部版本更新不自动暴露。
 
@@ -100,7 +105,10 @@
 - 跨租户 API、AI、任务、导出和分享测试。
 - CSRF、Session 撤销和注册限流测试。
 - SSRF 地址、DNS Rebinding 模拟和危险重定向测试。
-- Webhook 无签名、错误签名和重放测试。
+- 上传目录的路径穿越、重复路径、秘密、提示注入、文件数和大小边界测试。
+- 公共 GitHub URL 的规范化、任意主机/私网阻断和无 Authorization Header 测试。
+- PAT 的加密、撤销及 API/日志/任务载荷明文扫描。
+- 启用 GitHub App 时执行 Webhook 无签名、错误签名和重放测试。
 - Prompt Injection 与恶意仓库 Fixture。
 - Zip Slip、压缩炸弹、错误 MIME 和超限上传测试。
 - 日志、数据库、浏览器存储和导出物秘密扫描。

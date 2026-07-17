@@ -1,7 +1,10 @@
 # GitHub App 部署与真实验收
 
-本页用于 Phase 5 人工 Gate。应用只做 GitHub 到 JadeAI Career 的只读导入，不要求用户
-提供 PAT，也不会把 Installation Access Token 写入数据库。
+本页只适用于部署者选择启用的 **可选高级 GitHub App 模式**。文件/目录上传、公共仓库 URL
+和 Fine-grained PAT 不以 GitHub App 为前置条件；默认 MVP Gate 不要求创建 GitHub App。
+
+App 模式只做 GitHub 到 JadeAI Career 的只读导入，不要求用户提供 PAT，也不会把
+Installation Access Token 写入数据库。只有启用该模式并准备对外发布时，才执行本页人工 Gate。
 
 ## 1. 创建测试 GitHub App
 
@@ -66,4 +69,5 @@ corepack pnpm github:reconcile
    WorkResume 必需文档命中时同步失败且保留上一个良好快照。
 8. 撤销安装或移除仓库；确认连接变为 revoked/仓库取消选择，之后不能继续同步。
 
-真实 Gate 通过前，不把 Phase 5 标记为生产就绪。
+启用 GitHub App 的部署在真实 Gate 通过前，不把 **GitHub App 模式**标记为生产就绪；这不阻断
+不包含 App 的来源模式发布。

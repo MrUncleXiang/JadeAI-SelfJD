@@ -18,6 +18,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { GitHubSourceCard } from '@/components/knowledge/github-source-card';
+import { WorkResumeUploadCard } from '@/components/knowledge/workresume-upload-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -297,6 +298,8 @@ export default function KnowledgePage() {
         </div>
       </div>
 
+      <WorkResumeUploadCard onFactsChanged={load} />
+
       <GitHubSourceCard onFactsChanged={load} />
 
       <Card>
@@ -336,9 +339,7 @@ export default function KnowledgePage() {
             <Database className="mx-auto mb-4 h-10 w-10 text-zinc-300" />
             <h2 className="font-semibold">{t('emptyTitle')}</h2>
             <p className="mx-auto mt-2 max-w-2xl text-sm text-zinc-500">{t('emptyDescription')}</p>
-            <code className="mt-4 inline-block rounded-md bg-zinc-100 px-3 py-2 text-xs dark:bg-zinc-900">
-              pnpm workresume:import -- --root /path/to/repository --user-id &lt;user-id&gt;
-            </code>
+            <p className="mt-4 text-xs text-zinc-400">{t('emptyHint')}</p>
           </CardContent>
         </Card>
       ) : (

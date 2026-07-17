@@ -7,6 +7,7 @@ import type {
   CareerFactType,
   CareerKnowledgePolicy,
   CareerSnapshotImportInput,
+  CareerSourceType,
 } from '@/lib/career/types';
 
 import { db } from '../index';
@@ -546,6 +547,37 @@ export const careerRepository = {
       const created = await tx.select().from(careerFacts).where(eq(careerFacts.id, next.id)).limit(1);
       return created[0];
     });
+  },
+
+  async findSourceRepositoryOwned(
+    userId: string,
+    sourceType: CareerSourceType,
+    externalRepositoryId: string,
+  ) {
+    const rows = await db.select().from(sourceRepositories).where(and(
+      eq(sourceRepositories.userId, userId),
+      eq(sourceRepositories.sourceType, sourceType),
+      eq(sourceRepositories.externalRepositoryId, externalRepositoryId),
+    )).limit(1);
+    return rows[0] || null;
+  },
+
+  async findLatestReadySnapshotOwned(userId: string, sourceRepositoryId: string) {
+    const repositories = await db.select({ lastHeadSha: sourceRepositories.lastHeadSha })
+      .from(sourceRepositories).where(and(
+        eq(sourceRepositories.id, sourceRepositoryId),
+        eq(sourceRepositories.userId, userId),
+      )).limit(1);
+    const currentRevision = repositories[0]?.lastHeadSha;
+    const predicates = [
+      eq(sourceSnapshots.userId, userId),
+      eq(sourceSnapshots.sourceRepositoryId, sourceRepositoryId),
+      eq(sourceSnapshots.status, 'ready'),
+    ];
+    if (currentRevision) predicates.push(eq(sourceSnapshots.commitSha, currentRevision));
+    const rows = await db.select().from(sourceSnapshots).where(and(...predicates))
+      .orderBy(desc(sourceSnapshots.completedAt), desc(sourceSnapshots.createdAt)).limit(1);
+    return rows[0] || null;
   },
 
   async importSnapshotOwned(input: CareerSnapshotImportInput) {

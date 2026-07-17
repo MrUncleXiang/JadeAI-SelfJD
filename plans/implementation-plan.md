@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 5 GitHub App 与增量同步的本地实现和自动化验收已完成；等待真实 GitHub App、测试私有仓库和正式 Fork Remote 的人工 Gate
+状态：Phase 5B 文件/目录来源已实现且自动化门禁已通过；Phase 5C 公共 URL 和 Fine-grained PAT 待实现；GitHub App 为可选高级模式
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -44,8 +44,8 @@ load frozen requirement and ADR
 - [x] 生成 PRD、需求矩阵、架构、威胁模型和 ADR。
 - [x] 生成实施计划和验收矩阵。
 - [ ] 获得正式 GitHub Fork/Remote 写权限。
-- [ ] 从正式 Fork 恢复完整上游 Git 历史，并移植 Phase 0 Commit。
-- [ ] 准备至少 10GB 可用开发空间。
+- [x] 从正式 Fork 恢复完整上游 Git 历史，并移植既有阶段 Commit。
+- [x] 清理可重建 `.next` 产物并确认当前空间可完成聚焦测试与单次构建；活动服务目录不做破坏性清理。
 
 Gate：
 
@@ -217,49 +217,55 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - `pnpm type-check`、聚焦 ESLint、`pnpm spec:check` 和 `pnpm build` 通过。
 - 私有仓库只读检查：19 个文档、46 条事实、142 条证据、445 条声明；聚合哈希 `sha256:bb1dbd6e2dc95a5b89efce2de58050a4ea52e68ddbcec99f97104154cb3c6335`，无警告代码。
 
-## 8. Phase 5：GitHub App 与增量同步
+## 8. Phase 5：分层个人信息来源与 GitHub 同步
 
-关联：GH-001 至 GH-005。
+关联：KB-003、GH-001 至 GH-007。
 
-实现：
+### 8.1 Phase 5A：可选 GitHub App 高级模式
 
 1. [x] GitHub App Setup Callback、哈希 Pending State 和 Repository Selection。
 2. [x] Installation 元数据和短期 Token 获取；Token 不进入仓储参数或数据库。
 3. [x] 有界 GitHub API Client、Git Blob SHA 校验、超时、限流和稳定错误映射。
 4. [x] 首次同步、不可变 Snapshot、WorkResume v2 适配器和只下载变化 Blob。
-5. [x] Webhook 原始请求体验签、Delivery 去重、数据库 Job 和安装生命周期。
-6. [x] Push 增量、`github:reconcile` 定时补偿和手动检查更新。
-7. [x] 路径/大小/编码过滤、Secret Scan、Prompt Injection 隔离和上次良好快照保留。
-8. [x] 知识库页面的授权、仓库选择、同步状态、错误和轮询 UI。
-9. [x] SQLite/PostgreSQL 前向迁移、旧库重放断言和无 GitHub Credential 列检查。
-10. [ ] 真实 GitHub App + 测试私有仓库浏览器/Webhook E2E。
+5. [x] Webhook 验签、Delivery 去重、数据库 Job、生命周期和定时补偿。
+6. [x] 知识库页面的授权、仓库选择、同步状态、错误和轮询 UI。
+7. [ ] 仅当部署者启用 App 时，使用测试私有仓库执行真实安装/Webhook 浏览器 Gate。
 
-自动测试：
+### 8.2 Phase 5B：无 GitHub App 的上传入口
 
-- Mock GitHub Contract。
-- 私有选中/未选中仓库。
-- 同 SHA 幂等、单文件变化、删除和重命名。
-- Webhook 验签、重放和权限撤销。
-- 恶意仓库 Fixture。
+1. [x] 浏览器文件夹选择和 WorkResume v2 相对路径传输。
+2. [x] `GET/POST /api/sources/workresume-upload`、账号 Session、Origin 校验和数据库限流。
+3. [x] 最多 500 文件、单文件 1 MiB、总正文 12 MiB、请求体 14 MiB 的边界。
+4. [x] 路径规范化、生成目录/非白名单忽略、UTF-8/二进制/Secret/Prompt Injection 检查。
+5. [x] 规范化文件集合 SHA-256 Revision、重复上传幂等、新 Revision 父快照和旧证据 Stale。
+6. [x] 用户作用域来源状态、不可变文档/事实/证据和不含路径/正文的审计元数据。
+7. [x] 知识库页面上传卡片及中英文状态/错误文案。
+8. [x] 真实 Chromium 文件夹选择 E2E 覆盖 UI 上传、受保护 API 和租户化事实查询。
 
-人工 Gate：用户创建测试 GitHub App，并对一个测试私有仓库完成 E2E。
+### 8.3 Phase 5C：远程仓库的简化连接
+
+1. [ ] 公共 GitHub URL 规范化和固定 GitHub API Adapter，不执行任意 URL Clone。
+2. [ ] 用户级 Fine-grained PAT 加密保存、明确仓库选择、手动同步和定时轮询。
+3. [ ] 公共 URL、PAT 和 App 共用安全扫描、WorkResume 解析、快照、事实审核和幂等语义。
+4. [ ] 公共 URL SSRF/无凭证 Contract，PAT 密文/撤销/脱敏安全测试和浏览器 E2E。
 
 当前进度（2026-07-17）：
 
-- GitHub App 权限限定为 Metadata/Contents Read，安装绑定按用户隔离且 State 10 分钟一次性消费。
-- 首次、手动、Webhook 和定时任务共享 `repository + commit + parser` 幂等键；仓库重命名按
-  Blob SHA 复用，删除文件只把旧证据标为 Stale。
-- `.env`、密钥文件、构建目录和超限文件从 Tree 阶段阻断；正文秘密不落明文，提示注入文档
-  不具备 LLM 使用资格。
-- Webhook 覆盖 Push、Installation、Installation Repositories 和 Repository 生命周期；错误
-  签名不写数据库，重复 Delivery 不重复入队。
-- 正文 Secret 不保存明文；WorkResume 必需文档命中 Secret 时稳定返回 `SECRET_DETECTED`，
-  不创建新快照并保留上一个良好快照。
-- `pnpm test`：38 个测试文件、180 个测试通过；`pnpm test:e2e`：6 个真实浏览器场景通过。
-- `pnpm test:migration`、真实临时 PostgreSQL `pnpm test:integration`、`pnpm type-check`、
-  `pnpm spec:check` 和 `pnpm build` 通过；本阶段新增/修改 TypeScript 文件通过 ESLint。
-- 本地 Mock GitHub、SQLite 迁移、API DTO 脱敏和 UI 已完成；真实外部安装 Gate 尚未执行，
-  因此 Phase 5 暂不标记为生产就绪。上游既存全量 ESLint 债务仍单独跟踪，不以放宽规则掩盖。
+- 默认 MVP 不需要 GitHub App；当前账号登录仍是用户名/密码，所有 GitHub 凭证只属于来源连接。
+- 文件夹上传已经打通 UI -> 受保护 API -> 安全解析 -> 不可变快照 -> Draft Fact 的窄端到端链路。
+- 相同上传 Revision 返回幂等结果；选中文档变化时创建子快照，并将缺失 Blob 对应旧证据标为 Stale。
+- App 模式本地 Mock、迁移、同步/Webhook、DTO 脱敏和 UI 已完成；真实 App Gate 只约束启用该模式的部署。
+- 公共 URL 和 Fine-grained PAT 尚未实现，因此 GH-002、GH-003、GH-005 至 GH-007 仍是后续 Gate，
+  Phase 5 整体不能标记完成。
+- 上游既存全量 ESLint 债务继续单独跟踪，不通过放宽规则或无关批量修改掩盖。
+
+自动化证据（2026-07-17）：
+
+- `pnpm test`：40 个测试文件、191 个测试通过；上传入口聚焦测试覆盖认证、Origin、流式请求上限、幂等、新 Revision、Stale Evidence、Secret 与正文不落库。
+- `pnpm test:e2e`：7 个真实 Chromium 场景通过；新增真实目录选择、UI 上传、受保护 API 和租户化 Career Fact 查询，且预热动态 Binding Route 避免开发服务器首次编译影响断言。
+- `pnpm test:migration`、一次性真实 PostgreSQL 临时容器 `pnpm test:integration`、`pnpm type-check`、`pnpm spec:check` 和 `pnpm build` 通过。
+- Phase 5B 新增/修改 TypeScript 文件通过聚焦 ESLint；全量 ESLint 仍受上游既存债务约束。
+- 私有 `MyUnityResume` 浏览器上传适配器只读检查：108 个上传文件、38 个忽略文件、19 个选中文档、46 条事实、142 条证据、445 条声明；聚合 Revision `sha256:bb1dbd6e2dc95a5b89efce2de58050a4ea52e68ddbcec99f97104154cb3c6335`，无警告代码且未输出个人正文。
 
 ## 9. Phase 6：JD 与定向简历
 

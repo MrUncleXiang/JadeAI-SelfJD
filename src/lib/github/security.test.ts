@@ -22,12 +22,12 @@ describe('GitHub repository security boundary', () => {
     const document = inspectGitHubDocument({
       path: 'notes.md',
       blobSha: 'a'.repeat(40),
-      bytes: Buffer.from('api_key = "sk-this-is-a-long-secret-value-123456"'),
+      bytes: Buffer.from('api_key = "not-a-real-secret-value-123456"'),
     });
     expect(document.parseStatus).toBe('ignored');
     expect(document.llmEligible).toBe(false);
     expect(document.textContent).toBeNull();
-    expect(document.securityFindings?.map((item) => item.code)).toContain('api_token');
+    expect(document.securityFindings?.map((item) => item.code)).toContain('credential_assignment');
   });
 
   it('keeps prompt injection reviewable but excludes it from parsing and LLM context', () => {
@@ -55,6 +55,24 @@ describe('GitHub repository security boundary', () => {
       securityFindings: [],
       llmEligible: true,
       mimeType: 'text/markdown',
+    });
+  });
+
+  it('rejects traversal intent before path normalization', () => {
+    const result = filterGitHubTree([
+      {
+        path: 'projects/../WorkResume.config.json',
+        type: 'blob',
+        mode: '100644',
+        sha: 'd'.repeat(40),
+        size: 128,
+      },
+    ]);
+    expect(result.accepted).toEqual([]);
+    expect(result.ignored[0]).toMatchObject({
+      path: 'projects/../WorkResume.config.json',
+      llmEligible: false,
+      securityFindings: [{ code: 'unsafe_path', severity: 'blocked' }],
     });
   });
 });

@@ -1,87 +1,55 @@
 # football-platform 归档退役计划
 
-状态：Blocked from destructive action
-日期：2026-07-16
+状态：远端同步已验证；因活动服务依赖而暂不删除
+日期：2026-07-17
 
 ## 1. 当前证据
 
-- 文件系统约 40GB，剩余约 4.9GB，使用率 88%。
-- 父仓库：`/home/ubuntu/footballscoreplatform`。
-- 项目目录：`/home/ubuntu/footballscoreplatform/football-platform`。
-- 父仓库 Remote：
-  `git@github-footballscoreplatform:MrUncleXiang/footballscoreplatform.git`。
-- 当前分支：`master`，跟踪 `origin/master`。
-- 存在未提交的服务代码和测试修改。
-- 存在未跟踪 `.codex-tasks` 数据。
-- `football-mihomo.service` 仍在运行，并使用项目输出目录。
-- 项目包含 `.env`，父目录包含 `.db_password`。
-- 主要占用包括 `backups`、`reports`、`data`，不适合直接提交普通 Git。
+- `/` 剩余约 4.0 GiB，使用率 90%。
+- 仓库 `/home/ubuntu/footballscoreplatform` 占用约 1.6 GiB。
+- Remote：`git@github-footballscoreplatform:MrUncleXiang/footballscoreplatform.git`。
+- `master` 工作区干净，本地 HEAD 与 `origin/master` 均为
+  `35d7aec12be6c96b583ebf217eaa259ff0fd1b65`。
+- `git lfs status` 无待提交、待推送对象。
+- `football-mihomo.service` 处于 `active`，其 WorkingDirectory 和配置文件都位于
+  `/home/ubuntu/footballscoreplatform/football-platform`。
 
-因此当前不能执行 `rm -rf`、卸载或盲目推送全部目录。
+结论：源码已经同步到远端，但现在直接卸载会破坏正在运行的 Mihomo 服务。当前只删除了
+JadeAI 开发目录中可重建的 `.next` 产物，没有删除 football-platform。
 
-## 2. 目标
+## 2. 删除前置 Gate
 
-在不丢代码、运行数据、备份、秘密和服务恢复能力的前提下：
+只有以下步骤全部通过，才允许删除原目录：
 
-1. 把应进入 Git 的源代码完整推送远端。
-2. 把不应进入 Git 的数据制作加密归档。
-3. 证明能够从远端和归档恢复。
-4. 迁移或停止依赖本目录的服务。
-5. 最后删除本机项目并释放空间。
+1. 在临时目录从 GitHub 全新 Clone，并拉取 Git LFS 对象。
+2. 运行项目最小测试/启动检查，证明远端可以恢复源码和必需资产。
+3. 盘点 `data`、`backups`、`reports`、运行输出和未跟踪秘密；可重建缓存可丢弃，必须保留的
+   数据生成清单及 SHA-256，并迁移到用户指定的私有存储。
+4. `.env`、数据库密码等秘密单独迁移到 Secret 管理，不进入 Git、Release 或普通日志。
+5. 将 `football-mihomo.service` 的运行目录和配置迁到稳定位置，或由用户明确同意停止并禁用服务。
+6. 从新位置启动/重启服务，检查状态、端口和日志；确认没有进程继续打开原目录文件。
+7. 再次确认 Git 工作区干净且本地 HEAD 等于远端 HEAD。
 
-## 3. 步骤
+## 3. 最终删除步骤
 
-### A. 代码冻结
+完成前置 Gate 并取得用户对停服/迁移方案的确认后：
 
-- 读取仓库 `AGENTS.md`。
-- 保存 `git status`、Remote、Branch 和 HEAD。
-- 审查三处已修改代码和未跟踪任务。
-- 运行相关测试。
-- 新建 `archive/local-decommission-20260716` 分支。
-- 提交有效代码；不提交秘密、数据库、备份和生成报告。
-- 推送分支和必要 Tag。
+```bash
+systemctl show football-mihomo.service -p WorkingDirectory -p ExecStart --no-pager
+git -C /home/ubuntu/footballscoreplatform status --short
+git -C /home/ubuntu/footballscoreplatform rev-parse HEAD
+git -C /home/ubuntu/footballscoreplatform rev-parse origin/master
+```
 
-### B. 非 Git 数据归档
-
-- 分类 `data`、`backups`、`reports` 和运行输出。
-- 确定哪些是可重建缓存，哪些必须保留。
-- 对必须保留内容生成文件清单和 SHA-256。
-- 制作加密压缩包，上传到用户指定的私有存储或 Release 资产。
-- `.env` 和 `.db_password` 单独通过 Secret 管理迁移，不进入 Git 或普通归档日志。
-
-### C. 服务迁移
-
-- 记录 `football-mihomo.service` 的 Unit、启动命令和依赖路径。
-- 将 Sidecar 移到稳定运行目录，或明确停止并禁用服务。
-- 重启/停止后检查端口、日志和依赖进程。
-
-### D. 恢复演练
-
-- 在临时目录从 GitHub 全新 Clone。
-- 恢复必要秘密和数据。
-- 运行测试和最小启动 Smoke Test。
-- 校验归档 SHA-256。
-- 记录恢复命令和结果。
-
-### E. 删除
-
-只有 A 至 D 全部通过并得到用户确认后：
-
-- 停止相关服务和进程。
-- 再次检查没有进程打开项目文件。
-- 删除原项目目录。
-- 检查磁盘释放量。
-- 保留恢复 Runbook 和归档清单。
+确认服务不再依赖原路径后，才删除 `/home/ubuntu/footballscoreplatform`，随后记录释放空间和恢复
+Runbook。删除属于不可逆文件系统操作，不在无人值守自动推进中执行。
 
 ## 4. 当前动作边界
 
-本计划阶段不进行：
+- 不重复推送已经与 `origin/master` 一致的提交。
+- 不把运行数据、备份、报告或秘密强行提交到 GitHub。
+- 不停止活动服务。
+- 不在恢复演练和服务迁移完成前删除目录。
 
-- 自动提交未知语义代码。
-- 把 `data/backups/reports` 强推 GitHub。
-- 上传 `.env`、`.db_password`。
-- 停止活动服务。
-- 删除目录。
-
-JadeAI Phase 0 文档可在当前空间完成；开始依赖安装和完整构建前，建议至少释放到 10GB
-可用空间。
+当前约 4.0 GiB 可用空间足以继续本阶段的聚焦测试与一次构建；如果后续构建再次逼近容量上限，
+优先清理可重建缓存和产物，而不是破坏活动服务。

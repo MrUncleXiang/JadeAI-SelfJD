@@ -1,0 +1,9 @@
+{
+  "repository": "LingyiChen-AI/JadeAI",
+  "commit": "ca38294960e4b6f8a1ba66d0106059fcf97c323c",
+  "tag": "v0.4.1",
+  "tree_sha": "7057dca5118e22cd0e28a68ab53b92b13995fc2b",
+  "files": 444,
+  "bytes": 34424984,
+  "fetch_method": "origin/main shallow partial fetch; original snapshot blobs were SHA verified"
+}

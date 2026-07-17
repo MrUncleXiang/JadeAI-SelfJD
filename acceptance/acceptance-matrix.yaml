@@ -6,6 +6,16 @@ scope:
   deployment: self-hosted-single-instance
   productionDatabase: postgresql
   githubDirection: read-only-import
+  sourceIntake:
+    required:
+      - file-or-directory-upload
+      - github-public-url
+      - github-fine-grained-pat
+    optional:
+      - github-app
+    automaticSync:
+      - github-fine-grained-pat-polling
+      - github-app-webhook-and-reconcile
   excludedCapabilities:
     - wechat
     - qq
@@ -356,6 +366,23 @@ scenarios:
       - src/app/api/career-facts/career-fact-routes.test.ts
       - tests/e2e/auth-and-tenancy.spec.ts
 
+  - id: ACC-KB-003
+    requirement: KB-003
+    phase: 5
+    priority: must
+    title: 文件或目录上传个人信息来源
+    given: 未配置 GitHub App，用户上传合法、重复和恶意 WorkResume 白名单文件集合
+    when: 执行上传、安全扫描和导入
+    then: 合法内容形成当前用户的不可变快照和 Draft Fact；相同摘要幂等；新内容形成新快照；危险正文不落库
+    layers: [unit, integration, e2e, security]
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/source/workresume-upload.test.ts
+      - src/app/api/sources/workresume-upload/route.test.ts
+      - src/lib/github/security.test.ts
+      - src/lib/db/repositories/career.repository.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
+
   - id: ACC-MYR-001
     requirement: MYR-001
     phase: 4
@@ -376,11 +403,11 @@ scenarios:
   - id: ACC-GH-001
     requirement: GH-001
     phase: 5
-    priority: must
-    title: GitHub App 只读仓库选择
-    given: Installation 中选中和未选中的仓库
-    when: 用户连接并列出仓库
-    then: 只显示可访问仓库且不保存安装令牌
+    priority: should
+    title: 可选 GitHub App 只读仓库选择
+    given: GitHub App 未配置或 Installation 中存在选中和未选中的仓库
+    when: 用户打开来源入口或连接并列出仓库
+    then: 未配置时不阻断其他来源；启用时只显示可访问仓库且不保存安装令牌
     layers: [contract, integration, e2e, security]
     automationStatus: partial
     automationEvidence:
@@ -396,10 +423,10 @@ scenarios:
     requirement: GH-002
     phase: 5
     priority: must
-    title: GitHub 首次同步
-    given: 包含允许和禁止文件的测试仓库
+    title: GitHub 统一首次同步
+    given: 同一 WorkResume Fixture 可由公共 URL、PAT 或 App Adapter 读取
     when: 执行首次同步
-    then: 允许内容形成校验快照和 Draft Fact；禁止文件仅保留无正文的安全元数据
+    then: 各模式进入相同安全及解析管线，允许内容形成等价快照和 Draft Fact
     layers: [contract, integration, e2e]
     automationStatus: partial
     automationEvidence:
@@ -412,10 +439,10 @@ scenarios:
     requirement: GH-003
     phase: 5
     priority: must
-    title: GitHub 增量与幂等
-    given: 相同 SHA、单文件变更和重复 Webhook
-    when: 同步和重放事件
-    then: 相同 SHA 不重复；只有变化 Blob 重新下载和安全检查，未变化文档按 Blob SHA 复用
+    title: GitHub 分模式更新与幂等
+    given: 公共 URL、PAT、App 连接及相同 SHA、单文件变更和重复 Webhook
+    when: 手动检查、定时轮询或 App Webhook 到达
+    then: 只执行该模式允许的更新方式；相同 SHA 不重复，只有变化 Blob 重新下载和安全检查
     layers: [unit, integration, contract]
     automationStatus: partial
     automationEvidence:
@@ -443,10 +470,10 @@ scenarios:
     requirement: GH-005
     phase: 5
     priority: must
-    title: 恶意仓库隔离
-    given: 包含 Secret、提示注入、脚本和超大文件的仓库
+    title: 恶意 GitHub 来源隔离
+    given: 畸形 URL、失效凭证及包含 Secret、提示注入、脚本和超大文件的仓库
     when: 同步和解析
-    then: 危险内容被过滤且不能触发外部工具或越权
+    then: SSRF、Token 泄漏和危险内容被阻止，来源不能触发外部工具或越权
     layers: [unit, integration, security]
     automationStatus: partial
     automationEvidence:
@@ -454,6 +481,28 @@ scenarios:
       - src/lib/github/client.test.ts
       - src/lib/github/sync.test.ts
       - src/lib/github/webhook.test.ts
+
+  - id: ACC-GH-006
+    requirement: GH-006
+    phase: 5
+    priority: must
+    title: 公共 GitHub URL 无凭证导入
+    given: 规范公共仓库 URL、私有仓库 URL、畸形 URL 和非 GitHub 地址
+    when: 用户在不提供凭证的情况下导入
+    then: 只有允许的公共 GitHub 仓库被解析到不可变 Repository ID 和 Commit，且不会请求任意主机或私网地址
+    layers: [unit, contract, integration, e2e, security]
+    automationStatus: planned
+
+  - id: ACC-GH-007
+    requirement: GH-007
+    phase: 5
+    priority: must
+    title: Fine-grained PAT 私有仓库连接
+    given: 有效、错误、过期或撤销的用户级 Fine-grained PAT
+    when: 用户连接明确指定的私有仓库并执行同步
+    then: 有效 PAT 只用于服务端只读请求；失效凭证停止同步；任何响应、日志、浏览器存储和任务载荷均无明文 PAT
+    layers: [unit, contract, integration, e2e, security]
+    automationStatus: planned
 
   - id: ACC-JD-001
     requirement: JD-001

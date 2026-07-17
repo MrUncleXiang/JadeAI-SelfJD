@@ -85,7 +85,17 @@ JadeAI Career 使用项目内的账号领域服务和数据库会话，不再暴
 - 如果身份已属于其他用户，创建待处理冲突，不静默迁移。
 - 解绑前确保账号仍有密码或其他可用登录方式。
 
-GitHub App 安装是“来源授权”，与 `github-login` 身份完全独立。
+个人信息来源的凭证与登录身份完全独立：
+
+- 文件/目录上传不需要第三方授权。
+- 公共 GitHub URL 不携带用户凭证。
+- Fine-grained PAT 只是当前用户某个来源连接的加密只读凭证，不能创建或登录 JadeAI 账号。
+- GitHub App 安装是可选的“来源授权”，不是 `github-login`，也不能替代账号密码 Session。
+- OAuth Authorization Code 是短期一次性交换材料，不是可长期保存并重复拉取仓库的授权码；如果后续采用
+  OAuth，仍需注册 OAuth App 或 GitHub App，并在服务端交换和保护 Access Token。
+
+任何来源模式都不得按 GitHub Email 自动合并 JadeAI 账号。当前可用登录入口仍只有本项目的账号密码
+流程；未来开放第三方登录时必须单独立项并遵守本节身份绑定规则。
 
 ## 7. 请求鉴权与授权
 

@@ -6,6 +6,7 @@ import {
   type Page,
 } from '@playwright/test';
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3100';
 const ADMIN_USERNAME = 'e2e-admin';
@@ -220,6 +221,11 @@ test.beforeAll(async ({ request }) => {
       method: 'POST',
       path: `/api/resumes/${placeholder}/versions/${placeholder}/restore`,
     },
+    {
+      method: 'PUT',
+      path: '/api/llm-bindings/resume',
+      data: { profileId: null },
+    },
   ];
 
   // Compile the deepest dynamic API routes before a UI assertion depends on
@@ -247,7 +253,8 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   await expect(page).toHaveURL(/\/en\/knowledge$/);
   await expect(page.getByRole('heading', { name: 'Career Knowledge' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Knowledge' })).toBeVisible();
-  await expect(page.getByText('GitHub personal information repositories', { exact: true })).toBeVisible();
+  await expect(page.getByText('Upload personal information source').first()).toBeVisible();
+  await expect(page.getByText('GitHub App advanced connection (optional)').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
   await expect(page.getByText('Short-lived installation tokens stay within one request')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible();
@@ -257,6 +264,31 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   const facts = await browserJson<unknown[]>(page, '/api/career-facts');
   expect(facts.status).toBe(200);
   expect(Array.isArray(facts.body)).toBe(true);
+});
+
+test('browser directory upload creates tenant-scoped career facts', async ({ page }) => {
+  await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+  await page.goto('/en/knowledge');
+
+  const directoryInput = page.locator('input[type="file"]');
+  await expect(directoryInput).toHaveAttribute('webkitdirectory', '');
+  const fixtureDirectory = path.resolve('tests/fixtures/workresume-v2');
+  await directoryInput.setInputFiles(fixtureDirectory);
+  await expect(page.getByText('Selected 7 files. Click Secure import to parse them.')).toBeVisible();
+
+  const createdResponse = page.waitForResponse((response) => (
+    response.url().endsWith('/api/sources/workresume-upload')
+    && response.request().method() === 'POST'
+  ));
+  await page.getByRole('button', { name: 'Secure import' }).click();
+  expect((await createdResponse).status()).toBe(201);
+  await expect(page.getByText('Personal information source imported')).toBeVisible();
+  await expect(page.getByText('Atlas', { exact: true })).toBeVisible();
+  await expect(page.getByText('Beacon', { exact: true })).toBeVisible();
+
+  const facts = await browserJson<unknown[]>(page, '/api/career-facts');
+  expect(facts.status).toBe(200);
+  expect(facts.body).toHaveLength(4);
 });
 
 test('registration, invitation, login, logout, CSRF, and last-admin lifecycle', async ({ page }) => {

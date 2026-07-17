@@ -90,7 +90,7 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 来源连接的统一父记录：
 
 - `id/user_id`。
-- `provider`，首期仅 `github`。
+- `provider`，仅用于需要远程凭证/授权的连接；浏览器上传不伪造连接记录。
 - `status`、`last_synced_at`、`last_error_code`。
 
 ### `github_connection_states`
@@ -108,24 +108,29 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 
 ### `source_repositories`
 
-- `user_id/source_type`；`source_type` 首期支持 `local-workresume`，Phase 5 增加 `github`。
-- `source_connection_id` 对本地只读导入可为空，GitHub App 同步时关联授权连接。
+- `user_id/source_type`；当前支持 `local-workresume`、`uploaded-workresume`、`github`。
+- `source_connection_id` 对本地/浏览器上传为空，GitHub App 同步时关联授权连接。
 - 外部不可变 Repository ID、`full_name`、默认分支。
 - 是否被用户选中、最近 HEAD SHA 和最近同步时间。
 - `(user_id, source_type, external_repository_id)` 唯一；本地来源使用稳定内容寻址 ID，不保存本机绝对路径。
+- 浏览器上传首切每用户使用一个逻辑 `primary` 来源；再次上传更新展示名和最后 Revision，
+  不覆盖历史快照。
 
 ### `source_snapshots`
 
 - `user_id/source_repository_id`。
-- Commit SHA、Tree SHA、父快照、创建时间。
+- 不可变 Revision、树摘要、父快照、创建时间。兼容期复用 `commit_sha/tree_sha` 物理列：
+  GitHub 保存 Commit SHA，浏览器上传保存规范化文档集合的 64 位 SHA-256。
 - `(source_repository_id, commit_sha, parser_id, parser_version)` 唯一；解析器升级可对相同
-  Commit 形成新的不可变解析快照。
+  Revision 形成新的不可变解析快照。
 - 状态：pending、processing、ready、failed。
+- 后续在公共 URL/PAT 落地时迁移为显式 `revision_kind + revision_id`；兼容字段在完成双写、
+  回填和回滚验证前保留。
 
 ### `source_documents`
 
 - `user_id/source_snapshot_id`。
-- 路径、Git Blob SHA、内容哈希、MIME、大小。
+- 相对路径、Blob/规范化正文 SHA-256、内容哈希、MIME、大小。
 - 对象存储位置或受控文本内容。
 - 解析状态、解析器 ID 和解析器版本。
 - `security_findings` 保存脱敏风险代码；`llm_eligible` 决定文档能否进入模型上下文。
@@ -138,6 +143,8 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 - Webhook Delivery ID 唯一，保存事件类型、Payload 哈希、Installation/Repository ID、必要
   Commit/Ref 和处理状态；验签失败在任何数据库写入前拒绝。
 - 不保存完整 Webhook Payload、Installation Access Token 或 GitHub App 私钥。
+- 浏览器上传是同步 HTTP 导入，不创建伪造的远程 `sync_job`；它通过请求上限、用户限流和
+  `(source, revision, parser)` 唯一约束获得有界与幂等语义。
 
 ## 5. 职业知识库
 
@@ -162,7 +169,7 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 
 - `career_fact_id`。
 - 必须关联 `source_document_id`，用户手工输入也需要先形成受控来源文档。
-- Commit SHA、路径、行区间或 JSON Pointer。
+- 不可变来源 Revision（兼容列名仍为 Commit SHA）、路径、行区间或 JSON Pointer。
 - 引用内容哈希和简短证据摘要。
 - 解析器 ID、版本和 `stale` 状态。
 
@@ -263,7 +270,7 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 
 ## 10. 保留和删除
 
-- 被 GitHub 新 Commit 替代的快照不立即删除，以保持证据可验证。
+- 被 GitHub 新 Commit 或上传新 SHA-256 替代的快照不立即删除，以保持证据可验证。
 - 用户可删除连接并选择保留或清除已审核事实。
 - 删除 LLM 档案立即清除密文并使绑定失效。
 - 删除账号采用可恢复期，期满后异步物理删除用户内容。

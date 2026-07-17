@@ -6,6 +6,8 @@
 import { index, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+import type { CareerSourceType } from '@/lib/career/types';
+
 const epochNow = sql`extract(epoch from now())::integer`;
 
 export const users = pgTable('users', {
@@ -191,7 +193,7 @@ export const githubInstallations = pgTable('github_installations', {
 export const sourceRepositories = pgTable('source_repositories', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  sourceType: text('source_type').notNull(),
+  sourceType: text('source_type').$type<CareerSourceType>().notNull(),
   sourceConnectionId: text('source_connection_id'),
   externalRepositoryId: text('external_repository_id').notNull(),
   fullName: text('full_name').notNull(),

@@ -1,6 +1,6 @@
 # ADR-0003：GitHub App 只读同步
 
-状态：Accepted
+状态：Superseded by ADR-0004
 日期：2026-07-16
 
 ## 背景

@@ -13,7 +13,7 @@ Next.js Web / Route Handlers
   |-- Resume & Export
   |-- LLM Profiles
   |-- Career Knowledge Base
-  |-- GitHub Integration
+  |-- Source Integration
   |-- JD & Interview
   |
   +--------------------+
@@ -21,7 +21,7 @@ Next.js Web / Route Handlers
   v                    v
 PostgreSQL         Job Queue / Worker
   |                    |
-  |                    +--> GitHub API / Webhooks
+  |                    +--> GitHub API / Webhooks（可选）
   |                    +--> User-selected LLM APIs
   |                    +--> Document parsers
   |
@@ -59,8 +59,8 @@ HTTP 请求只负责鉴权、参数校验、创建任务和返回状态。
 - LLM 档案和按功能绑定。
 - 简历版本和变更集。
 - 职业事实、来源快照和证据关系。
-- GitHub App 安装、仓库连接、Webhook 和同步任务。
-- WorkResume v2 导入器。
+- 分层来源接入：浏览器目录上传、公共 GitHub URL、Fine-grained PAT，以及可选 GitHub App。
+- WorkResume v2 上传/仓库导入器、不可变 Revision 和安全扫描。
 - JD 文件导入、结构化要求及事实匹配。
 
 ## 3. 领域模块
@@ -91,8 +91,9 @@ LLM 只能提出变更，不能直接访问仓储。
 
 ### 3.6 Source Integration
 
-负责外部来源连接、不可变快照、来源文档、解析器版本和同步任务。首个实现是 GitHub，
-首个专用解析器是 WorkResume schemaVersion 2。
+负责上传或外部来源连接、不可变快照、来源文档、解析器版本和同步任务。首个默认入口是
+WorkResume schemaVersion 2 浏览器目录上传；公共 GitHub URL 和 Fine-grained PAT 属于后续
+远程 Adapter，GitHub App 作为需要 Webhook/后台同步时的可选高级入口。
 
 ### 3.7 JD
 
@@ -110,12 +111,13 @@ LLM 只能提出变更，不能直接访问仓储。
 - 简历 CRUD 和编辑器保存。
 - ResumePatch 预览和应用。
 - 事实审核。
+- 有界 WorkResume v2 目录上传和确定性导入。
 - LLM 档案 CRUD。
 - 查询同步、导入和导出状态。
 
 ### 4.2 后台任务
 
-- GitHub 首次或增量同步。
+- GitHub 首次或增量同步（公共 URL/PAT/App 按各自能力启用）。
 - 仓库文件解析和事实候选生成。
 - PDF/DOCX/图片 JD 解析。
 - 大型简历导出。
@@ -147,6 +149,7 @@ src/
     resume-change/
     knowledge/
     sources/
+      upload/
       github/
       work-resume/
     jd/
