@@ -7,6 +7,7 @@ import {
   decodeAndVerifyGitHubBlob,
   GitHubApiError,
   GitHubAppClient,
+  GitHubPatClient,
   GitHubPublicClient,
 } from './client';
 
@@ -125,6 +126,36 @@ describe('public GitHub client', () => {
     await expect(client.getRepository('alice/career-facts')).rejects.toEqual(
       expect.objectContaining<Partial<GitHubApiError>>({ code: 'RATE_LIMITED', status: 429 }),
     );
+  });
+});
+
+describe('fine-grained PAT GitHub client', () => {
+  it('uses the fixed GitHub API origin and sends the token only as a bearer header', async () => {
+    const token = `github_pat_${'A'.repeat(60)}`;
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json({
+      id: 91,
+      login: 'alice',
+    }));
+    const client = new GitHubPatClient(token, { fetch: fetchMock });
+    await expect(client.getAuthenticatedUser()).resolves.toEqual({ id: '91', login: 'alice' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.github.com/user');
+    expect(init?.cache).toBe('no-store');
+    expect(init?.redirect).toBe('error');
+    expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${token}`);
+    expect(String(url)).not.toContain(token);
+  });
+
+  it('maps a rejected token without including it in the stable error', async () => {
+    const token = `github_pat_${'B'.repeat(60)}`;
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json({}, { status: 401 }));
+    const client = new GitHubPatClient(token, { fetch: fetchMock });
+    const error = await client.getAuthenticatedUser().catch((caught) => caught as GitHubApiError);
+    expect(error).toEqual(expect.objectContaining<Partial<GitHubApiError>>({
+      code: 'AUTH_FAILED',
+      status: 401,
+    }));
+    expect(JSON.stringify(error)).not.toContain(token);
   });
 });
 

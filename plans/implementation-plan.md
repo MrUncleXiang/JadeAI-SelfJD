@@ -1,6 +1,6 @@
 # JadeAI Career 分阶段实施计划
 
-状态：Phase 5B 文件/目录来源和 Phase 5C 公共 URL 已实现；Fine-grained PAT 待实现；GitHub App 为可选高级模式
+状态：Phase 5B 文件/目录、Phase 5C 公共 URL、Phase 5D Fine-grained PAT 已完成；GitHub App 为可选高级模式
 基线：JadeAI v0.4.1 / `ca38294960e4b6f8a1ba66d0106059fcf97c323c`
 
 ## 1. 执行原则
@@ -43,7 +43,7 @@ load frozen requirement and ADR
 - [x] 冻结微信、QQ、`opentalking`、语音和数字人排除范围。
 - [x] 生成 PRD、需求矩阵、架构、威胁模型和 ADR。
 - [x] 生成实施计划和验收矩阵。
-- [ ] 获得正式 GitHub Fork/Remote 写权限。
+- [x] 获得正式 GitHub Fork/Remote 写权限，并使用仓库专用 Deploy Key 推送阶段分支。
 - [x] 从正式 Fork 恢复完整上游 Git 历史，并移植既有阶段 Commit。
 - [x] 清理可重建 `.next` 产物并确认当前空间可完成聚焦测试与单次构建；活动服务目录不做破坏性清理。
 
@@ -245,11 +245,17 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 ### 8.3 Phase 5C：远程仓库的简化连接
 
 1. [x] 公共 GitHub URL 规范化和固定 GitHub API Adapter，不执行任意 URL Clone。
-2. [ ] 用户级 Fine-grained PAT 加密保存、明确仓库选择、手动同步和定时轮询。
-3. [x] 公共 URL 与 App 共用安全扫描、WorkResume 解析、快照、事实审核和幂等语义。
-4. [ ] PAT Adapter 接入同一安全扫描、解析、快照和事实审核管线。
-5. [x] 公共 URL SSRF/无凭证 Contract、增量 Blob、租户 API 和浏览器 E2E。
-6. [ ] PAT 密文/撤销/脱敏安全测试和浏览器 E2E。
+2. [x] 公共 URL 与 App 共用安全扫描、WorkResume 解析、快照、事实审核和幂等语义。
+3. [x] 公共 URL SSRF/无凭证 Contract、增量 Blob、租户 API 和浏览器 E2E。
+
+### 8.4 Phase 5D：Fine-grained PAT 私有仓库连接
+
+1. [x] 用户级 Fine-grained PAT 加密保存、明确仓库选择、手动同步和定时轮询。
+2. [x] PAT Adapter 接入同一安全扫描、解析、快照和事实审核管线。
+3. [x] PAT 密文 AAD 绑定用户/连接，列表与任务 DTO 脱敏，撤销时删除密文并取消仓库选择。
+4. [x] 固定 `https://api.github.com`、拒绝重定向、有界超时与响应、稳定错误映射。
+5. [x] SQLite/PostgreSQL 前向迁移、租户 API、知识库 UI 和浏览器不持久化令牌验收。
+6. [x] PAT 格式、加密、轮换兼容、撤销、统一同步和明文扫描自动化测试。
 
 当前进度（2026-07-17）：
 
@@ -261,8 +267,11 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - 相同公共仓库 HEAD 重复检查不读取 Tree/Blob；单 Blob 改变时其余文档按 Git Blob SHA 复用，
   并将旧证据标为 Stale。
 - App 模式本地 Mock、迁移、同步/Webhook、DTO 脱敏和 UI 已完成；真实 App Gate 只约束启用该模式的部署。
-- Fine-grained PAT 尚未实现，因此 GH-007 以及 GH-002、GH-003、GH-005 的 PAT 分支仍是后续 Gate，
-  Phase 5 整体不能标记完成。
+- Fine-grained PAT 已打通知识库 UI -> 受保护 API -> 固定 GitHub API -> 加密凭证 -> 明确仓库选择 ->
+  共用后台同步/安全解析/不可变快照/Draft Fact 的窄端到端链路。
+- PAT 只接受 `github_pat_`，密文 AAD 绑定用户和连接；API、审计与 Job 不含明文。主动撤销或
+  GitHub 401 会删除密文、取消仓库选择并停止后续同步。
+- Phase 5D 完整 Gate 已通过；真实 GitHub PAT 仅保留为部署者自愿执行的人工只读 Gate，不进入 CI、日志或仓库。
 - 上游既存全量 ESLint 债务继续单独跟踪，不通过放宽规则或无关批量修改掩盖。
 
 自动化证据（2026-07-17）：
@@ -283,6 +292,19 @@ Phase 5C 公共 URL 自动化证据（2026-07-17）：
   `pnpm spec:check` 和 `pnpm build` 通过。
 - Phase 5C 新增/修改 TypeScript 文件通过聚焦 ESLint；构建和 E2E 产物验收后已清理，
   未修改生产安装 `/home/ubuntu/apps/JadeAI`。
+
+Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
+
+- `pnpm test`：46 个测试文件、232 个测试通过；PAT/加密/Client/Service/同步/Route 聚焦测试为
+  6 个文件、32 个测试，包含既有 LLM 密文 `profileId` AAD 升级兼容回归。
+- `pnpm test:e2e`：7 个真实 Chromium 场景通过；知识库页面显示 PAT 入口，提交后立即清空
+  密码输入框，并验证 `localStorage`/`sessionStorage` 不含令牌。
+- `pnpm test:migration`、一次性 PostgreSQL 18 临时容器 `pnpm test:integration`、`pnpm type-check`、
+  `pnpm spec:check` 和 `pnpm build` 通过。
+- Phase 5D 新增/修改 TypeScript 文件通过聚焦 ESLint。全量 ESLint 仍有上游既存的
+  1211 个错误和 64 个警告，未放宽规则或批量修改无关模板代码。
+- 生产安装 `/home/ubuntu/apps/JadeAI` 未修改；真实 Fine-grained PAT 不进入自动化环境，部署后由
+  用户本人在 UI 中一次性提交即可完成可选人工 Gate。
 
 ## 9. Phase 6：JD 与定向简历
 

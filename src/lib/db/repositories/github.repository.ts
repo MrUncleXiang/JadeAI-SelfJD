@@ -322,7 +322,7 @@ export const githubRepository = {
     const rows = await db.select().from(sourceRepositories).where(and(
       eq(sourceRepositories.id, repositoryId),
       eq(sourceRepositories.userId, userId),
-      eq(sourceRepositories.sourceType, 'github'),
+      inArray(sourceRepositories.sourceType, ['github', 'github-pat']),
     )).limit(1);
     return rows[0] ? { ...rows[0], selected: Boolean(rows[0].selected) } : null;
   },
@@ -395,7 +395,7 @@ export const githubRepository = {
       sourceConnections,
       eq(sourceConnections.id, sourceRepositories.sourceConnectionId),
     ).where(and(
-      eq(sourceRepositories.sourceType, 'github'),
+      inArray(sourceRepositories.sourceType, ['github', 'github-pat']),
       eq(sourceRepositories.selected, true),
       eq(sourceConnections.status, 'active'),
       or(isNull(sourceRepositories.lastSyncedAt), lte(sourceRepositories.lastSyncedAt, staleBefore)),
@@ -449,13 +449,36 @@ export const githubRepository = {
       eq(sourceRepositories.sourceConnectionId, job.sourceConnectionId),
     )).limit(1);
     const repository = repositories[0];
-    if (!repository || !repository.selected) throw new GitHubRepositoryError('REPOSITORY_NOT_FOUND');
+    if (!repository
+      || !repository.selected
+      || !['github', 'github-pat'].includes(repository.sourceType)) {
+      throw new GitHubRepositoryError('REPOSITORY_NOT_FOUND');
+    }
+    const connections = await db.select().from(sourceConnections).where(and(
+      eq(sourceConnections.id, job.sourceConnectionId),
+      eq(sourceConnections.userId, job.userId),
+    )).limit(1);
+    const connection = connections[0];
+    const expectedProvider = repository.sourceType === 'github' ? 'github' : 'github-pat';
+    if (!connection
+      || connection.provider !== expectedProvider
+      || !['active', 'error'].includes(connection.status)) {
+      throw new GitHubRepositoryError('CONNECTION_STATE_INVALID');
+    }
+    if (repository.sourceType === 'github-pat') {
+      return { job, repository, connection, installation: null };
+    }
     const installations = await db.select().from(githubInstallations).where(and(
       eq(githubInstallations.userId, job.userId),
       eq(githubInstallations.sourceConnectionId, job.sourceConnectionId),
     )).limit(1);
     if (!installations[0]) throw new GitHubRepositoryError('INSTALLATION_NOT_FOUND');
-    return { job, repository, installation: serializeInstallation(installations[0]) };
+    return {
+      job,
+      repository,
+      connection,
+      installation: serializeInstallation(installations[0]),
+    };
   },
 
   async latestSnapshotDocuments(input: {

@@ -20,9 +20,10 @@ Build professional resumes with drag-and-drop editing, real-time AI optimization
 
 > **Fork status:** The current JadeAI Career branch implements account/password authentication,
 > tenant isolation, encrypted per-user LLM profiles, reviewed AI resume patches, a career
-> knowledge base, and local GitHub App synchronization. A real GitHub App/private-repository
-> gate is still required before production use. The upstream public Docker image does not
-> include these changes.
+> knowledge base, browser uploads, public GitHub URL imports, and encrypted Fine-grained PAT
+> private-repository sync. GitHub App remains an optional advanced mode; its real installation
+> gate applies only when that mode is enabled. The upstream public Docker image does not include
+> these changes.
 
 ## Community
 
@@ -230,7 +231,7 @@ REGISTRATION_MODE=closed
 SESSION_TTL_DAYS=30
 ENABLE_FINGERPRINT_AUTH=false
 
-# Required before users can save encrypted LLM profiles
+# Required before users can save encrypted LLM profiles or GitHub PAT connections
 LLM_ENCRYPTION_KEYS={"1":"replace-with-base64-32-byte-key"}
 LLM_ENCRYPTION_ACTIVE_KEY_VERSION=1
 ```
@@ -238,7 +239,8 @@ LLM_ENCRYPTION_ACTIVE_KEY_VERSION=1
 Generate the encryption key with `openssl rand -base64 32`. Each signed-in user then
 configures one or more OpenAI-compatible, Anthropic, or Gemini profiles in
 **Settings > AI** and can bind a different profile to resume, JD, vision, and interview
-features. API keys are encrypted server-side and are not sent in business request headers.
+features. The same versioned keyring protects Fine-grained GitHub PATs. API keys and PATs are
+encrypted server-side and are not sent in business request headers or returned by list APIs.
 
 See `.env.example` for all available options.
 
@@ -271,10 +273,12 @@ Open [http://localhost:3000](http://localhost:3000).
 | `TRUST_PROXY_HEADERS` | No | `false` | Trust proxy-supplied client IP headers for coarse auth rate limits; enable only behind a sanitizing reverse proxy |
 | `ENABLE_FINGERPRINT_AUTH` | No | `false` | Development-only legacy fallback; ignored in production |
 | `SEED_DEMO_DATA` | No | `false` | Explicit development fixture; rejected in production |
-| `GITHUB_APP_ID` | For GitHub sync | — | Numeric GitHub App ID |
-| `GITHUB_APP_SLUG` | For GitHub sync | — | GitHub App slug used to build the installation URL |
-| `GITHUB_APP_PRIVATE_KEY` | For GitHub sync | — | PEM private key supplied only through deployment secrets |
-| `GITHUB_WEBHOOK_SECRET` | For GitHub sync | — | Secret used to validate raw webhook request bodies |
+| `LLM_ENCRYPTION_KEYS` | For encrypted user secrets | — | Versioned base64 32-byte AES keys for user LLM API keys and Fine-grained PATs |
+| `LLM_ENCRYPTION_ACTIVE_KEY_VERSION` | For encrypted user secrets | — | Key version used for new encrypted writes |
+| `GITHUB_APP_ID` | Optional GitHub App mode | — | Numeric GitHub App ID |
+| `GITHUB_APP_SLUG` | Optional GitHub App mode | — | GitHub App slug used to build the installation URL |
+| `GITHUB_APP_PRIVATE_KEY` | Optional GitHub App mode | — | PEM private key supplied only through deployment secrets |
+| `GITHUB_WEBHOOK_SECRET` | Optional GitHub App mode | — | Secret used to validate raw webhook request bodies |
 | `APP_NAME` | No | `JadeAI` | Application display name |
 | `DEFAULT_LOCALE` | No | `zh` | Default language: `zh` or `en` |
 

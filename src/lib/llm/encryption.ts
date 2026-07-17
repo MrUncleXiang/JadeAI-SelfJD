@@ -92,20 +92,37 @@ function readKeyring(): Keyring {
   return { activeVersion, keys };
 }
 
-function associatedData(userId: string, profileId: string): Buffer {
-  return Buffer.from(JSON.stringify({ scope: 'jadeai.llm-profile.v1', userId, profileId }), 'utf8');
+export interface SecretEncryptionContext {
+  scope: string;
+  userId: string;
+  resourceId: string;
 }
 
-export function encryptLlmApiKey(
-  apiKey: string,
-  context: { userId: string; profileId: string },
-): EncryptedSecret {
+function associatedData(context: SecretEncryptionContext): Buffer {
+  return Buffer.from(JSON.stringify({
+    scope: context.scope,
+    userId: context.userId,
+    resourceId: context.resourceId,
+  }), 'utf8');
+}
+
+function llmAssociatedData(context: { userId: string; profileId: string }): Buffer {
+  // Keep the original AAD shape so credentials encrypted before generic secret
+  // support was introduced remain decryptable after upgrading.
+  return Buffer.from(JSON.stringify({
+    scope: 'jadeai.llm-profile.v1',
+    userId: context.userId,
+    profileId: context.profileId,
+  }), 'utf8');
+}
+
+function encryptWithAssociatedData(secret: string, aad: Buffer): EncryptedSecret {
   const keyring = readKeyring();
   const key = keyring.keys.get(keyring.activeVersion)!;
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv(ALGORITHM, key, iv);
-  cipher.setAAD(associatedData(context.userId, context.profileId));
-  const ciphertext = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
+  cipher.setAAD(aad);
+  const ciphertext = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
   return {
     ciphertext: ciphertext.toString('base64url'),
     iv: iv.toString('base64url'),
@@ -114,17 +131,14 @@ export function encryptLlmApiKey(
   };
 }
 
-export function decryptLlmApiKey(
-  encrypted: EncryptedSecret,
-  context: { userId: string; profileId: string },
-): string {
+function decryptWithAssociatedData(encrypted: EncryptedSecret, aad: Buffer): string {
   const keyring = readKeyring();
   const key = keyring.keys.get(encrypted.keyVersion);
   if (!key) throw new LlmEncryptionError('KEY_VERSION_NOT_FOUND');
 
   try {
     const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(encrypted.iv, 'base64url'));
-    decipher.setAAD(associatedData(context.userId, context.profileId));
+    decipher.setAAD(aad);
     decipher.setAuthTag(Buffer.from(encrypted.tag, 'base64url'));
     return Buffer.concat([
       decipher.update(Buffer.from(encrypted.ciphertext, 'base64url')),
@@ -133,4 +147,32 @@ export function decryptLlmApiKey(
   } catch {
     throw new LlmEncryptionError('DECRYPTION_FAILED');
   }
+}
+
+export function encryptServerSecret(
+  secret: string,
+  context: SecretEncryptionContext,
+): EncryptedSecret {
+  return encryptWithAssociatedData(secret, associatedData(context));
+}
+
+export function decryptServerSecret(
+  encrypted: EncryptedSecret,
+  context: SecretEncryptionContext,
+): string {
+  return decryptWithAssociatedData(encrypted, associatedData(context));
+}
+
+export function encryptLlmApiKey(
+  apiKey: string,
+  context: { userId: string; profileId: string },
+): EncryptedSecret {
+  return encryptWithAssociatedData(apiKey, llmAssociatedData(context));
+}
+
+export function decryptLlmApiKey(
+  encrypted: EncryptedSecret,
+  context: { userId: string; profileId: string },
+): string {
+  return decryptWithAssociatedData(encrypted, llmAssociatedData(context));
 }

@@ -248,6 +248,21 @@ test.beforeEach(async ({ context }) => {
 
 test('career knowledge review workspace is authenticated and queries tenant-scoped facts', async ({ page }) => {
   await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+  await page.route('**/api/github/pat-connections', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  });
   await page.goto('/en/knowledge');
 
   await expect(page).toHaveURL(/\/en\/knowledge$/);
@@ -256,6 +271,11 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   await expect(page.getByText('Upload personal information source').first()).toBeVisible();
   await expect(page.getByText('Import public GitHub repository').first()).toBeVisible();
   await expect(page.getByPlaceholder('https://github.com/owner/repository')).toBeVisible();
+  await expect(page.getByText('Connect a private GitHub repository with a fine-grained token').first())
+    .toBeVisible();
+  const patInput = page.locator('#github-pat-token');
+  await expect(patInput).toHaveAttribute('type', 'password');
+  await expect(page.getByRole('button', { name: 'Verify and connect' })).toBeVisible();
   await expect(page.getByText('GitHub App advanced connection (optional)').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
   await expect(page.getByText('Short-lived installation tokens stay within one request')).toBeVisible();
@@ -269,6 +289,18 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   const publicSources = await browserJson<unknown[]>(page, '/api/sources/github-public');
   expect(publicSources.status).toBe(200);
   expect(Array.isArray(publicSources.body)).toBe(true);
+  const patConnections = await browserJson<unknown[]>(page, '/api/github/pat-connections');
+  expect(patConnections.status).toBe(200);
+  expect(Array.isArray(patConnections.body)).toBe(true);
+
+  const browserOnlyToken = `github_pat_${'E2E_'.repeat(12)}`;
+  await patInput.fill(browserOnlyToken);
+  await page.getByRole('button', { name: 'Verify and connect' }).click();
+  await expect(patInput).toHaveValue('');
+  expect(await page.evaluate((secret) => (
+    Object.values(localStorage).some((value) => value.includes(secret))
+    || Object.values(sessionStorage).some((value) => value.includes(secret))
+  ), browserOnlyToken)).toBe(false);
 });
 
 test('browser directory upload creates tenant-scoped career facts', async ({ page }) => {

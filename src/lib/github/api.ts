@@ -3,12 +3,15 @@ import { NextResponse } from 'next/server';
 import { authErrorResponse } from '@/lib/auth/api';
 
 import { GitHubServiceError } from './service';
+import { GitHubPatServiceError } from './pat-service';
 import { PublicGitHubSourceError } from './public-source';
 import { GitHubSyncError } from './sync';
 
 const ERROR_MESSAGES: Record<string, string> = {
   GITHUB_NOT_CONFIGURED: 'GitHub App integration is not configured.',
   INVALID_REPOSITORY_URL: 'Repository URL must be a canonical https://github.com/owner/repository URL.',
+  INVALID_PAT_FORMAT: 'Only a GitHub fine-grained personal access token is accepted.',
+  INVALID_PAT: 'The GitHub fine-grained personal access token is invalid.',
   INVALID_RETURN_PATH: 'The return path is invalid.',
   INVALID_CONNECTION_STATE: 'The GitHub connection state is invalid or expired.',
   INSTALLATION_NOT_FOUND: 'The GitHub App installation was not found.',
@@ -21,6 +24,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   REPOSITORY_NOT_FOUND: 'GitHub repository not found.',
   REPOSITORY_INACCESSIBLE: 'GitHub repository is inaccessible.',
   REPOSITORY_NOT_PUBLIC: 'Repository is not publicly readable without a credential.',
+  PAT_INSUFFICIENT_PERMISSIONS: 'The GitHub token cannot read the selected repository metadata and contents.',
+  PAT_REVOKED: 'The GitHub fine-grained personal access token was revoked or expired.',
+  PAT_ENCRYPTION_UNAVAILABLE: 'Server-side encryption for the GitHub token is unavailable.',
   INSTALLATION_REVOKED: 'GitHub App installation was revoked.',
   REPOSITORY_TOO_LARGE: 'Repository exceeds the supported synchronization limits.',
   UNSUPPORTED_LAYOUT: 'Repository does not contain a supported WorkResume v2 layout.',
@@ -40,6 +46,7 @@ export function dateString(value: Date | number | string | null): string | null 
 
 export function githubErrorResponse(error: unknown, requestId: string): NextResponse {
   if (!(error instanceof GitHubServiceError)
+    && !(error instanceof GitHubPatServiceError)
     && !(error instanceof GitHubSyncError)
     && !(error instanceof PublicGitHubSourceError)) {
     return authErrorResponse(error, requestId);

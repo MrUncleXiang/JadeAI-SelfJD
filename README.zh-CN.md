@@ -19,8 +19,9 @@
 ---
 
 > **二开状态：** 当前 JadeAI Career 分支已实现账号密码、租户隔离、用户级加密 LLM 档案、
-> 需用户确认的 AI 简历变更、职业事实库和 GitHub App 本地同步实现。投入生产前仍需使用真实
-> GitHub App 与测试私有仓库完成人工 Gate。上游公开 Docker 镜像不包含这些二开改动。
+> 需用户确认的 AI 简历变更、职业事实库、浏览器上传、公共 GitHub URL 导入和加密
+> Fine-grained PAT 私有仓库同步。GitHub App 保留为可选高级模式，只有启用该模式时才需要
+> 执行真实安装 Gate。上游公开 Docker 镜像不包含这些二开改动。
 
 ## 交流群
 
@@ -236,14 +237,15 @@ REGISTRATION_MODE=closed
 SESSION_TTL_DAYS=30
 ENABLE_FINGERPRINT_AUTH=false
 
-# 用户保存加密 LLM 档案前必须配置
+# 用户保存加密 LLM 档案或 GitHub PAT 连接前必须配置
 LLM_ENCRYPTION_KEYS={"1":"replace-with-base64-32-byte-key"}
 LLM_ENCRYPTION_ACTIVE_KEY_VERSION=1
 ```
 
 可使用 `openssl rand -base64 32` 生成加密密钥。登录用户可在 **设置 > AI** 中维护多个
 OpenAI-compatible、Anthropic 或 Gemini 档案，并分别绑定到简历、JD、图片理解和面试功能。
-API Key 由服务端加密保存，不再随业务请求 Header 传递。
+同一版本化 Keyring 也用于保护 Fine-grained GitHub PAT。API Key 和 PAT 均由服务端加密保存，
+不会随业务请求 Header 传递或通过列表 API 返回。
 
 查看 `.env.example` 了解所有可用选项。
 
@@ -275,10 +277,12 @@ pnpm dev
 | `TRUST_PROXY_HEADERS` | 否 | `false` | 信任代理写入的客户端 IP Header；仅在反向代理会清除伪造 Header 时启用 |
 | `ENABLE_FINGERPRINT_AUTH` | 否 | `false` | 仅本地开发可显式启用的旧指纹兼容模式 |
 | `SEED_DEMO_DATA` | 否 | `false` | 显式开发 Fixture；生产环境禁止启用 |
-| `GITHUB_APP_ID` | 使用 GitHub 同步时 | — | GitHub App 数字 ID |
-| `GITHUB_APP_SLUG` | 使用 GitHub 同步时 | — | 用于构造安装地址的 GitHub App Slug |
-| `GITHUB_APP_PRIVATE_KEY` | 使用 GitHub 同步时 | — | 只通过部署 Secret 提供的 PEM 私钥 |
-| `GITHUB_WEBHOOK_SECRET` | 使用 GitHub 同步时 | — | 校验 Webhook 原始请求体的 Secret |
+| `LLM_ENCRYPTION_KEYS` | 使用加密用户秘密时 | — | 用于用户 LLM API Key 和 Fine-grained PAT 的版本化 32 字节 AES 密钥 |
+| `LLM_ENCRYPTION_ACTIVE_KEY_VERSION` | 使用加密用户秘密时 | — | 新密文写入使用的密钥版本 |
+| `GITHUB_APP_ID` | 可选 GitHub App 模式 | — | GitHub App 数字 ID |
+| `GITHUB_APP_SLUG` | 可选 GitHub App 模式 | — | 用于构造安装地址的 GitHub App Slug |
+| `GITHUB_APP_PRIVATE_KEY` | 可选 GitHub App 模式 | — | 只通过部署 Secret 提供的 PEM 私钥 |
+| `GITHUB_WEBHOOK_SECRET` | 可选 GitHub App 模式 | — | 校验 Webhook 原始请求体的 Secret |
 | `APP_NAME` | 否 | `JadeAI` | 应用显示名称 |
 | `DEFAULT_LOCALE` | 否 | `zh` | 默认语言：`zh` 或 `en` |
 

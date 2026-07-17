@@ -7,12 +7,18 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => {
   process.env.DB_TYPE = 'sqlite';
   process.env.SQLITE_PATH = ':memory:';
+  process.env.LLM_ENCRYPTION_KEYS = JSON.stringify({
+    1: Buffer.alloc(32, 11).toString('base64'),
+  });
+  process.env.LLM_ENCRYPTION_ACTIVE_KEY_VERSION = '1';
 });
 
+import type { ActorContext } from '@/lib/auth/service';
 import { db, dbReady } from '@/lib/db';
 import {
   careerFactEvidence,
   githubInstallations,
+  githubPatCredentials,
   sourceConnections,
   sourceDocuments,
   sourceRepositories,
@@ -25,9 +31,11 @@ import type { GitHubAppConfig } from './config';
 import { GitHubApiError } from './client';
 import {
   type GitHubSyncApi,
+  type GitHubPatSyncApi,
   enqueueKnownGitHubCommit,
   githubSyncService,
 } from './sync';
+import { encryptGitHubPat } from './pat-token';
 import type { GitHubTreeEntry } from './types';
 
 const suffix = crypto.randomUUID();
@@ -349,5 +357,151 @@ describe('GitHub incremental synchronization', () => {
     expect((await db.select().from(sourceConnections)).find(
       (connection: typeof sourceConnections.$inferSelect) => connection.id === connectionId,
     )).toMatchObject({ status: 'active', lastErrorCode: 'SYNC_FAILED' });
+  });
+
+  it('uses an encrypted fine-grained PAT for the same incremental synchronization pipeline', async () => {
+    const patUserId = `github-pat-sync-${suffix}`;
+    const patConnectionId = `github-pat-connection-${suffix}`;
+    const patRepositoryId = `github-pat-repository-${suffix}`;
+    const patToken = `github_pat_${'D4_'.repeat(20)}`;
+    const encrypted = encryptGitHubPat(patToken, {
+      userId: patUserId,
+      connectionId: patConnectionId,
+    });
+    await db.insert(users).values({
+      id: patUserId,
+      username: patUserId,
+      authType: 'password',
+    });
+    await db.insert(sourceConnections).values({
+      id: patConnectionId,
+      userId: patUserId,
+      provider: 'github-pat',
+      status: 'active',
+    });
+    await db.insert(githubPatCredentials).values({
+      id: `github-pat-credential-${suffix}`,
+      userId: patUserId,
+      sourceConnectionId: patConnectionId,
+      label: 'PAT sync test',
+      accountId: '71002',
+      accountLogin: 'pat-alice',
+      encryptedToken: encrypted.ciphertext,
+      tokenIv: encrypted.iv,
+      tokenTag: encrypted.tag,
+      keyVersion: encrypted.keyVersion,
+    });
+    await db.insert(sourceRepositories).values({
+      id: patRepositoryId,
+      userId: patUserId,
+      sourceType: 'github-pat',
+      sourceConnectionId: patConnectionId,
+      externalRepositoryId: '92001',
+      fullName: 'pat-alice/career-facts',
+      defaultBranch: 'main',
+      selected: true,
+    });
+
+    const patClient: GitHubPatSyncApi = {
+      getRepository: vi.fn().mockResolvedValue({
+        id: '92001',
+        nodeId: 'R_92001',
+        name: 'career-facts',
+        fullName: 'pat-alice/career-facts',
+        private: true,
+        defaultBranch: 'main',
+        archived: false,
+        disabled: false,
+      }),
+      getCommit: vi.fn(async (_fullName, ref) => {
+        const version = versions.get(ref === 'main' ? defaultHeadSha : ref);
+        if (!version) throw new Error(`unexpected commit ${ref}`);
+        return { sha: version.commitSha, treeSha: version.treeSha };
+      }),
+      getTree: vi.fn(async (_fullName, treeSha) => {
+        const version = [...versions.values()].find((candidate) => candidate.treeSha === treeSha);
+        if (!version) throw new Error(`unexpected tree ${treeSha}`);
+        return { sha: version.treeSha, truncated: false, entries: version.entries };
+      }),
+      getBlob: vi.fn(async (_fullName, sha) => {
+        const bytes = blobs.get(sha);
+        if (!bytes) throw new Error(`unexpected blob ${sha}`);
+        return {
+          sha,
+          size: bytes.length,
+          encoding: 'base64' as const,
+          content: bytes.toString('base64'),
+        };
+      }),
+    };
+    const patActor: ActorContext = {
+      userId: patUserId,
+      role: 'user',
+      sessionId: `pat-session-${suffix}`,
+      requestId: `pat-request-${suffix}`,
+      user: {
+        id: patUserId,
+        username: patUserId,
+        email: null,
+        name: 'PAT Sync User',
+        avatarUrl: null,
+        role: 'user',
+        status: 'active',
+        authType: 'password',
+      },
+    };
+
+    const enqueued = await githubSyncService.enqueueRepository(
+      patActor,
+      patRepositoryId,
+      'manual',
+      { patClient },
+    );
+    const result = await githubSyncService.runJob(enqueued.job.id, { patClient });
+    expect(result).toMatchObject({
+      status: 'succeeded',
+      fetchedBlobs: 7,
+      factsCreated: 4,
+    });
+    expect(patClient.getRepository).toHaveBeenCalledWith('92001');
+    expect((await db.select().from(sourceRepositories)).find(
+      (repository: typeof sourceRepositories.$inferSelect) => repository.id === patRepositoryId,
+    )).toMatchObject({ sourceType: 'github-pat', lastHeadSha: defaultHeadSha });
+
+    const revokedJob = await enqueueKnownGitHubCommit({
+      userId: patUserId,
+      sourceConnectionId: patConnectionId,
+      sourceRepositoryId: patRepositoryId,
+      commitSha: 'a'.repeat(40),
+      trigger: 'manual',
+    });
+    const rejectedPatClient: GitHubPatSyncApi = {
+      ...patClient,
+      getRepository: vi.fn().mockRejectedValue(new GitHubApiError('AUTH_FAILED', 401)),
+    };
+    await expect(githubSyncService.runJob(revokedJob.job.id, {
+      patClient: rejectedPatClient,
+    })).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'PAT_REVOKED',
+      retryAt: null,
+    });
+    expect((await db.select().from(sourceConnections)).find(
+      (connection: typeof sourceConnections.$inferSelect) => connection.id === patConnectionId,
+    )).toMatchObject({ status: 'revoked', lastErrorCode: 'PAT_REVOKED' });
+    expect((await db.select().from(sourceRepositories)).find(
+      (repository: typeof sourceRepositories.$inferSelect) => repository.id === patRepositoryId,
+    )).toMatchObject({ selected: false });
+    expect((await db.select().from(githubPatCredentials)).some(
+      (credential: typeof githubPatCredentials.$inferSelect) => (
+        credential.sourceConnectionId === patConnectionId
+      ),
+    )).toBe(false);
+    expect(JSON.stringify({
+      credentials: await db.select().from(githubPatCredentials),
+      jobs: (await db.select().from(syncJobs)).filter(
+        (job: typeof syncJobs.$inferSelect) => job.userId === patUserId,
+      ),
+    })).not.toContain(patToken);
   });
 });

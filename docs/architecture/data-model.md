@@ -90,7 +90,8 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 来源连接的统一父记录：
 
 - `id/user_id`。
-- `provider`，仅用于需要远程凭证/授权的连接；浏览器上传不伪造连接记录。
+- `provider`，当前为 `github`（GitHub App）或 `github-pat`；仅用于需要远程凭证/授权的
+  连接，浏览器上传和无凭证公共 URL 不伪造连接记录。
 - `status`、`last_synced_at`、`last_error_code`。
 
 ### `github_connection_states`
@@ -106,11 +107,22 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 - 安装权限摘要。
 - 不保存 installation access token。
 
+### `github_pat_credentials`
+
+- `user_id/source_connection_id`，每个 PAT 连接唯一且显式归属租户。
+- 用户自定义 Label、GitHub Account ID 和 Account Login。
+- `encrypted_token/token_iv/token_tag/key_version` 保存 AES-256-GCM 密文和版本元数据。
+- 加密 AAD 绑定用户 ID、连接 ID 与 `jadeai.github-fine-grained-pat.v1` Scope，密文不能跨用户
+  或跨连接复用。
+- 列表查询、API DTO、审计和 Job 不选择或返回密文列；解密只发生在固定 GitHub API 出站边界。
+- 主动撤销或 GitHub 返回 401 时物理删除凭证行，并取消该连接下的仓库选择。
+
 ### `source_repositories`
 
-- `user_id/source_type`；当前支持 `local-workresume`、`uploaded-workresume`、`github-public`、`github`。
+- `user_id/source_type`；当前支持 `local-workresume`、`uploaded-workresume`、`github-public`、
+  `github-pat`、`github`。
 - `source_connection_id` 对本地、浏览器上传和无凭证公共 GitHub 为空，GitHub App 同步时
-  关联授权连接。
+  关联 Installation 连接，PAT 同步时关联加密凭证连接。
 - 外部不可变 Repository ID、`full_name`、默认分支。
 - 是否被用户选中、最近 HEAD SHA 和最近同步时间。
 - `(user_id, source_type, external_repository_id)` 唯一；本地来源使用稳定内容寻址 ID，不保存本机绝对路径。
@@ -127,7 +139,7 @@ GitHub 登录身份不等于 GitHub App 安装授权。
 - `(source_repository_id, commit_sha, parser_id, parser_version)` 唯一；解析器升级可对相同
   Revision 形成新的不可变解析快照。
 - 状态：pending、processing、ready、failed。
-- 后续在 PAT 落地和来源模式稳定后迁移为显式 `revision_kind + revision_id`；兼容字段在完成双写、
+- 后续在来源模式稳定后迁移为显式 `revision_kind + revision_id`；兼容字段在完成双写、
   回填和回滚验证前保留。
 
 ### `source_documents`
@@ -145,7 +157,8 @@ GitHub 登录身份不等于 GitHub App 安装授权。
   错误代码、重试时间和请求关联 ID。
 - Webhook Delivery ID 唯一，保存事件类型、Payload 哈希、Installation/Repository ID、必要
   Commit/Ref 和处理状态；验签失败在任何数据库写入前拒绝。
-- 不保存完整 Webhook Payload、Installation Access Token 或 GitHub App 私钥。
+- 不保存完整 Webhook Payload、Installation Access Token、GitHub App 私钥或 PAT 明文；PAT Job
+  只保存连接和仓库 ID。
 - 浏览器上传是同步 HTTP 导入，不创建伪造的远程 `sync_job`；它通过请求上限、用户限流和
   `(source, revision, parser)` 唯一约束获得有界与幂等语义。
 - 公共 GitHub URL 首切同样是同步有界 HTTP 导入；它先比较默认分支 HEAD，再依靠

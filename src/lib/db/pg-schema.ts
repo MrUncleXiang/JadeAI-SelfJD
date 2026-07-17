@@ -156,6 +156,25 @@ export const sourceConnections = pgTable('source_connections', {
   index('source_connections_user_provider_idx').on(table.userId, table.provider),
 ]);
 
+export const githubPatCredentials = pgTable('github_pat_credentials', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceConnectionId: text('source_connection_id').notNull().unique()
+    .references(() => sourceConnections.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  accountId: text('account_id').notNull(),
+  accountLogin: text('account_login').notNull(),
+  encryptedToken: text('encrypted_token').notNull(),
+  tokenIv: text('token_iv').notNull(),
+  tokenTag: text('token_tag').notNull(),
+  keyVersion: integer('key_version').notNull(),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('github_pat_credentials_user_idx').on(table.userId),
+  index('github_pat_credentials_account_idx').on(table.accountId),
+]);
+
 export const githubConnectionStates = pgTable('github_connection_states', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),

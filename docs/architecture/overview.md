@@ -92,8 +92,8 @@ LLM 只能提出变更，不能直接访问仓储。
 ### 3.6 Source Integration
 
 负责上传或外部来源连接、不可变快照、来源文档、解析器版本和同步任务。当前默认入口是
-WorkResume schemaVersion 2 浏览器目录上传和无凭证公共 GitHub URL；Fine-grained PAT 是后续
-私有仓库 Adapter，GitHub App 作为需要 Webhook/后台同步时的可选高级入口。
+WorkResume schemaVersion 2 浏览器目录上传、无凭证公共 GitHub URL 和用户级加密
+Fine-grained PAT 私有仓库；GitHub App 作为需要安装授权和 Webhook 时的可选高级入口。
 
 ### 3.7 JD
 
@@ -113,6 +113,7 @@ WorkResume schemaVersion 2 浏览器目录上传和无凭证公共 GitHub URL；
 - 事实审核。
 - 有界 WorkResume v2 目录上传和确定性导入。
 - 有界公共 GitHub URL 导入和手动 HEAD 更新检查。
+- PAT 连接创建、可访问仓库读取、仓库选择和撤销；同步本身进入后台 Job。
 - LLM 档案 CRUD。
 - 查询同步、导入和导出状态。
 

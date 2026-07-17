@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: JadeAI Career API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Living API contract for the JadeAI Career fork. Paths marked
     x-implementation-status: planned are not available yet.
@@ -615,6 +615,162 @@ paths:
                   $ref: '#/components/schemas/GitHubConnectionSummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/github/pat-connections:
+    get:
+      tags: [GitHub]
+      operationId: listGithubPatConnections
+      x-requirement-id: GH-007
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Current user's sanitized Fine-grained PAT connections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GitHubPatConnectionSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [GitHub]
+      operationId: createGithubPatConnection
+      x-requirement-id: GH-007
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubPatConnectionRequest'
+      responses:
+        '201':
+          description: Token verified and encrypted connection created; plaintext token is never returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubPatConnectionCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Session is missing or the submitted PAT was rejected by GitHub
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          description: Request body exceeds the bounded JSON limit
+        '415':
+          description: Content-Type is not application/json
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          description: GitHub could not be reached or returned an invalid bounded response
+        '503':
+          description: The server encryption keyring is unavailable
+
+  /api/github/pat-connections/{connectionId}:
+    delete:
+      tags: [GitHub]
+      operationId: revokeGithubPatConnection
+      x-requirement-id: GH-007
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/ConnectionId'
+      responses:
+        '204':
+          description: Credential ciphertext deleted and repositories deselected
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/github/pat-connections/{connectionId}/repositories:
+    get:
+      tags: [GitHub]
+      operationId: listGithubPatRepositories
+      x-requirement-id: GH-007
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/ConnectionId'
+      responses:
+        '200':
+          description: Repositories currently accessible through the owned PAT connection
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GitHubAvailableRepository'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          description: GitHub could not be reached or returned an invalid bounded response
+        '503':
+          description: The encrypted credential cannot currently be decrypted
+    put:
+      tags: [GitHub]
+      operationId: selectGithubPatRepositories
+      x-requirement-id: GH-007
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/ConnectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [repositoryIds]
+              properties:
+                repositoryIds:
+                  type: array
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    type: string
+                    pattern: '^\d{1,30}$'
+      responses:
+        '200':
+          description: Persisted repositories explicitly selected under the owned PAT connection
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GitHubSelectedRepository'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          description: Request body exceeds the bounded JSON limit
+        '415':
+          description: Content-Type is not application/json
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          description: GitHub could not be reached or returned an invalid bounded response
+        '503':
+          description: The encrypted credential cannot currently be decrypted
 
   /api/github/repositories:
     get:
@@ -1425,6 +1581,13 @@ components:
       schema:
         type: string
         format: uuid
+    ConnectionId:
+      name: connectionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     FactId:
       name: factId
       in: path
@@ -1979,6 +2142,94 @@ components:
           type: string
           format: date-time
 
+    GitHubPatConnectionRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 80
+        token:
+          type: string
+          writeOnly: true
+          minLength: 31
+          maxLength: 255
+          pattern: '^github_pat_[A-Za-z0-9_]{20,244}$'
+
+    GitHubPatConnectionCreated:
+      type: object
+      additionalProperties: false
+      required: [id, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: active
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+
+    GitHubPatCredentialSummary:
+      type: object
+      additionalProperties: false
+      required: [label, accountLogin]
+      properties:
+        label:
+          type: string
+          maxLength: 80
+        accountLogin:
+          type: string
+
+    GitHubPatConnectionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - lastSyncedAt
+        - lastErrorCode
+        - createdAt
+        - updatedAt
+        - credential
+        - repositories
+        - recentJobs
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, active, suspended, revoked, error]
+        lastSyncedAt:
+          type: [string, 'null']
+          format: date-time
+        lastErrorCode:
+          type: [string, 'null']
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+        credential:
+          oneOf:
+            - $ref: '#/components/schemas/GitHubPatCredentialSummary'
+            - type: 'null'
+        repositories:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/GitHubSelectedRepository'
+        recentJobs:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/GitHubSyncJobSummary'
+
     GitHubInstallationSummary:
       type: object
       additionalProperties: false
@@ -2084,6 +2335,9 @@ components:
           minimum: 0
         errorCode:
           type: [string, 'null']
+        nextAttemptAt:
+          type: [string, 'null']
+          format: date-time
         createdAt:
           type: [string, 'null']
           format: date-time

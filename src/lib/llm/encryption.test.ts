@@ -1,3 +1,5 @@
+import { createCipheriv } from 'node:crypto';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -40,6 +42,31 @@ describe.sequential('LLM API key encryption', () => {
     expect(newRecord.keyVersion).toBe(2);
     expect(decryptLlmApiKey(oldRecord, context)).toBe('old-secret');
     expect(decryptLlmApiKey(newRecord, context)).toBe('new-secret');
+  });
+
+  it('decrypts records written with the original profileId AAD format', () => {
+    vi.stubEnv('LLM_ENCRYPTION_KEYS', JSON.stringify({ 1: KEY_V1 }));
+    vi.stubEnv('LLM_ENCRYPTION_ACTIVE_KEY_VERSION', '1');
+
+    const iv = Buffer.alloc(12, 7);
+    const cipher = createCipheriv('aes-256-gcm', Buffer.from(KEY_V1, 'base64'), iv);
+    cipher.setAAD(Buffer.from(JSON.stringify({
+      scope: 'jadeai.llm-profile.v1',
+      userId: context.userId,
+      profileId: context.profileId,
+    }), 'utf8'));
+    const ciphertext = Buffer.concat([
+      cipher.update('legacy-secret', 'utf8'),
+      cipher.final(),
+    ]);
+    const legacyRecord = {
+      ciphertext: ciphertext.toString('base64url'),
+      iv: iv.toString('base64url'),
+      tag: cipher.getAuthTag().toString('base64url'),
+      keyVersion: 1,
+    };
+
+    expect(decryptLlmApiKey(legacyRecord, context)).toBe('legacy-secret');
   });
 
   it('rejects swapped ownership metadata and tampered ciphertext', () => {

@@ -63,4 +63,5 @@ GitHub App 的现有只读实现保留并明确标记为可选高级入口；无
 
 - WorkResume v2 浏览器目录上传已实现。
 - 无凭证公共 GitHub URL 导入与手动 HEAD 检查已实现。
-- Fine-grained PAT 私有仓库 Adapter 待实现；GitHub App 仍为可选高级模式。
+- Fine-grained PAT 私有仓库连接、加密保存、明确仓库选择、手动/定时同步和撤销已实现。
+- GitHub App 仍为可选高级模式，其真实安装/Webhook Gate 仅约束启用该模式的部署。

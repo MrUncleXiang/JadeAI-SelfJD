@@ -143,7 +143,7 @@ export const llmFeatureBindings = sqliteTable('llm_feature_bindings', {
 export const sourceConnections = sqliteTable('source_connections', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  provider: text('provider', { enum: ['github'] }).notNull(),
+  provider: text('provider', { enum: ['github', 'github-pat'] }).notNull(),
   status: text('status', {
     enum: ['pending', 'active', 'suspended', 'revoked', 'error'],
   }).notNull().default('pending'),
@@ -153,6 +153,25 @@ export const sourceConnections = sqliteTable('source_connections', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 }, (table) => [
   index('source_connections_user_provider_idx').on(table.userId, table.provider),
+]);
+
+export const githubPatCredentials = sqliteTable('github_pat_credentials', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sourceConnectionId: text('source_connection_id').notNull().unique()
+    .references(() => sourceConnections.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  accountId: text('account_id').notNull(),
+  accountLogin: text('account_login').notNull(),
+  encryptedToken: text('encrypted_token').notNull(),
+  tokenIv: text('token_iv').notNull(),
+  tokenTag: text('token_tag').notNull(),
+  keyVersion: integer('key_version').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  index('github_pat_credentials_user_idx').on(table.userId),
+  index('github_pat_credentials_account_idx').on(table.accountId),
 ]);
 
 export const githubConnectionStates = sqliteTable('github_connection_states', {
@@ -193,7 +212,7 @@ export const sourceRepositories = sqliteTable('source_repositories', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   sourceType: text('source_type', {
-    enum: ['local-workresume', 'uploaded-workresume', 'github-public', 'github'],
+    enum: ['local-workresume', 'uploaded-workresume', 'github-public', 'github-pat', 'github'],
   }).notNull(),
   sourceConnectionId: text('source_connection_id'),
   externalRepositoryId: text('external_repository_id').notNull(),

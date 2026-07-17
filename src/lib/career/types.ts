@@ -17,6 +17,7 @@ export type CareerSourceType =
   | 'local-workresume'
   | 'uploaded-workresume'
   | 'github-public'
+  | 'github-pat'
   | 'github';
 
 export interface CareerFactClaimInput {

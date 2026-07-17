@@ -513,7 +513,14 @@ scenarios:
     when: 用户连接明确指定的私有仓库并执行同步
     then: 有效 PAT 只用于服务端只读请求；失效凭证停止同步；任何响应、日志、浏览器存储和任务载荷均无明文 PAT
     layers: [unit, contract, integration, e2e, security]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/github/pat-token.test.ts
+      - src/lib/github/client.test.ts
+      - src/lib/github/pat-service.test.ts
+      - src/lib/github/sync.test.ts
+      - src/app/api/github/pat-connections/route.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-JD-001
     requirement: JD-001

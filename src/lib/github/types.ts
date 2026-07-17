@@ -1,5 +1,10 @@
 export type GitHubAccountType = 'user' | 'organization';
 
+export interface GitHubAuthenticatedUser {
+  id: string;
+  login: string;
+}
+
 export interface GitHubInstallation {
   id: string;
   account: {

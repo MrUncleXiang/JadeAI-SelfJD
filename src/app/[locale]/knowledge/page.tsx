@@ -17,6 +17,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
+import { GitHubPatSourceCard } from '@/components/knowledge/github-pat-source-card';
 import { GitHubSourceCard } from '@/components/knowledge/github-source-card';
 import { PublicGitHubSourceCard } from '@/components/knowledge/public-github-source-card';
 import { WorkResumeUploadCard } from '@/components/knowledge/workresume-upload-card';
@@ -302,6 +303,8 @@ export default function KnowledgePage() {
       <WorkResumeUploadCard onFactsChanged={load} />
 
       <PublicGitHubSourceCard onFactsChanged={load} />
+
+      <GitHubPatSourceCard onFactsChanged={load} />
 
       <GitHubSourceCard onFactsChanged={load} />
 

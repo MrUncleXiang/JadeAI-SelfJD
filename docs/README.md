@@ -8,7 +8,7 @@
 - 上游仓库：`LingyiChen-AI/JadeAI`
 - 上游版本：`v0.4.1`
 - 上游提交：`ca38294960e4b6f8a1ba66d0106059fcf97c323c`
-- 本地开发分支：`codex/phase-5b-source-connectors`
+- 当前开发分支：`codex/phase-5d-github-pat`
 - 生产安装 `/home/ubuntu/apps/JadeAI` 不在本次开发中直接修改
 
 ## 产品与需求
@@ -28,6 +28,7 @@
 - [JD 导入与定向简历](architecture/jd-ingestion.md)
 - [威胁模型](security/threat-model.md)
 - [OpenAPI 活契约](api/openapi.yaml)
+- [Fine-grained PAT 私有仓库接入](operations/github-pat.md)
 - [GitHub App 部署与真实验收](operations/github-app.md)
 
 ## 决策与执行
