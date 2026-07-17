@@ -417,6 +417,55 @@ export const factReviewEvents = sqliteTable('fact_review_events', {
   index('fact_review_events_user_fact_created_idx').on(table.userId, table.careerFactId, table.createdAt),
 ]);
 
+export const jdSources = sqliteTable('jd_sources', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  inputType: text('input_type', { enum: ['text', 'pdf', 'docx', 'image'] }).notNull(),
+  title: text('title').notNull().default(''),
+  company: text('company').notNull().default(''),
+  jobTitle: text('job_title').notNull().default(''),
+  location: text('location').notNull().default(''),
+  originalFilename: text('original_filename'),
+  mimeType: text('mime_type').notNull().default('text/plain'),
+  sizeBytes: integer('size_bytes').notNull(),
+  contentHash: text('content_hash').notNull(),
+  rawText: text('raw_text').notNull(),
+  normalizedText: text('normalized_text').notNull(),
+  status: text('status', {
+    enum: ['draft', 'parsing', 'needs_review', 'confirmed', 'failed'],
+  }).notNull().default('draft'),
+  parserId: text('parser_id'),
+  parserVersion: text('parser_version'),
+  errorCode: text('error_code'),
+  confirmedAt: integer('confirmed_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  uniqueIndex('jd_sources_user_content_hash_uq').on(table.userId, table.contentHash),
+  index('jd_sources_user_status_updated_idx').on(table.userId, table.status, table.updatedAt),
+]);
+
+export const jdRequirements = sqliteTable('jd_requirements', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  jdSourceId: text('jd_source_id').notNull().references(() => jdSources.id, { onDelete: 'cascade' }),
+  requirementType: text('requirement_type', {
+    enum: ['responsibility', 'hard_skill', 'soft_skill', 'experience', 'education', 'preferred'],
+  }).notNull(),
+  text: text('text').notNull(),
+  normalizedTerm: text('normalized_term').notNull().default(''),
+  aliases: text('aliases', { mode: 'json' }).notNull().default('[]'),
+  priority: text('priority', { enum: ['required', 'preferred', 'normal'] }).notNull().default('normal'),
+  importanceBasisPoints: integer('importance_basis_points').notNull().default(5_000),
+  sourceLocator: text('source_locator', { mode: 'json' }).notNull().default('{}'),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  uniqueIndex('jd_requirements_source_sort_uq').on(table.jdSourceId, table.sortOrder),
+  index('jd_requirements_user_source_idx').on(table.userId, table.jdSourceId),
+]);
+
 export const resumes = sqliteTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id),

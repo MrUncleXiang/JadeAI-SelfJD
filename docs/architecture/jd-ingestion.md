@@ -2,6 +2,18 @@
 
 关联需求：JD-001 至 JD-004、AI-001 至 AI-003、RES-002。
 
+## 当前实现状态
+
+Phase 6A 已实现文字 JD 的首个端到端切片：
+
+- `/zh/jd`、`/en/jd` 支持粘贴、保存、去重、AI 结构化、人工修正和确认。
+- `jd_sources` 与 `jd_requirements` 按用户隔离；相同规范文本按用户和 SHA-256 复用。
+- AI 提取使用用户绑定到 `jd` Feature 的 LLM 档案，JD 内容以不可信数据边界传入。
+- LLM 结果只进入 `needs_review`，用户确认后才进入 `confirmed`。
+- 重新解析或编辑会撤销旧确认，防止下游继续使用未审核变更。
+
+尚未实现：PDF、DOCX、图片导入，Requirement 与 Approved Fact 匹配，以及 Targeted Resume Clone。
+
 ## 1. 输入
 
 首期支持：

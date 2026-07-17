@@ -407,6 +407,51 @@ export const factReviewEvents = pgTable('fact_review_events', {
   index('fact_review_events_user_fact_created_idx').on(table.userId, table.careerFactId, table.createdAt),
 ]);
 
+export const jdSources = pgTable('jd_sources', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  inputType: text('input_type').notNull(),
+  title: text('title').notNull().default(''),
+  company: text('company').notNull().default(''),
+  jobTitle: text('job_title').notNull().default(''),
+  location: text('location').notNull().default(''),
+  originalFilename: text('original_filename'),
+  mimeType: text('mime_type').notNull().default('text/plain'),
+  sizeBytes: integer('size_bytes').notNull(),
+  contentHash: text('content_hash').notNull(),
+  rawText: text('raw_text').notNull(),
+  normalizedText: text('normalized_text').notNull(),
+  status: text('status').notNull().default('draft'),
+  parserId: text('parser_id'),
+  parserVersion: text('parser_version'),
+  errorCode: text('error_code'),
+  confirmedAt: integer('confirmed_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('jd_sources_user_content_hash_uq').on(table.userId, table.contentHash),
+  index('jd_sources_user_status_updated_idx').on(table.userId, table.status, table.updatedAt),
+]);
+
+export const jdRequirements = pgTable('jd_requirements', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  jdSourceId: text('jd_source_id').notNull().references(() => jdSources.id, { onDelete: 'cascade' }),
+  requirementType: text('requirement_type').notNull(),
+  text: text('text').notNull(),
+  normalizedTerm: text('normalized_term').notNull().default(''),
+  aliases: text('aliases').notNull().default('[]'),
+  priority: text('priority').notNull().default('normal'),
+  importanceBasisPoints: integer('importance_basis_points').notNull().default(5_000),
+  sourceLocator: text('source_locator').notNull().default('{}'),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  uniqueIndex('jd_requirements_source_sort_uq').on(table.jdSourceId, table.sortOrder),
+  index('jd_requirements_user_source_idx').on(table.userId, table.jdSourceId),
+]);
+
 export const resumes = pgTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull(),

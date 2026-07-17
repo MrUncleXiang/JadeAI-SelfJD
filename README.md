@@ -274,6 +274,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `SESSION_TTL_DAYS` | No | `30` | Session lifetime, clamped to 1–90 days |
 | `AUTH_URL` | Public standalone deployment | — | Exact browser-facing origin used for same-origin checks on authentication state changes |
 | `AUTH_COOKIE_SECURE` | No | `true` in production | Set to `false` only for a temporary direct-HTTP deployment; production should use HTTPS |
+| `PUBLIC_LANDING_PAGE` | No | `true` | Set to `false` to redirect unauthenticated `/` and locale home pages to account login |
 | `TRUST_PROXY_HEADERS` | No | `false` | Trust proxy-supplied client IP headers for coarse auth rate limits; enable only behind a sanitizing reverse proxy |
 | `ENABLE_FINGERPRINT_AUTH` | No | `false` | Development-only legacy fallback; ignored in production |
 | `SEED_DEMO_DATA` | No | `false` | Explicit development fixture; rejected in production |

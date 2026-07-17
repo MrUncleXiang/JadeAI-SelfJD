@@ -70,6 +70,12 @@ interface LlmBindings {
   interview: string | null;
 }
 
+interface JdSourceRecord {
+  id: string;
+  title: string;
+  status: 'draft' | 'parsing' | 'needs_review' | 'confirmed' | 'failed';
+}
+
 function uniqueUsername(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
 }
@@ -246,6 +252,12 @@ test.beforeEach(async ({ context }) => {
   await installStableBrowserState(context);
 });
 
+test('private instance redirects the public-IP landing page to account login', async ({ page }) => {
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/zh\/login\?callbackUrl=%2F$/);
+  await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
+});
+
 test('career knowledge review workspace is authenticated and queries tenant-scoped facts', async ({ page }) => {
   await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
   await page.route('**/api/github/pat-connections', async (route) => {
@@ -326,6 +338,71 @@ test('browser directory upload creates tenant-scoped career facts', async ({ pag
   const facts = await browserJson<unknown[]>(page, '/api/career-facts');
   expect(facts.status).toBe(200);
   expect(facts.body).toHaveLength(4);
+});
+
+test('text JD workspace saves, reviews, and explicitly confirms tenant-scoped requirements', async ({ page }) => {
+  await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+  await page.goto('/en/jd');
+
+  await expect(page).toHaveURL(/\/en\/jd$/);
+  await expect(page.getByRole('heading', { name: 'Job Descriptions & Targeted Resumes' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Job JD' })).toBeVisible();
+
+  const marker = crypto.randomUUID().slice(0, 8);
+  const title = `Senior Unity Engineer ${marker}`;
+  await page.locator('#jd-title').fill(title);
+  await page.locator('#jd-text').fill(`${title}\nResponsibilities\nBuild reliable Unity editor tools\nRequired skills\nC# and Unity`);
+  const createdResponse = page.waitForResponse((response) => (
+    response.url().endsWith('/api/jd-sources')
+    && response.request().method() === 'POST'
+  ));
+  await page.getByRole('button', { name: 'Save JD' }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  const source = await created.json() as JdSourceRecord;
+  await expect(page.getByText(title, { exact: true })).toBeVisible();
+  await expect(page.getByText('Awaiting extraction').first()).toBeVisible();
+
+  const reviewed = await browserJson<JdSourceRecord>(
+    page,
+    `/api/jd-sources/${source.id}`,
+    'PATCH',
+    {
+      title,
+      company: 'Example Studio',
+      jobTitle: 'Senior Unity Engineer',
+      requirements: [{
+        requirementType: 'hard_skill',
+        text: 'C# and Unity',
+        normalizedTerm: 'unity c#',
+        aliases: ['C Sharp'],
+        priority: 'required',
+        importance: 1,
+        sourceLocator: { line: 5 },
+      }],
+    },
+  );
+  expect(reviewed.status).toBe(200);
+  expect(reviewed.body).toMatchObject({ status: 'needs_review' });
+
+  await page.reload();
+  await expect(page.getByText(title, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Review' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Review structured JD' })).toBeVisible();
+  await dialog.getByLabel('Location').fill('Remote');
+  const confirmedResponse = page.waitForResponse((response) => (
+    response.url().endsWith(`/api/jd-sources/${source.id}/confirm`)
+    && response.request().method() === 'POST'
+  ));
+  await dialog.getByRole('button', { name: 'Confirm JD' }).click();
+  expect((await confirmedResponse).status()).toBe(200);
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText('Confirmed').first()).toBeVisible();
+
+  const confirmed = await browserJson<JdSourceRecord>(page, `/api/jd-sources/${source.id}`);
+  expect(confirmed.status).toBe(200);
+  expect(confirmed.body).toMatchObject({ id: source.id, status: 'confirmed' });
 });
 
 test('registration, invitation, login, logout, CSRF, and last-admin lifecycle', async ({ page }) => {

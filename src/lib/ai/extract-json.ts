@@ -188,6 +188,7 @@ export function extractJson<T>(text: string, schema: ZodType<T>): T {
     } catch {}
   }
 
-  console.error('[extractJson] FULL failed text:\n', cleaned);
+  // Model output may contain a user's resume or JD. Never emit it to server logs.
+  console.error(`[extractJson] Failed to validate model JSON (length=${text.length})`);
   throw new Error(`Failed to extract valid JSON from AI response (length=${text.length})`);
 }

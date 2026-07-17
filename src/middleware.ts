@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
-import { isAccountAuthEnabled } from './lib/config';
+import { isAccountAuthEnabled, isPublicLandingPageEnabled } from './lib/config';
 
 const intlMiddleware = createMiddleware(routing);
 
 // Public paths that don't require authentication (relative to locale prefix)
 const PUBLIC_PATHS = [
-  '/',        // Landing page
   '/login',   // Login page
   '/register', // Registration page (availability is enforced by the API)
   '/share',   // Public share links
@@ -16,9 +15,8 @@ const PUBLIC_PATHS = [
 function isPublicPath(pathname: string): boolean {
   // Strip locale prefix: /zh/dashboard -> /dashboard, /en/ -> /
   const withoutLocale = pathname.replace(/^\/(zh|en)/, '') || '/';
-  return PUBLIC_PATHS.some((p) =>
-    p === '/' ? withoutLocale === '/' : withoutLocale.startsWith(p)
-  );
+  if (withoutLocale === '/') return isPublicLandingPageEnabled();
+  return PUBLIC_PATHS.some((p) => withoutLocale.startsWith(p));
 }
 
 export default async function middleware(request: NextRequest) {

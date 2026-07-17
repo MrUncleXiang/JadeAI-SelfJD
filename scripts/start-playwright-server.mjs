@@ -18,6 +18,7 @@ const env = {
   NODE_ENV: 'development',
   NEXT_TELEMETRY_DISABLED: '1',
   AUTH_ENABLED: 'true',
+  PUBLIC_LANDING_PAGE: 'false',
   ENABLE_FINGERPRINT_AUTH: 'false',
   REGISTRATION_MODE: 'closed',
   DB_TYPE: 'sqlite',

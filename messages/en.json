@@ -1037,6 +1037,73 @@
       "custom": "Custom"
     }
   },
+  "jd": {
+    "nav": "Job JD",
+    "title": "Job Descriptions & Targeted Resumes",
+    "description": "Save a job description, use the LLM profile bound to the JD feature to extract structured requirements, and confirm them before fact matching or targeted resume generation. This first slice supports pasted text; PDF, DOCX, and images follow in later slices.",
+    "refresh": "Refresh",
+    "requestFailed": "The operation failed",
+    "pasteTitle": "Paste a job description",
+    "pasteDescription": "Save the source text first, then use your personal JD LLM profile for structured extraction. Source text and review results are isolated to your account.",
+    "optionalTitle": "Display title (optional)",
+    "titlePlaceholder": "For example: Senior Unity Client Engineer",
+    "jdText": "Job description text",
+    "textPlaceholder": "Paste responsibilities, required qualifications, and preferred qualifications…",
+    "securityNote": "JD content is untrusted data; prompts inside it cannot change system instructions.",
+    "saveSource": "Save JD",
+    "created": "JD saved",
+    "duplicateFound": "Identical content found; the existing JD was reused",
+    "savedSources": "Saved JDs",
+    "sourceCount": "{count} total",
+    "emptyTitle": "No job descriptions yet",
+    "emptyDescription": "Paste a job description to begin.",
+    "requirements": "{count} requirements",
+    "extract": "AI Extract",
+    "extractAgain": "Extract Again",
+    "extracted": "JD requirements extracted; review them before confirmation",
+    "extractFailed": "JD extraction failed",
+    "review": "Review",
+    "reviewTitle": "Review structured JD",
+    "reviewDescription": "Correct role metadata and requirements. Only confirmed JDs can enter fact matching and targeted resume workflows.",
+    "requirementList": "Role requirements",
+    "addRequirement": "Add requirement",
+    "requirementRequired": "Keep at least one requirement",
+    "requirementText": "Exact requirement or accurate summary",
+    "normalizedTerm": "Canonical term",
+    "aliases": "Aliases, comma-separated",
+    "saveReview": "Save Review",
+    "saved": "Review saved",
+    "confirm": "Confirm JD",
+    "reconfirm": "Confirm Again",
+    "confirmed": "JD confirmed and ready for matching",
+    "cancel": "Cancel",
+    "fields": {
+      "title": "Display title",
+      "company": "Company",
+      "jobTitle": "Role title",
+      "location": "Location"
+    },
+    "status": {
+      "draft": "Awaiting extraction",
+      "parsing": "Extracting",
+      "needs_review": "Needs review",
+      "confirmed": "Confirmed",
+      "failed": "Extraction failed"
+    },
+    "types": {
+      "responsibility": "Responsibility",
+      "hard_skill": "Hard skill",
+      "soft_skill": "Soft skill",
+      "experience": "Experience",
+      "education": "Education",
+      "preferred": "Preferred"
+    },
+    "priorities": {
+      "required": "Required",
+      "preferred": "Preferred",
+      "normal": "Normal"
+    }
+  },
   "knowledge": {
     "nav": "Knowledge",
     "title": "Career Knowledge",

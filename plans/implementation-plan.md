@@ -328,6 +328,18 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - 基准简历不变。
 - PDF/DOCX 可打开、文本正确、无内部证据。
 
+### Phase 6A 进展：文本 JD 结构化
+
+- [x] 新增租户隔离的 `jd_sources`、`jd_requirements` 及 SQLite/PostgreSQL 迁移。
+- [x] 文本规范化、每用户内容哈希去重、LLM 结构化提取和不可信数据边界。
+- [x] JD Requirement 审核、修正、确认 API 与 `/[locale]/jd` UI。
+- [x] 重新解析或编辑自动撤销确认；只有 `confirmed` 状态可供后续阶段使用。
+- [x] 单元/Repository 验收覆盖去重、来源定位、租户隔离、审核与确认门禁。
+- [x] 真实浏览器 E2E 覆盖保存、人工修正、确认状态和租户 API。
+- [ ] 生产部署验收。
+- [ ] Phase 6B：PDF、DOCX、图片安全导入。
+- [ ] Phase 6C：Approved Fact 匹配、缺口分析和定向 ResumePatch。
+
 ## 10. Phase 7：面试和现有功能回归
 
 关联：INT-001、INT-002、RES-001。

@@ -1429,11 +1429,25 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   /api/jd-sources:
+    get:
+      tags: [JD]
+      operationId: listJdSources
+      x-requirement-id: JD-001
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Current user's JD sources with reviewable requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JdSource'
     post:
       tags: [JD]
       operationId: createJdSource
       x-requirement-id: JD-001
-      x-implementation-status: planned
+      x-implementation-status: implemented
       requestBody:
         required: true
         content:
@@ -1457,6 +1471,101 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JdSource'
+
+  /api/jd-sources/{jdSourceId}:
+    get:
+      tags: [JD]
+      operationId: getJdSource
+      x-requirement-id: JD-001
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/JdSourceId'
+      responses:
+        '200':
+          description: User-owned JD source and requirements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdSource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [JD]
+      operationId: updateJdSourceReview
+      x-requirement-id: JD-001
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/JdSourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requirements]
+              properties:
+                title:
+                  type: string
+                  maxLength: 240
+                company:
+                  type: string
+                  maxLength: 240
+                jobTitle:
+                  type: string
+                  maxLength: 240
+                location:
+                  type: string
+                  maxLength: 240
+                requirements:
+                  type: array
+                  minItems: 1
+                  maxItems: 120
+                  items:
+                    $ref: '#/components/schemas/JdRequirementInput'
+      responses:
+        '200':
+          description: Review saved and confirmation revoked until explicitly confirmed again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdSource'
+
+  /api/jd-sources/{jdSourceId}/extract:
+    post:
+      tags: [JD]
+      operationId: extractJdRequirements
+      x-requirement-id: JD-001
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/JdSourceId'
+      responses:
+        '200':
+          description: LLM extraction saved in needs_review state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdSource'
+        '422':
+          description: No usable LLM profile is bound to the JD feature
+
+  /api/jd-sources/{jdSourceId}/confirm:
+    post:
+      tags: [JD]
+      operationId: confirmJdSource
+      x-requirement-id: JD-001
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/JdSourceId'
+      responses:
+        '200':
+          description: Reviewed JD confirmed for downstream matching
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdSource'
+        '409':
+          description: JD has no reviewed requirements
 
   /api/jd-sources/{jdSourceId}/analyze:
     post:
@@ -2817,9 +2926,54 @@ components:
           type: string
           format: date-time
 
+    JdRequirementInput:
+      type: object
+      additionalProperties: false
+      required: [requirementType, text]
+      properties:
+        id:
+          type: string
+          format: uuid
+        requirementType:
+          type: string
+          enum: [responsibility, hard_skill, soft_skill, experience, education, preferred]
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        normalizedTerm:
+          type: string
+          maxLength: 240
+        aliases:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 120
+        priority:
+          type: string
+          enum: [required, preferred, normal]
+        importance:
+          type: number
+          minimum: 0
+          maximum: 1
+        sourceLocator:
+          type: object
+          additionalProperties: true
+
+    JdRequirement:
+      allOf:
+        - $ref: '#/components/schemas/JdRequirementInput'
+        - type: object
+          required: [id, normalizedTerm, aliases, priority, importance, sourceLocator, sortOrder]
+          properties:
+            sortOrder:
+              type: integer
+              minimum: 0
+
     JdSource:
       type: object
-      required: [id, inputType, status]
+      required: [id, inputType, title, company, jobTitle, location, contentHash, normalizedText, status, requirements]
       properties:
         id:
           type: string
@@ -2833,9 +2987,34 @@ components:
           type: string
         jobTitle:
           type: string
+        location:
+          type: string
+        contentHash:
+          type: string
+        normalizedText:
+          type: string
         status:
           type: string
           enum: [draft, parsing, needs_review, confirmed, failed]
+        parserId:
+          type: [string, 'null']
+        parserVersion:
+          type: [string, 'null']
+        errorCode:
+          type: [string, 'null']
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/JdRequirement'
 
     Job:
       type: object

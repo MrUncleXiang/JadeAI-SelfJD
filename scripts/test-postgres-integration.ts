@@ -140,7 +140,9 @@ async function main(): Promise<void> {
           'career_fact_evidence',
           'career_fact_claims',
           'career_fact_relations',
-          'fact_review_events'
+          'fact_review_events',
+          'jd_sources',
+          'jd_requirements'
         )
       ORDER BY table_name
     `;
@@ -154,6 +156,8 @@ async function main(): Promise<void> {
         'fact_review_events',
         'github_connection_states',
         'github_installations',
+        'jd_requirements',
+        'jd_sources',
         'resume_change_operations',
         'resume_change_sets',
         'resume_versions',

@@ -1037,6 +1037,73 @@
       "custom": "自定义"
     }
   },
+  "jd": {
+    "nav": "岗位 JD",
+    "title": "岗位 JD 与定向简历",
+    "description": "保存招聘 JD，使用你为 JD 功能绑定的 LLM 提取结构化要求，并在确认后用于事实匹配与定向简历。当前首个切片支持粘贴文字；PDF、DOCX 和图片将在后续切片接入。",
+    "refresh": "刷新",
+    "requestFailed": "操作失败",
+    "pasteTitle": "粘贴招聘 JD",
+    "pasteDescription": "先保存原始文本，再按需调用个人 JD LLM 档案进行结构化提取。原文与审核结果会按当前账号隔离。",
+    "optionalTitle": "显示标题（可选）",
+    "titlePlaceholder": "例如：高级 Unity 客户端工程师",
+    "jdText": "招聘 JD 原文",
+    "textPlaceholder": "粘贴岗位职责、任职要求、优先条件等内容……",
+    "securityNote": "JD 被视为不可信数据；其中的提示词不会改变系统指令。",
+    "saveSource": "保存 JD",
+    "created": "JD 已保存",
+    "duplicateFound": "检测到相同内容，已复用现有 JD",
+    "savedSources": "已保存 JD",
+    "sourceCount": "共 {count} 条",
+    "emptyTitle": "还没有 JD",
+    "emptyDescription": "请先粘贴一份招聘 JD。",
+    "requirements": "{count} 条要求",
+    "extract": "AI 结构化",
+    "extractAgain": "重新结构化",
+    "extracted": "JD 要求已提取，请审核后确认",
+    "extractFailed": "JD 提取失败",
+    "review": "审核",
+    "reviewTitle": "审核结构化 JD",
+    "reviewDescription": "修正岗位信息和要求。只有确认后的 JD 才能进入事实匹配与定向简历流程。",
+    "requirementList": "岗位要求",
+    "addRequirement": "新增要求",
+    "requirementRequired": "至少保留一条岗位要求",
+    "requirementText": "岗位要求原文或准确摘要",
+    "normalizedTerm": "规范术语",
+    "aliases": "别名，用英文逗号分隔",
+    "saveReview": "保存审核",
+    "saved": "审核内容已保存",
+    "confirm": "确认 JD",
+    "reconfirm": "重新确认",
+    "confirmed": "JD 已确认，可用于后续匹配",
+    "cancel": "取消",
+    "fields": {
+      "title": "显示标题",
+      "company": "公司",
+      "jobTitle": "岗位名称",
+      "location": "工作地点"
+    },
+    "status": {
+      "draft": "待解析",
+      "parsing": "解析中",
+      "needs_review": "待审核",
+      "confirmed": "已确认",
+      "failed": "解析失败"
+    },
+    "types": {
+      "responsibility": "岗位职责",
+      "hard_skill": "硬技能",
+      "soft_skill": "软技能",
+      "experience": "经验要求",
+      "education": "学历要求",
+      "preferred": "优先条件"
+    },
+    "priorities": {
+      "required": "必须",
+      "preferred": "优先",
+      "normal": "一般"
+    }
+  },
   "knowledge": {
     "nav": "事实库",
     "title": "职业事实库",

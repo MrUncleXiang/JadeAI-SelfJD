@@ -7,6 +7,14 @@ export function isAccountAuthEnabled(
   return nodeEnv === 'production' || value !== 'false';
 }
 
+export function isPublicLandingPageEnabled(
+  value = process.env.PUBLIC_LANDING_PAGE,
+): boolean {
+  // Keep the upstream marketing page available by default, while allowing a
+  // private self-hosted instance to require login before rendering any page.
+  return value !== 'false';
+}
+
 export const config = {
   auth: {
     enabled: isAccountAuthEnabled(),

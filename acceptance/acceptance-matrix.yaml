@@ -531,7 +531,13 @@ scenarios:
     when: 解析并由用户修正
     then: 保存可追踪的结构化 Requirement
     layers: [unit, contract, e2e]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/jd/normalize.test.ts
+      - src/lib/jd/service.test.ts
+      - src/lib/db/repositories/jd.repository.test.ts
+      - src/app/api/jd-sources/route.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-JD-002
     requirement: JD-002
