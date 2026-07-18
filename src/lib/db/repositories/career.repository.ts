@@ -440,6 +440,197 @@ export const careerRepository = {
     });
   },
 
+  async reviewFactsOwned(
+    userId: string,
+    factIds: string[],
+    decision: 'approve' | 'reject',
+    note?: string,
+  ): Promise<FactRow[]> {
+    if (factIds.length < 1 || factIds.length > 100 || new Set(factIds).size !== factIds.length) {
+      throw new CareerRepositoryError('INVALID_FACT_STATE');
+    }
+    const now = new Date();
+    const nextStatus = decision === 'approve' ? 'approved' : 'rejected';
+    const selectedIds = new Set(factIds);
+
+    if (config.db.type === 'sqlite') {
+      return db.transaction((tx: typeof db) => {
+        const facts = tx.select().from(careerFacts).where(and(
+          eq(careerFacts.userId, userId),
+          inArray(careerFacts.id, factIds),
+        )).all();
+        if (facts.length !== factIds.length || facts.some((fact: FactRow) => fact.status !== 'draft')) {
+          throw new CareerRepositoryError('INVALID_FACT_STATE');
+        }
+        const evidence = tx.select({ careerFactId: careerFactEvidence.careerFactId })
+          .from(careerFactEvidence).where(and(
+            eq(careerFactEvidence.userId, userId),
+            inArray(careerFactEvidence.careerFactId, factIds),
+          )).all();
+        const factsWithEvidence = new Set(evidence.map((item: { careerFactId: string }) => item.careerFactId));
+        if (facts.some((fact: FactRow) => !factsWithEvidence.has(fact.id))) {
+          throw new CareerRepositoryError('INVALID_FACT_STATE');
+        }
+
+        const relations = decision === 'approve'
+          ? tx.select().from(careerFactRelations).where(and(
+            eq(careerFactRelations.userId, userId),
+            inArray(careerFactRelations.careerFactId, factIds),
+            eq(careerFactRelations.relationType, 'merged-from'),
+          )).all()
+          : [];
+        if (decision === 'approve' && facts.some((fact: FactRow) => (
+          (fact.supersedesFactId && selectedIds.has(fact.supersedesFactId))
+          || relations.some((relation: typeof careerFactRelations.$inferSelect) => (
+            relation.careerFactId === fact.id && selectedIds.has(relation.relatedFactId)
+          ))
+        ))) {
+          throw new CareerRepositoryError('INVALID_FACT_STATE');
+        }
+
+        const factById = new Map<string, FactRow>(
+          facts.map((fact: FactRow): [string, FactRow] => [fact.id, fact]),
+        );
+        for (const factId of factIds) {
+          const existing = factById.get(factId)!;
+          const before = factState(existing);
+          tx.update(careerFacts).set({
+            status: nextStatus,
+            approvedBy: decision === 'approve' ? userId : null,
+            approvedAt: decision === 'approve' ? now : null,
+            updatedAt: now,
+          }).where(and(eq(careerFacts.id, factId), eq(careerFacts.userId, userId))).run();
+
+          if (decision === 'approve') {
+            const supersededIds = new Set<string>();
+            if (existing.supersedesFactId) supersededIds.add(existing.supersedesFactId);
+            relations.filter((relation: typeof careerFactRelations.$inferSelect) => relation.careerFactId === factId)
+              .forEach((relation: typeof careerFactRelations.$inferSelect) => supersededIds.add(relation.relatedFactId));
+            for (const sourceId of supersededIds) {
+              const source = tx.select().from(careerFacts).where(and(
+                eq(careerFacts.id, sourceId), eq(careerFacts.userId, userId),
+              )).limit(1).get();
+              if (!source || source.status === 'superseded') continue;
+              tx.update(careerFacts).set({ status: 'superseded', supersededByFactId: factId, updatedAt: now })
+                .where(and(eq(careerFacts.id, sourceId), eq(careerFacts.userId, userId))).run();
+              tx.insert(factReviewEvents).values(eventValues({
+                userId, factId: sourceId, actorUserId: userId, action: 'superseded',
+                beforeState: factState(source),
+                afterState: { ...factState(source), status: 'superseded', supersededByFactId: factId },
+                note: `Superseded by ${factId}`,
+              })).run();
+            }
+          }
+
+          const updated = tx.select().from(careerFacts).where(eq(careerFacts.id, factId)).limit(1).get()!;
+          tx.insert(factReviewEvents).values(eventValues({
+            userId, factId, actorUserId: userId,
+            action: decision === 'approve' ? 'approved' : 'rejected',
+            beforeState: before,
+            afterState: factState(updated),
+            note,
+          })).run();
+        }
+
+        const updated = tx.select().from(careerFacts).where(and(
+          eq(careerFacts.userId, userId), inArray(careerFacts.id, factIds),
+        )).all();
+        const updatedById = new Map<string, FactRow>(
+          updated.map((fact: FactRow): [string, FactRow] => [fact.id, fact]),
+        );
+        return factIds.map((factId) => updatedById.get(factId)!);
+      });
+    }
+
+    return db.transaction(async (tx: typeof db) => {
+      const facts = await tx.select().from(careerFacts).where(and(
+        eq(careerFacts.userId, userId),
+        inArray(careerFacts.id, factIds),
+      ));
+      if (facts.length !== factIds.length || facts.some((fact: FactRow) => fact.status !== 'draft')) {
+        throw new CareerRepositoryError('INVALID_FACT_STATE');
+      }
+      const evidence = await tx.select({ careerFactId: careerFactEvidence.careerFactId })
+        .from(careerFactEvidence).where(and(
+          eq(careerFactEvidence.userId, userId),
+          inArray(careerFactEvidence.careerFactId, factIds),
+        ));
+      const factsWithEvidence = new Set(evidence.map((item: { careerFactId: string }) => item.careerFactId));
+      if (facts.some((fact: FactRow) => !factsWithEvidence.has(fact.id))) {
+        throw new CareerRepositoryError('INVALID_FACT_STATE');
+      }
+
+      const relations = decision === 'approve'
+        ? await tx.select().from(careerFactRelations).where(and(
+          eq(careerFactRelations.userId, userId),
+          inArray(careerFactRelations.careerFactId, factIds),
+          eq(careerFactRelations.relationType, 'merged-from'),
+        ))
+        : [];
+      if (decision === 'approve' && facts.some((fact: FactRow) => (
+        (fact.supersedesFactId && selectedIds.has(fact.supersedesFactId))
+        || relations.some((relation: typeof careerFactRelations.$inferSelect) => (
+          relation.careerFactId === fact.id && selectedIds.has(relation.relatedFactId)
+        ))
+      ))) {
+        throw new CareerRepositoryError('INVALID_FACT_STATE');
+      }
+
+      const factById = new Map<string, FactRow>(
+        facts.map((fact: FactRow): [string, FactRow] => [fact.id, fact]),
+      );
+      for (const factId of factIds) {
+        const existing = factById.get(factId)!;
+        const before = factState(existing);
+        await tx.update(careerFacts).set({
+          status: nextStatus,
+          approvedBy: decision === 'approve' ? userId : null,
+          approvedAt: decision === 'approve' ? now : null,
+          updatedAt: now,
+        }).where(and(eq(careerFacts.id, factId), eq(careerFacts.userId, userId)));
+
+        if (decision === 'approve') {
+          const supersededIds = new Set<string>();
+          if (existing.supersedesFactId) supersededIds.add(existing.supersedesFactId);
+          relations.filter((relation: typeof careerFactRelations.$inferSelect) => relation.careerFactId === factId)
+            .forEach((relation: typeof careerFactRelations.$inferSelect) => supersededIds.add(relation.relatedFactId));
+          for (const sourceId of supersededIds) {
+            const sources = await tx.select().from(careerFacts).where(and(
+              eq(careerFacts.id, sourceId), eq(careerFacts.userId, userId),
+            )).limit(1);
+            const source = sources[0];
+            if (!source || source.status === 'superseded') continue;
+            await tx.update(careerFacts).set({ status: 'superseded', supersededByFactId: factId, updatedAt: now })
+              .where(and(eq(careerFacts.id, sourceId), eq(careerFacts.userId, userId)));
+            await tx.insert(factReviewEvents).values(eventValues({
+              userId, factId: sourceId, actorUserId: userId, action: 'superseded',
+              beforeState: factState(source),
+              afterState: { ...factState(source), status: 'superseded', supersededByFactId: factId },
+              note: `Superseded by ${factId}`,
+            }));
+          }
+        }
+
+        const updatedRows = await tx.select().from(careerFacts).where(eq(careerFacts.id, factId)).limit(1);
+        await tx.insert(factReviewEvents).values(eventValues({
+          userId, factId, actorUserId: userId,
+          action: decision === 'approve' ? 'approved' : 'rejected',
+          beforeState: before,
+          afterState: factState(updatedRows[0]),
+          note,
+        }));
+      }
+
+      const updated = await tx.select().from(careerFacts).where(and(
+        eq(careerFacts.userId, userId), inArray(careerFacts.id, factIds),
+      ));
+      const updatedById = new Map<string, FactRow>(
+        updated.map((fact: FactRow): [string, FactRow] => [fact.id, fact]),
+      );
+      return factIds.map((factId) => updatedById.get(factId)!);
+    });
+  },
+
   async mergeFactsOwned(userId: string, factIds: string[], input: {
     factType: CareerFactType;
     canonicalKey: string;

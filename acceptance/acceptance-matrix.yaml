@@ -354,16 +354,19 @@ scenarios:
     requirement: KB-002
     phase: 4
     priority: must
-    title: 事实审核复用
-    given: Draft、Approved、Rejected 事实
-    when: 生成多个简历
-    then: 只有 Approved 自动参与且可以跨简历复用
+    title: 批量事实审核与可审阅复用
+    given: 当前用户拥有 Draft、Approved、Rejected 事实及另一用户的事实
+    when: 批量批准或拒绝 Draft，并从已批准知识生成简历
+    then: 批量操作仅修改当前用户的有效 Draft；只有 Approved 进入 AI 上下文，且生成结果以未应用 Change Set 进入逐项 Diff 审阅
     layers: [integration, e2e]
     automationStatus: automated
     automationEvidence:
       - src/lib/db/repositories/career.repository.test.ts
       - src/lib/db/repositories/resume-change.repository.test.ts
       - src/app/api/career-facts/career-fact-routes.test.ts
+      - src/app/api/career-facts/review/route.test.ts
+      - src/lib/resume/from-knowledge.test.ts
+      - src/app/api/resumes/from-knowledge/route.test.ts
       - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-KB-003
@@ -548,7 +551,12 @@ scenarios:
     when: 上传和解析
     then: 合法文件可修正，恶意或超限文件被拒绝
     layers: [unit, integration, security]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/jd/image-ingestion.test.ts
+      - src/lib/jd/service.test.ts
+      - src/app/api/jd-sources/image/route.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-JD-003
     requirement: JD-003

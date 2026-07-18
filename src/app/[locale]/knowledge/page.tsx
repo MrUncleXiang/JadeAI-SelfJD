@@ -7,11 +7,13 @@ import {
   Database,
   FileText,
   GitCommitHorizontal,
+  ListChecks,
   Loader2,
   Merge,
   Pencil,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   XCircle,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -21,6 +23,7 @@ import { GitHubPatSourceCard } from '@/components/knowledge/github-pat-source-ca
 import { GitHubSourceCard } from '@/components/knowledge/github-source-card';
 import { PublicGitHubSourceCard } from '@/components/knowledge/public-github-source-card';
 import { WorkResumeUploadCard } from '@/components/knowledge/workresume-upload-card';
+import { GenerateResumeDialog } from '@/components/dashboard/generate-resume-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -136,6 +139,7 @@ export default function KnowledgePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
   const [editingFact, setEditingFact] = useState<CareerFact | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editSummary, setEditSummary] = useState('');
@@ -144,6 +148,7 @@ export default function KnowledgePage() {
   const [mergeType, setMergeType] = useState<FactType>('project');
   const [mergeTitle, setMergeTitle] = useState('');
   const [mergeSummary, setMergeSummary] = useState('');
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -156,6 +161,9 @@ export default function KnowledgePage() {
       setFacts(result);
       setSelectedIds((current) => new Set(
         [...current].filter((id) => result.some((fact) => fact.id === id && isMergeableFact(fact))),
+      ));
+      setSelectedDraftIds((current) => new Set(
+        [...current].filter((id) => result.some((fact) => fact.id === id && fact.status === 'draft')),
       ));
     } catch (error) {
       toast.error(t('requestFailed'), {
@@ -174,6 +182,14 @@ export default function KnowledgePage() {
     () => facts.filter((fact) => selectedIds.has(fact.id)),
     [facts, selectedIds],
   );
+  const draftFacts = useMemo(
+    () => facts.filter((fact) => fact.status === 'draft'),
+    [facts],
+  );
+  const selectedDraftFacts = useMemo(
+    () => draftFacts.filter((fact) => selectedDraftIds.has(fact.id)),
+    [draftFacts, selectedDraftIds],
+  );
 
   function toggleSelected(fact: CareerFact) {
     if (!isMergeableFact(fact)) return;
@@ -183,6 +199,24 @@ export default function KnowledgePage() {
       else next.add(fact.id);
       return next;
     });
+  }
+
+  function toggleDraftSelected(fact: CareerFact) {
+    if (fact.status !== 'draft') return;
+    setSelectedDraftIds((current) => {
+      const next = new Set(current);
+      if (next.has(fact.id)) next.delete(fact.id);
+      else next.add(fact.id);
+      return next;
+    });
+  }
+
+  function toggleAllDrafts() {
+    setSelectedDraftIds((current) => (
+      draftFacts.length > 0 && draftFacts.every((fact) => current.has(fact.id))
+        ? new Set()
+        : new Set(draftFacts.map((fact) => fact.id))
+    ));
   }
 
   function openEdit(fact: CareerFact) {
@@ -239,6 +273,31 @@ export default function KnowledgePage() {
     }
   }
 
+  async function reviewSelected(decision: 'approve' | 'reject') {
+    if (selectedDraftFacts.length < 1) return;
+    setBusyId(`batch-${decision}`);
+    try {
+      await api<CareerFact[]>('/api/career-facts/review', {
+        method: 'POST',
+        body: JSON.stringify({
+          factIds: selectedDraftFacts.map((fact) => fact.id),
+          decision,
+        }),
+      });
+      toast.success(decision === 'approve'
+        ? t('batchApproved', { count: selectedDraftFacts.length })
+        : t('batchRejected', { count: selectedDraftFacts.length }));
+      setSelectedDraftIds(new Set());
+      await load();
+    } catch (error) {
+      toast.error(t('requestFailed'), {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function prepareMerge() {
     if (selectedFacts.length < 2) return;
     const firstType = selectedFacts[0]?.factType || 'project';
@@ -285,6 +344,10 @@ export default function KnowledgePage() {
           <p className="mt-1 max-w-3xl text-sm text-zinc-500">{t('description')}</p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => setGenerateOpen(true)} disabled={busyId !== null}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            {t('generateFromKnowledge')}
+          </Button>
           <Button
             variant="outline"
             onClick={prepareMerge}
@@ -307,6 +370,63 @@ export default function KnowledgePage() {
       <GitHubPatSourceCard onFactsChanged={load} />
 
       <GitHubSourceCard onFactsChanged={load} />
+
+      <Card className={draftFacts.length > 0 ? 'border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/10' : undefined}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ListChecks className="h-5 w-5 text-amber-600" />
+                {t('reviewQueueTitle')}
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {draftFacts.length > 0
+                  ? t('reviewQueueDescription', { count: draftFacts.length })
+                  : t('reviewQueueEmpty')}
+              </CardDescription>
+            </div>
+            {draftFacts.length > 0 && (
+              <Button variant="outline" size="sm" onClick={toggleAllDrafts} disabled={busyId !== null}>
+                {draftFacts.every((fact) => selectedDraftIds.has(fact.id))
+                  ? t('clearDraftSelection')
+                  : t('selectAllDrafts', { count: draftFacts.length })}
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        {draftFacts.length > 0 && (
+          <CardContent>
+            <div className="flex flex-col gap-3 rounded-lg border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                {t('selectedDrafts', { count: selectedDraftFacts.length })}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void reviewSelected('reject')}
+                  disabled={selectedDraftFacts.length < 1 || busyId !== null}
+                >
+                  {busyId === 'batch-reject'
+                    ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    : <XCircle className="mr-1.5 h-3.5 w-3.5" />}
+                  {t('rejectSelected')}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void reviewSelected('approve')}
+                  disabled={selectedDraftFacts.length < 1 || busyId !== null}
+                >
+                  {busyId === 'batch-approve'
+                    ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    : <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />}
+                  {t('approveSelected')}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       <Card>
         <CardContent className="flex flex-wrap gap-3 pt-6">
@@ -354,18 +474,27 @@ export default function KnowledgePage() {
             const allowedClaims = fact.claims.filter((claim) => claim.type === 'allowed');
             const forbiddenClaims = fact.claims.filter((claim) => claim.type === 'forbidden');
             const isBusy = busyId === fact.id;
+            const selectedForReview = selectedDraftIds.has(fact.id);
+            const selectedForMerge = selectedIds.has(fact.id);
             return (
-              <Card key={fact.id} className={selectedIds.has(fact.id) ? 'ring-2 ring-brand/60' : undefined}>
+              <Card
+                key={fact.id}
+                className={selectedForMerge
+                  ? 'ring-2 ring-brand/60'
+                  : selectedForReview ? 'ring-2 ring-amber-400/70' : undefined}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(fact.id)}
-                      disabled={!isMergeableFact(fact) || busyId !== null}
-                      onChange={() => toggleSelected(fact)}
-                      aria-label={t('selectFact', { title: fact.title })}
-                      className="mt-1 h-4 w-4 rounded border-zinc-300 accent-zinc-900"
-                    />
+                    {fact.status === 'draft' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedForReview}
+                        disabled={busyId !== null}
+                        onChange={() => toggleDraftSelected(fact)}
+                        aria-label={t('selectFactForReview', { title: fact.title })}
+                        className="mt-1 h-4 w-4 rounded border-zinc-300 accent-amber-600"
+                      />
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 flex flex-wrap gap-2">
                         <Badge variant="outline">{t(`type.${fact.factType}`)}</Badge>
@@ -382,12 +511,12 @@ export default function KnowledgePage() {
                     {fact.summary || t('noSummary')}
                   </p>
 
-                  <div className="rounded-lg border bg-zinc-50/70 p-3 dark:bg-zinc-950/40">
-                    <div className="mb-2 flex items-center justify-between gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                  <details className="group rounded-lg border bg-zinc-50/70 p-3 dark:bg-zinc-950/40">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">
                       <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />{t('evidence', { count: fact.evidence.length })}</span>
                       <span>{t('confidence', { value: Math.round(fact.confidence * 100) })}</span>
-                    </div>
-                    <div className="space-y-2">
+                    </summary>
+                    <div className="mt-3 space-y-2">
                       {fact.evidence.slice(0, 4).map((evidence) => (
                         <div key={evidence.id} className="rounded-md bg-white p-2 text-xs shadow-sm dark:bg-zinc-900">
                           <div className="flex min-w-0 items-center gap-1.5 font-mono text-zinc-700 dark:text-zinc-200">
@@ -406,30 +535,47 @@ export default function KnowledgePage() {
                         <p className="text-xs text-zinc-500">{t('moreEvidence', { count: fact.evidence.length - 4 })}</p>
                       )}
                     </div>
-                  </div>
+                  </details>
 
                   {(allowedClaims.length > 0 || forbiddenClaims.length > 0) && (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
+                    <details className="rounded-lg border p-3">
+                      <summary className="cursor-pointer text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                        {t('claimDetails', { count: allowedClaims.length + forbiddenClaims.length })}
+                      </summary>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
                         <div className="mb-1 flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
                           <Check className="h-3.5 w-3.5" />{t('allowedClaims', { count: allowedClaims.length })}
                         </div>
                         <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
                           {allowedClaims.slice(0, 3).map((claim) => <li key={claim.id}>• {claim.claim}</li>)}
                         </ul>
-                      </div>
-                      <div>
+                        </div>
+                        <div>
                         <div className="mb-1 flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400">
                           <Ban className="h-3.5 w-3.5" />{t('forbiddenClaims', { count: forbiddenClaims.length })}
                         </div>
                         <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
                           {forbiddenClaims.slice(0, 3).map((claim) => <li key={claim.id}>• {claim.claim}</li>)}
                         </ul>
+                        </div>
                       </div>
-                    </div>
+                    </details>
                   )}
 
-                  <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                    {isMergeableFact(fact) && (
+                      <Button
+                        variant={selectedForMerge ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => toggleSelected(fact)}
+                        disabled={busyId !== null}
+                      >
+                        <Merge className="mr-1.5 h-3.5 w-3.5" />
+                        {selectedForMerge ? t('removeFromMerge') : t('addToMerge')}
+                      </Button>
+                    )}
+                    <div className="ml-auto flex flex-wrap justify-end gap-2">
                     {fact.status !== 'superseded' && (
                       <Button variant="outline" size="sm" onClick={() => openEdit(fact)} disabled={busyId !== null}>
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />{t('edit')}
@@ -447,6 +593,7 @@ export default function KnowledgePage() {
                         </Button>
                       </>
                     )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -492,6 +639,11 @@ export default function KnowledgePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GenerateResumeDialog
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+      />
 
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
         <DialogContent className="sm:max-w-xl">

@@ -82,6 +82,7 @@ interface ResumeChangeReviewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   refreshKey: number;
+  initialChangeSetId?: string;
 }
 
 function headers(): Record<string, string> {
@@ -130,6 +131,7 @@ export function ResumeChangeReview({
   open,
   onOpenChange,
   refreshKey,
+  initialChangeSetId,
 }: ResumeChangeReviewProps) {
   const t = useTranslations('ai.resumeChanges');
   const [changeSets, setChangeSets] = useState<ResumeChangeSet[]>([]);
@@ -179,9 +181,13 @@ export function ResumeChangeReview({
     if (selectedChangeSetId && changeSets.some((changeSet) => changeSet.id === selectedChangeSetId)) {
       return;
     }
-    const next = changeSets.find((changeSet) => isApplicable(changeSet.status)) || changeSets[0];
+    const next = (initialChangeSetId
+      ? changeSets.find((changeSet) => changeSet.id === initialChangeSetId)
+      : undefined)
+      || changeSets.find((changeSet) => isApplicable(changeSet.status))
+      || changeSets[0];
     setSelectedChangeSetId(next?.id);
-  }, [changeSets, selectedChangeSetId]);
+  }, [changeSets, initialChangeSetId, selectedChangeSetId]);
 
   const activeChangeSet = useMemo(
     () => changeSets.find((changeSet) => changeSet.id === selectedChangeSetId),

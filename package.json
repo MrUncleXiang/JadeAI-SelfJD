@@ -70,6 +70,7 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
+    "sharp": "0.34.5",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "undici": "^7.28.0",

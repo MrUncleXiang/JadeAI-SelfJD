@@ -111,6 +111,74 @@ export const jdRepository = {
     return { source: serializeSource(rows[0]), created: rows[0].id === id };
   },
 
+  async findSourceByContentHashOwned(userId: string, contentHash: string) {
+    const rows = await db.select().from(jdSources).where(and(
+      eq(jdSources.userId, userId),
+      eq(jdSources.contentHash, contentHash),
+    )).limit(1);
+    return rows[0] ? (await attachRequirements(rows))[0] : null;
+  },
+
+  async createImageReviewOwned(input: {
+    userId: string;
+    title: string;
+    company: string;
+    jobTitle: string;
+    location: string;
+    originalFilename: string;
+    mimeType: string;
+    sizeBytes: number;
+    contentHash: string;
+    normalizedText: string;
+    parserId: string;
+    parserVersion: string;
+    requirements: Array<JdRequirementInput & { sortOrder: number; importance: number }>;
+  }) {
+    const id = crypto.randomUUID();
+    const requirements = requirementValues(input.userId, id, input.requirements);
+    const sourceValues = {
+      id,
+      userId: input.userId,
+      inputType: 'image' as const,
+      title: input.title,
+      company: input.company,
+      jobTitle: input.jobTitle,
+      location: input.location,
+      originalFilename: input.originalFilename,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+      contentHash: input.contentHash,
+      // Phase 6B.1 intentionally stores extracted text, not uploaded binary data.
+      rawText: input.normalizedText,
+      normalizedText: input.normalizedText,
+      status: 'needs_review' as const,
+      parserId: input.parserId,
+      parserVersion: input.parserVersion,
+    } satisfies typeof jdSources.$inferInsert;
+
+    if (config.db.type === 'sqlite') {
+      db.transaction((tx: typeof db) => {
+        const inserted = tx.insert(jdSources).values(sourceValues).onConflictDoNothing().run();
+        if (inserted.changes > 0 && requirements.length > 0) {
+          tx.insert(jdRequirements).values(requirements).run();
+        }
+      });
+    } else {
+      await db.transaction(async (tx: typeof db) => {
+        const inserted = await tx.insert(jdSources).values(sourceValues)
+          .onConflictDoNothing()
+          .returning({ id: jdSources.id });
+        if (inserted.length > 0 && requirements.length > 0) {
+          await tx.insert(jdRequirements).values(requirements);
+        }
+      });
+    }
+
+    const source = await this.findSourceByContentHashOwned(input.userId, input.contentHash);
+    if (!source) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
+    return { source, created: source.id === id };
+  },
+
   async listSourcesOwned(userId: string) {
     const rows = await db.select().from(jdSources)
       .where(eq(jdSources.userId, userId))

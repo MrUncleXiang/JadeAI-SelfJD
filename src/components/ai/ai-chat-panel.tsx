@@ -25,6 +25,8 @@ interface ChatSession {
 interface AIChatContentProps {
   resumeId: string;
   hideTitle?: boolean;
+  initialChangeReviewOpen?: boolean;
+  initialChangeSetId?: string;
 }
 
 function getHeaders(): Record<string, string> {
@@ -44,7 +46,12 @@ function formatTime(date: Date | number | null) {
 }
 
 /** Headless chat body — reusable in both side panel and floating bubble */
-export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
+export function AIChatContent({
+  resumeId,
+  hideTitle,
+  initialChangeReviewOpen = false,
+  initialChangeSetId,
+}: AIChatContentProps) {
   const t = useTranslations('ai');
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -54,9 +61,13 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>();
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [changeReviewOpen, setChangeReviewOpen] = useState(false);
+  const [changeReviewOpen, setChangeReviewOpen] = useState(initialChangeReviewOpen);
   const [changeReviewRefreshKey, setChangeReviewRefreshKey] = useState(0);
   const [isProposing, setIsProposing] = useState(false);
+
+  useEffect(() => {
+    if (initialChangeReviewOpen) setChangeReviewOpen(true);
+  }, [initialChangeReviewOpen]);
 
   const { historicalMessages, hasMore, isLoadingMore, loadInitial, loadMore, reset: resetPagination } = useMessagePagination();
 
@@ -301,6 +312,7 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
             open={changeReviewOpen}
             onOpenChange={setChangeReviewOpen}
             refreshKey={changeReviewRefreshKey}
+            initialChangeSetId={initialChangeSetId}
           />
 
           {/* History popover */}

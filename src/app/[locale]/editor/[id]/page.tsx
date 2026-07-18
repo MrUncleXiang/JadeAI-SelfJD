@@ -30,6 +30,7 @@ import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { takePendingOptimizeMessage } from '@/lib/pending-optimize';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useSearchParams } from 'next/navigation';
 
 const EDITOR_TOUR_STEPS: TourStepConfig[] = [
   { target: 'sidebar', placement: 'right', i18nKey: 'sidebar' },
@@ -41,6 +42,9 @@ const EDITOR_TOUR_STEPS: TourStepConfig[] = [
 
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  const reviewGeneratedChanges = searchParams.get('reviewChanges') === '1';
+  const generatedChangeSetId = searchParams.get('changeSetId') || undefined;
   const { isLoading: fpLoading } = useFingerprint();
   const { resume, sections, updateSection, addSection, removeSection, reorderSections } = useEditor(id);
   const isMobile = useIsMobile();
@@ -90,6 +94,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       setShowAiChat(true);
     }
   }, [resume, id, setPendingAiMessage, setShowAiChat]);
+
+  useEffect(() => {
+    if (reviewGeneratedChanges) setShowAiChat(true);
+  }, [reviewGeneratedChanges, setShowAiChat]);
 
   if (fpLoading || !resume) {
     return (
@@ -165,7 +173,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         </SheetContent>
       </Sheet>
 
-      <AIChatBubble resumeId={id} />
+      <AIChatBubble
+        resumeId={id}
+        initialChangeReviewOpen={reviewGeneratedChanges}
+        initialChangeSetId={generatedChangeSetId}
+      />
       <SettingsDialog />
       <JdAnalysisDialog
         open={activeModal === 'jd-analysis'}

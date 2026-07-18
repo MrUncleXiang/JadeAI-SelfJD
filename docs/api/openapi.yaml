@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: JadeAI Career API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Living API contract for the JadeAI Career fork. Paths marked
     x-implementation-status: planned are not available yet.
@@ -1121,6 +1121,54 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/career-facts/review:
+    post:
+      tags: [Knowledge]
+      operationId: reviewCareerFacts
+      x-requirement-id: KB-002
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [factIds, decision]
+              properties:
+                factIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                decision:
+                  type: string
+                  enum: [approve, reject]
+                note:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '200':
+          description: All selected user-owned draft facts were reviewed atomically
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CareerFact'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /api/career-facts/merge:
     post:
       tags: [Knowledge]
@@ -1258,6 +1306,72 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /api/resumes/from-knowledge:
+    post:
+      tags: [ResumeChange]
+      operationId: createResumeFromKnowledge
+      x-requirement-id: KB-002
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                template:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                language:
+                  type: string
+                  enum: [zh, en]
+                targetRole:
+                  type: string
+                  maxLength: 240
+                instruction:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '201':
+          description: A baseline resume and evidence-backed reviewable Change Set were created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [resumeId, changeSetId, title, operationCount]
+                properties:
+                  resumeId:
+                    type: string
+                    format: uuid
+                  changeSetId:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  operationCount:
+                    type: integer
+                    minimum: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: No approved career facts are available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
   /api/resumes/{resumeId}/change-sets:
     get:
@@ -1471,6 +1585,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JdSource'
+
+  /api/jd-sources/image:
+    post:
+      tags: [JD]
+      operationId: createJdSourceFromImage
+      x-requirement-id: JD-002
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PNG, JPEG or WebP; maximum 10 MiB and 40 megapixels.
+                title:
+                  type: string
+                  maxLength: 240
+      responses:
+        '200':
+          description: An existing source with the same decoded image content was returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdSource'
+        '201':
+          description: Image text and requirements were extracted into a reviewable source; raw image bytes were not retained
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          description: Image or multipart payload exceeds the upload boundary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Unsupported multipart request or image media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: No tested vision-capable LLM profile is bound to the vision feature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Vision extraction failed or returned an invalid result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/jd-sources/{jdSourceId}:
     get:
@@ -2989,6 +3169,13 @@ components:
           type: string
         location:
           type: string
+        originalFilename:
+          type: [string, 'null']
+        mimeType:
+          type: [string, 'null']
+        sizeBytes:
+          type: [integer, 'null']
+          minimum: 0
         contentHash:
           type: string
         normalizedText:
@@ -3011,6 +3198,9 @@ components:
         updatedAt:
           type: [string, 'null']
           format: date-time
+        deduplicated:
+          type: boolean
+          description: Present on creation responses; true when an existing source was returned.
         requirements:
           type: array
           items:

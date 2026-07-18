@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import sharp from 'sharp';
 
 vi.hoisted(() => {
   process.env.DB_TYPE = 'sqlite';
@@ -121,6 +122,92 @@ describe('JD extraction service', () => {
       errorCode: 'LLM_PROFILE_REQUIRED',
       normalizedText: expect.stringContaining('Own product delivery'),
     });
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it('uses only a probed Vision binding and stores an image result for human review', async () => {
+    const buffer = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#ffffff' },
+    }).png().toBuffer();
+    mocks.resolveLlmConfig.mockResolvedValueOnce({
+      provider: 'openai-compatible',
+      apiKey: 'test-only',
+      baseURL: 'https://llm.test/v1',
+      model: 'vision-test-model',
+      capabilities: { vision: true },
+    });
+    mocks.generateText.mockResolvedValueOnce({
+      text: JSON.stringify({
+        normalizedText: `高级 Unity 工程师 ${suffix}\n要求：熟练使用 C# 与 Unity`,
+        title: '高级 Unity 工程师',
+        company: '',
+        jobTitle: '高级 Unity 工程师',
+        location: '',
+        requirements: [{
+          requirementType: 'hard_skill',
+          text: '熟练使用 C# 与 Unity',
+          normalizedTerm: 'unity c#',
+          aliases: [],
+          priority: 'required',
+          importance: 1,
+          sourceText: '熟练使用 C# 与 Unity',
+        }],
+      }),
+    });
+
+    const created = await jdService.createImageSource(actor, {
+      buffer,
+      filename: 'unity-jd.png',
+      mimeType: 'image/png',
+    });
+    expect(created).toMatchObject({ created: true });
+    expect(created.source).toMatchObject({
+      inputType: 'image',
+      status: 'needs_review',
+      originalFilename: 'unity-jd.png',
+      mimeType: 'image/png',
+      parserId: 'vision-jd-extractor',
+      requirements: [expect.objectContaining({
+        text: '熟练使用 C# 与 Unity',
+        sourceLocator: expect.objectContaining({ image: 1, line: 2 }),
+      })],
+    });
+    expect(mocks.resolveLlmConfig).toHaveBeenCalledWith(userId, 'vision');
+    expect(mocks.generateText).toHaveBeenCalledWith(expect.objectContaining({
+      system: expect.stringContaining('untrusted data'),
+      messages: [expect.objectContaining({
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'image', image: buffer, mediaType: 'image/png' }),
+        ]),
+      })],
+    }));
+
+    const duplicate = await jdService.createImageSource(actor, {
+      buffer,
+      filename: 'unity-jd.png',
+      mimeType: 'image/png',
+    });
+    expect(duplicate).toMatchObject({ created: false, source: { id: created.source.id } });
+    expect(mocks.generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send an image when the bound profile has not passed the Vision probe', async () => {
+    const buffer = await sharp({
+      create: { width: 32, height: 32, channels: 3, background: '#ff0000' },
+    }).webp().toBuffer();
+    mocks.resolveLlmConfig.mockResolvedValueOnce({
+      provider: 'openai-compatible',
+      apiKey: 'test-only',
+      baseURL: 'https://llm.test/v1',
+      model: 'text-only-model',
+      capabilities: { vision: false },
+    });
+
+    await expect(jdService.createImageSource(actor, {
+      buffer,
+      filename: 'text-only.webp',
+      mimeType: 'image/webp',
+    })).rejects.toMatchObject({ code: 'LLM_VISION_REQUIRED', status: 422 });
     expect(mocks.generateText).not.toHaveBeenCalled();
   });
 });

@@ -115,6 +115,33 @@ export const careerService = {
     }
   },
 
+  async reviewFacts(
+    actor: ActorContext,
+    factIdsInput: string[],
+    decision: 'approve' | 'reject',
+    note?: string,
+  ) {
+    await dbReady;
+    const factIds = [...new Set(factIdsInput)];
+    if (factIds.length < 1 || factIds.length > 100) {
+      throw new CareerServiceError('INVALID_FACT_INPUT', 400, 'Select 1 to 100 draft facts.');
+    }
+    try {
+      const rows = await careerRepository.reviewFactsOwned(
+        actor.userId,
+        factIds,
+        decision,
+        note ? cleanSummary(note) : undefined,
+      );
+      return Promise.all(rows.map(async (row) => (
+        (await careerRepository.findFactOwned(actor.userId, row.id))!
+      )));
+    } catch (error) {
+      if (error instanceof CareerRepositoryError) throw mapRepositoryError(error);
+      throw error;
+    }
+  },
+
   async mergeFacts(actor: ActorContext, input: {
     factIds: string[];
     factType: CareerFactType;

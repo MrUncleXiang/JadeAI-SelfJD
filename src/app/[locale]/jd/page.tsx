@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
   BriefcaseBusiness,
+  FileImage,
   FileSearch,
   Loader2,
   PencilLine,
@@ -12,6 +13,7 @@ import {
   Save,
   Sparkles,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -61,6 +63,9 @@ interface JdSource {
   company: string;
   jobTitle: string;
   location: string;
+  originalFilename: string | null;
+  mimeType: string;
+  sizeBytes: number;
   contentHash: string;
   normalizedText: string;
   status: JdStatus;
@@ -93,12 +98,13 @@ const REQUIREMENT_TYPES: RequirementType[] = [
 const REQUIREMENT_PRIORITIES: RequirementPriority[] = ['required', 'preferred', 'normal'];
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const response = await fetch(url, {
     credentials: 'same-origin',
     cache: 'no-store',
     ...init,
     headers: {
-      ...(init?.body ? { 'content-type': 'application/json' } : {}),
+      ...(init?.body && !isFormData ? { 'content-type': 'application/json' } : {}),
       ...init?.headers,
     },
   });
@@ -144,6 +150,10 @@ export default function JdPage() {
   const [text, setText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [imageTitle, setImageTitle] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageInputKey, setImageInputKey] = useState(0);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
 
@@ -187,6 +197,33 @@ export default function JdPage() {
       });
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  async function uploadImageSource() {
+    if (!imageFile) return;
+    setIsUploadingImage(true);
+    try {
+      const body = new FormData();
+      body.set('file', imageFile);
+      if (imageTitle.trim()) body.set('title', imageTitle.trim());
+      const source = await api<JdSource>('/api/jd-sources/image', {
+        method: 'POST',
+        body,
+      });
+      setImageTitle('');
+      setImageFile(null);
+      setImageInputKey((value) => value + 1);
+      toast.success(source.deduplicated ? t('duplicateFound') : t('imageExtracted'));
+      await load();
+      if (source.requirements.length > 0) setDraft(reviewDraft(source));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      toast.error(t('imageUploadFailed'), {
+        description: message === 'LLM_VISION_REQUIRED' ? t('visionRequired') : message || undefined,
+      });
+    } finally {
+      setIsUploadingImage(false);
     }
   }
 
@@ -320,6 +357,59 @@ export default function JdPage() {
         </CardContent>
       </Card>
 
+      <Card className="border-brand/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FileImage className="h-5 w-5 text-brand" /> {t('imageTitle')}
+          </CardTitle>
+          <CardDescription>{t('imageDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-[1fr_1.3fr]">
+            <div className="space-y-2">
+              <Label htmlFor="jd-image-title">{t('optionalTitle')}</Label>
+              <Input
+                id="jd-image-title"
+                value={imageTitle}
+                onChange={(event) => setImageTitle(event.target.value)}
+                maxLength={240}
+                placeholder={t('titlePlaceholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="jd-image">{t('imageFile')}</Label>
+              <Input
+                key={imageInputKey}
+                id="jd-image"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-3">
+            <div className="min-w-0 text-xs text-muted-foreground">
+              <p>{t('imageLimits')}</p>
+              {imageFile && (
+                <p className="mt-1 truncate font-medium text-foreground">
+                  {imageFile.name} · {(imageFile.size / 1024 / 1024).toFixed(2)} MiB
+                </p>
+              )}
+            </div>
+            <Button
+              onClick={() => void uploadImageSource()}
+              disabled={!imageFile || isUploadingImage}
+            >
+              {isUploadingImage
+                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                : <Upload className="mr-2 h-4 w-4" />}
+              {t('uploadAndExtract')}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">{t('imagePrivacyNote')}</p>
+        </CardContent>
+      </Card>
+
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t('savedSources')}</h2>
@@ -340,11 +430,17 @@ export default function JdPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <CardTitle className="truncate text-base">{source.title}</CardTitle>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <CardTitle className="truncate text-base">{source.title}</CardTitle>
+                        <Badge variant="outline">{t(`inputTypes.${source.inputType}`)}</Badge>
+                      </div>
                       <CardDescription className="mt-1 line-clamp-2">
                         {[source.company, source.jobTitle, source.location].filter(Boolean).join(' · ')
                           || source.normalizedText.slice(0, 120)}
                       </CardDescription>
+                      {source.originalFilename && (
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{source.originalFilename}</p>
+                      )}
                     </div>
                     <Badge variant={statusVariant(source.status)}>{t(`status.${source.status}`)}</Badge>
                   </div>
@@ -361,16 +457,18 @@ export default function JdPage() {
                         <PencilLine className="mr-2 h-4 w-4" /> {t('review')}
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      onClick={() => void extract(source)}
-                      disabled={busyId === source.id || source.status === 'parsing'}
-                    >
-                      {busyId === source.id || source.status === 'parsing'
-                        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        : <Sparkles className="mr-2 h-4 w-4" />}
-                      {source.requirements.length > 0 ? t('extractAgain') : t('extract')}
-                    </Button>
+                    {source.inputType === 'text' && (
+                      <Button
+                        size="sm"
+                        onClick={() => void extract(source)}
+                        disabled={busyId === source.id || source.status === 'parsing'}
+                      >
+                        {busyId === source.id || source.status === 'parsing'
+                          ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          : <Sparkles className="mr-2 h-4 w-4" />}
+                        {source.requirements.length > 0 ? t('extractAgain') : t('extract')}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

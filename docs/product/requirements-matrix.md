@@ -24,7 +24,7 @@
 | AI-003 | Must | AI 内容保留事实与 JD 依据 | 变更可追踪证据，未证实表述给出阻断或警告 |
 | AI-004 | Must | Tool Calling 与 JSON 降级兼容 | Tool 不可用时 JSON 模式仍能完成流程 |
 | KB-001 | Must | 规范化职业事实与证据模型 | 事实、来源快照、位置和内容哈希可查询 |
-| KB-002 | Must | 事实审核和跨简历复用 | Draft 不自动入正式简历，Approved 可复用 |
+| KB-002 | Must | 事实批量审核和跨简历复用 | 待审事实可批量批准/拒绝；Draft 不自动入正式简历，Approved 可生成可逐项审阅的 ResumePatch |
 | KB-003 | Must | 文件或目录上传个人信息来源 | 无 GitHub 配置也可导入；相同内容幂等，新内容形成新快照 |
 | MYR-001 | Must | WorkResume schemaVersion 2 专用导入器 | 本地固定样例可稳定导入且来源可追踪 |
 | GH-001 | Should | 可选 GitHub App 授权并选择只读仓库 | 未配置 App 不阻断 MVP；启用后不持久化安装令牌 |

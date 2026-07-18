@@ -34,54 +34,58 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
   const locale = useLocale();
   const router = useRouter();
 
-  const [jobTitle, setJobTitle] = useState('');
-  const [yearsOfExperience, setYearsOfExperience] = useState<number | ''>('');
-  const [skills, setSkills] = useState('');
-  const [industry, setIndustry] = useState('');
-  const [experience, setExperience] = useState('');
+  const [targetRole, setTargetRole] = useState('');
+  const [resumeTitle, setResumeTitle] = useState('');
+  const [instruction, setInstruction] = useState('');
   const [template, setTemplate] = useState('classic');
   const [language, setLanguage] = useState(locale);
   const [state, setState] = useState<GenerateState>('form');
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ resumeId: string; title: string } | null>(null);
+  const [result, setResult] = useState<{
+    resumeId: string;
+    changeSetId: string;
+    title: string;
+    operationCount: number;
+  } | null>(null);
 
   const handleGenerate = async () => {
-    if (!jobTitle.trim()) return;
     setState('generating');
     setError('');
 
     try {
-      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
-      const res = await fetch('/api/ai/generate-resume', {
+      const res = await fetch('/api/resumes/from-knowledge', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
         },
         body: JSON.stringify({
-          jobTitle: jobTitle.trim(),
-          yearsOfExperience: yearsOfExperience === '' ? undefined : yearsOfExperience,
-          skills: skills.trim()
-            ? skills.split(/[\s,，、]+/).map(s => s.trim()).filter(Boolean)
-            : undefined,
-          industry: industry.trim() || undefined,
-          experience: experience.trim() || undefined,
+          targetRole: targetRole.trim() || undefined,
+          title: resumeTitle.trim() || undefined,
+          instruction: instruction.trim() || undefined,
           template,
-          language,
+          language: language === 'en' ? 'en' : 'zh',
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Generation failed');
+        const data = await res.json().catch(() => ({})) as { code?: string; message?: string };
+        throw new Error(data.code === 'NO_APPROVED_FACTS'
+          ? t('noApprovedFacts')
+          : data.message || data.code || t('error'));
       }
 
-      const data = await res.json();
+      const data = await res.json() as {
+        resumeId: string;
+        changeSetId: string;
+        title: string;
+        operationCount: number;
+      };
       setResult(data);
       setState('success');
       onCreated?.();
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate resume');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('error'));
       setState('error');
     }
   };
@@ -89,7 +93,7 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
   const handleOpenResume = () => {
     if (result) {
       onOpenChange(false);
-      router.push(`/editor/${result.resumeId}`);
+      router.push(`/editor/${result.resumeId}?reviewChanges=1&changeSetId=${encodeURIComponent(result.changeSetId)}`);
     }
   };
 
@@ -102,11 +106,9 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
     onOpenChange(false);
     setTimeout(() => {
       setState('form');
-      setJobTitle('');
-      setYearsOfExperience('');
-      setSkills('');
-      setIndustry('');
-      setExperience('');
+      setTargetRole('');
+      setResumeTitle('');
+      setInstruction('');
       setTemplate('classic');
       setLanguage(locale);
       setError('');
@@ -128,71 +130,50 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
         <div className="max-h-[70vh] overflow-y-auto px-6 py-4 space-y-4">
           {state === 'form' && (
             <>
-              {/* Row 1: Job Title + Years + Industry */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border border-brand/20 bg-brand/5 p-3 text-sm text-zinc-600 dark:text-zinc-300">
+                {t('knowledgeNotice')}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {t('jobTitle')} *
+                    {t('targetRole')}
                   </label>
                   <Input
-                    value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
-                    placeholder={t('jobTitle')}
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    maxLength={240}
+                    placeholder={t('targetRolePlaceholder')}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {t('yearsOfExperience')}
+                    {t('resumeTitle')}
                   </label>
                   <Input
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={yearsOfExperience}
-                    onChange={(e) => setYearsOfExperience(e.target.value ? Number(e.target.value) : '')}
-                    placeholder="3"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {t('industry')}
-                  </label>
-                  <Input
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
-                    placeholder={t('industry')}
+                    value={resumeTitle}
+                    onChange={(e) => setResumeTitle(e.target.value)}
+                    maxLength={200}
+                    placeholder={t('resumeTitlePlaceholder')}
                   />
                 </div>
               </div>
 
-              {/* Skills */}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {t('skills')}
-                </label>
-                <Input
-                  value={skills}
-                  onChange={(e) => setSkills(e.target.value)}
-                  placeholder={t('skillsPlaceholder')}
-                />
-              </div>
-
-              {/* Work Experience */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {t('experience')}
+                  {t('instruction')}
                 </label>
                 <Textarea
-                  value={experience}
-                  onChange={(e) => setExperience(e.target.value)}
-                  placeholder={t('experiencePlaceholder')}
+                  value={instruction}
+                  onChange={(e) => setInstruction(e.target.value)}
+                  maxLength={2000}
+                  placeholder={t('instructionPlaceholder')}
                   rows={4}
                   className="resize-none"
                 />
               </div>
 
-              {/* Row 2: Language + Template */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                     {t('language')}
@@ -239,7 +220,7 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
                 {t('success')}
               </p>
               <p className="text-xs text-zinc-500 mt-1">
-                {t('successDescription')}
+                {t('successDescription', { count: result?.operationCount ?? 0 })}
               </p>
             </div>
           )}
@@ -267,7 +248,6 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
               </Button>
               <Button
                 onClick={handleGenerate}
-                disabled={!jobTitle.trim()}
                 className="cursor-pointer bg-brand hover:bg-brand-hover"
               >
                 {t('generate')}

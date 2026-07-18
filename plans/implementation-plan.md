@@ -337,8 +337,25 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - [x] 单元/Repository 验收覆盖去重、来源定位、租户隔离、审核与确认门禁。
 - [x] 真实浏览器 E2E 覆盖保存、人工修正、确认状态和租户 API。
 - [x] 生产部署验收：`8783d06` 已部署至 `http://43.138.159.58:3000`，未登录访问根路径会跳转至账号登录页；认证 API、JD 工作区、SQLite 迁移和公网监听验收通过。
-- [ ] Phase 6B：PDF、DOCX、图片安全导入。
+- [ ] Phase 6B：PDF、DOCX 安全导入（图片 Phase 6B.1 已完成）。
 - [ ] Phase 6C：Approved Fact 匹配、缺口分析和定向 ResumePatch。
+
+### 用户反馈闭环（2026-07-18）
+
+- [x] `KB-002`：待审队列改为紧凑卡片，详细证据按需展开，支持全选及批量批准/拒绝。
+- [x] `KB-002` / `AI-001`：工作台和知识库显式提供“从已批准知识生成简历”，结果进入 Change Set 审阅而不直接写入。
+- [x] `JD-002` Phase 6B.1：上传 PNG/JPEG/WebP，完成 MIME/Magic/尺寸/像素门禁、Vision 能力校验、识别及人工复核。
+
+自动化证据（2026-07-18）：
+
+- `pnpm test`：55 个测试文件、260 个测试通过；覆盖批量审核原子性/租户隔离、Approved Fact
+  生成 Change Set、图片格式/Magic/解码/尺寸门禁、Vision 绑定和图片 JD 路由。
+- `pnpm test:e2e`：9 个真实 Chromium 场景通过；知识库入口、生成对话框、目录导入后的全选批量批准，
+  以及 JD 图片控件和格式约束均有浏览器断言。
+- 新增/修改 TypeScript/TSX 文件通过聚焦 ESLint；全量 ESLint 仍有上游既存的
+  1210 个错误和 64 个警告，未放宽规则或批量修改无关模板代码。
+- `pnpm type-check`、`pnpm spec:check`、`pnpm test:migration`、一次性 PostgreSQL 18
+  `pnpm test:integration` 和 `pnpm build` 全部通过。
 
 ## 10. Phase 7：面试和现有功能回归
 

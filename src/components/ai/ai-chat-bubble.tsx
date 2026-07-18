@@ -27,6 +27,8 @@ function getWinSize(): { w: number; h: number } {
 
 interface AIChatBubbleProps {
   resumeId: string;
+  initialChangeReviewOpen?: boolean;
+  initialChangeSetId?: string;
 }
 
 /** Compute the best left/top for the chat window given the bubble position. */
@@ -49,7 +51,11 @@ function calcWindowPos(bubbleRight: number, bubbleBottom: number, winW: number, 
   return { left, top };
 }
 
-export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
+export function AIChatBubble({
+  resumeId,
+  initialChangeReviewOpen,
+  initialChangeSetId,
+}: AIChatBubbleProps) {
   const t = useTranslations('ai');
   const { showAiChat, toggleAiChat } = useEditorStore();
   const hasLlmProfile = useSettingsStore((state) => Boolean(
@@ -185,7 +191,12 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
 
         {/* Chat content */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          <AIChatContent resumeId={resumeId} hideTitle />
+          <AIChatContent
+            resumeId={resumeId}
+            hideTitle
+            initialChangeReviewOpen={initialChangeReviewOpen}
+            initialChangeSetId={initialChangeSetId}
+          />
         </div>
       </div>
 

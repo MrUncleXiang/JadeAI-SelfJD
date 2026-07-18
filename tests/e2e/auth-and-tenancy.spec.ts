@@ -294,6 +294,13 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible();
   await expect(page.getByText('Review status')).toBeVisible();
   await expect(page.getByText('Fact type')).toBeVisible();
+  await expect(page.getByText('Review queue')).toBeVisible();
+  await page.getByRole('button', { name: 'Generate from approved knowledge' }).click();
+  const generateDialog = page.getByRole('dialog');
+  await expect(generateDialog.getByRole('heading', { name: 'Generate from Approved Knowledge' })).toBeVisible();
+  await expect(generateDialog.getByText('Generation never writes directly to the resume.', { exact: false })).toBeVisible();
+  await generateDialog.getByRole('button', { name: 'Close' }).first().click();
+  await expect(generateDialog).not.toBeVisible();
 
   const facts = await browserJson<unknown[]>(page, '/api/career-facts');
   expect(facts.status).toBe(200);
@@ -335,9 +342,21 @@ test('browser directory upload creates tenant-scoped career facts', async ({ pag
   await expect(page.getByText('Atlas', { exact: true })).toBeVisible();
   await expect(page.getByText('Beacon', { exact: true })).toBeVisible();
 
-  const facts = await browserJson<unknown[]>(page, '/api/career-facts');
+  await page.getByRole('button', { name: 'Select all drafts (4)' }).click();
+  await expect(page.getByText('4 draft facts selected')).toBeVisible();
+  const reviewedResponse = page.waitForResponse((response) => (
+    response.url().endsWith('/api/career-facts/review')
+    && response.request().method() === 'POST'
+  ));
+  await page.getByRole('button', { name: 'Approve selected' }).click();
+  expect((await reviewedResponse).status()).toBe(200);
+  await expect(page.getByText('Approved 4 facts')).toBeVisible();
+
+  const facts = await browserJson<Array<{ status: string }>>(page, '/api/career-facts');
   expect(facts.status).toBe(200);
-  expect(facts.body).toHaveLength(4);
+  const factRows = facts.body || [];
+  expect(factRows).toHaveLength(4);
+  expect(factRows.every((fact) => fact.status === 'approved')).toBe(true);
 });
 
 test('text JD workspace saves, reviews, and explicitly confirms tenant-scoped requirements', async ({ page }) => {
@@ -347,6 +366,11 @@ test('text JD workspace saves, reviews, and explicitly confirms tenant-scoped re
   await expect(page).toHaveURL(/\/en\/jd$/);
   await expect(page.getByRole('heading', { name: 'Job Descriptions & Targeted Resumes' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Job JD' })).toBeVisible();
+  await expect(page.getByText('Upload a job-description image')).toBeVisible();
+  const imageInput = page.locator('#jd-image');
+  await expect(imageInput).toHaveAttribute('type', 'file');
+  await expect(imageInput).toHaveAttribute('accept', /image\/png/);
+  await expect(page.getByRole('button', { name: 'Upload and Extract' })).toBeDisabled();
 
   const marker = crypto.randomUUID().slice(0, 8);
   const title = `Senior Unity Engineer ${marker}`;
