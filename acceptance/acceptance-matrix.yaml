@@ -357,7 +357,7 @@ scenarios:
     title: 批量事实审核与可审阅复用
     given: 当前用户拥有 Draft、Approved、Rejected 事实及另一用户的事实
     when: 批量批准或拒绝 Draft，并从已批准知识生成简历
-    then: 批量操作仅修改当前用户的有效 Draft；只有 Approved 进入 AI 上下文，且生成结果以未应用 Change Set 进入逐项 Diff 审阅
+    then: 批量操作仅修改当前用户的有效 Draft；审核工作台原位更新且不刷新重排列表；只有 Approved 进入 AI 上下文，且生成结果以未应用 Change Set 进入逐项 Diff 审阅
     layers: [integration, e2e]
     automationStatus: automated
     automationEvidence:
@@ -549,7 +549,7 @@ scenarios:
     title: JD 文件和图片安全导入
     given: 合法及恶意 PDF、DOCX 和图片 Fixture
     when: 上传和解析
-    then: 合法文件可修正，恶意或超限文件被拒绝
+    then: 合法图片经方向修正、元数据移除、尺寸限制和 JPEG 规范化后可修正；恶意或超限文件被拒绝；Vision 配置或 Provider 失败返回稳定错误码和请求 ID
     layers: [unit, integration, security]
     automationStatus: partial
     automationEvidence:

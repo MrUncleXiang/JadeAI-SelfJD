@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   BadgeCheck,
   BriefcaseBusiness,
+  CheckCircle2,
   FileImage,
   FileSearch,
   Loader2,
@@ -11,6 +13,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Settings2,
   Sparkles,
   Trash2,
   Upload,
@@ -39,6 +42,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useUIStore } from '@/stores/ui-store';
 
 type JdStatus = 'draft' | 'parsing' | 'needs_review' | 'confirmed' | 'failed';
 type RequirementType = 'responsibility' | 'hard_skill' | 'soft_skill' | 'experience' | 'education' | 'preferred';
@@ -97,6 +102,17 @@ const REQUIREMENT_TYPES: RequirementType[] = [
 ];
 const REQUIREMENT_PRIORITIES: RequirementPriority[] = ['required', 'preferred', 'normal'];
 
+class ApiRequestError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const response = await fetch(url, {
@@ -108,8 +124,18 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  const body = await response.json().catch(() => null) as ({ code?: string; message?: string } & T) | null;
-  if (!response.ok) throw new Error(body?.code || body?.message || `HTTP_${response.status}`);
+  const body = await response.json().catch(() => null) as ({
+    code?: string;
+    message?: string;
+    requestId?: string;
+  } & T) | null;
+  if (!response.ok) {
+    throw new ApiRequestError(
+      body?.code || `HTTP_${response.status}`,
+      body?.message || body?.code || `HTTP_${response.status}`,
+      body?.requestId,
+    );
+  }
   return body as T;
 }
 
@@ -145,6 +171,15 @@ function statusVariant(status: JdStatus): 'default' | 'secondary' | 'destructive
 
 export default function JdPage() {
   const t = useTranslations('jd');
+  const {
+    llmBindings,
+    llmError,
+    llmLoaded,
+    llmLoading,
+    llmProfiles,
+    hydrate,
+  } = useSettingsStore();
+  const { openModal, setSettingsTab } = useUIStore();
   const [sources, setSources] = useState<JdSource[]>([]);
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
@@ -156,6 +191,15 @@ export default function JdPage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
+
+  const visionProfile = useMemo(
+    () => llmProfiles.find((profile) => profile.id === llmBindings.vision) || null,
+    [llmBindings, llmProfiles],
+  );
+  const visionReady = visionProfile?.status === 'active' && visionProfile.capabilities.vision;
+  const visionProbeError = visionProfile?.capabilities.errors?.vision
+    || visionProfile?.capabilities.errors?.reachable
+    || null;
 
   const selectedSource = useMemo(
     () => sources.find((source) => source.id === draft?.sourceId) || null,
@@ -178,6 +222,58 @@ export default function JdPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!llmLoaded) void hydrate();
+  }, [hydrate, llmLoaded]);
+
+  function openVisionSettings() {
+    setSettingsTab('ai');
+    openModal('settings');
+  }
+
+  function imageErrorDescription(error: unknown) {
+    const code = error instanceof ApiRequestError ? error.code : '';
+    let description: string;
+    switch (code) {
+      case 'LLM_PROFILE_REQUIRED':
+      case 'LLM_VISION_REQUIRED':
+        description = t('errors.visionRequired');
+        break;
+      case 'LLM_PROFILE_INVALID':
+        description = t('errors.profileInvalid');
+        break;
+      case 'LLM_AUTH_FAILED':
+        description = t('errors.authFailed');
+        break;
+      case 'LLM_MODEL_NOT_FOUND':
+        description = t('errors.modelNotFound');
+        break;
+      case 'LLM_RATE_LIMITED':
+        description = t('errors.rateLimited');
+        break;
+      case 'LLM_VISION_TIMEOUT':
+        description = t('errors.timeout');
+        break;
+      case 'LLM_VISION_UNSUPPORTED':
+        description = t('errors.visionUnsupported');
+        break;
+      case 'LLM_OUTBOUND_BLOCKED':
+        description = t('errors.outboundBlocked');
+        break;
+      case 'JD_EXTRACTION_INVALID':
+        description = t('errors.invalidResponse');
+        break;
+      case 'LLM_PROVIDER_ERROR':
+        description = t('errors.providerError');
+        break;
+      default:
+        description = error instanceof Error ? error.message : t('requestFailed');
+    }
+    return error instanceof ApiRequestError && error.requestId
+      ? `${description} · ${t('requestId')}: ${error.requestId}`
+      : description;
+  }
 
   async function createSource() {
     if (!text.trim()) return;
@@ -218,9 +314,8 @@ export default function JdPage() {
       await load();
       if (source.requirements.length > 0) setDraft(reviewDraft(source));
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
       toast.error(t('imageUploadFailed'), {
-        description: message === 'LLM_VISION_REQUIRED' ? t('visionRequired') : message || undefined,
+        description: imageErrorDescription(error),
       });
     } finally {
       setIsUploadingImage(false);
@@ -365,6 +460,39 @@ export default function JdPage() {
           <CardDescription>{t('imageDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className={`flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between ${
+            visionReady
+              ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20'
+              : 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20'
+          }`}>
+            <div className="flex min-w-0 items-start gap-2.5">
+              {visionReady
+                ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />}
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {llmLoading && !llmLoaded
+                    ? t('visionStatusLoading')
+                    : visionReady
+                      ? t('visionStatusReady', { name: visionProfile.name })
+                      : visionProfile
+                        ? t('visionStatusUnavailable', { name: visionProfile.name })
+                        : t('visionStatusUnbound')}
+                </p>
+                <p className="mt-1 break-words text-xs text-muted-foreground">
+                  {llmError
+                    ? t('visionStatusLoadFailed')
+                    : visionProfile
+                      ? `${visionProfile.modelName} · ${t(`profileStatus.${visionProfile.status}`)}${visionProbeError ? ` · ${visionProbeError}` : ''}`
+                      : t('visionStatusHint')}
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={openVisionSettings}>
+              <Settings2 className="mr-2 h-4 w-4" />
+              {t('configureVision')}
+            </Button>
+          </div>
           <div className="grid gap-4 sm:grid-cols-[1fr_1.3fr]">
             <div className="space-y-2">
               <Label htmlFor="jd-image-title">{t('optionalTitle')}</Label>
@@ -398,7 +526,7 @@ export default function JdPage() {
             </div>
             <Button
               onClick={() => void uploadImageSource()}
-              disabled={!imageFile || isUploadingImage}
+              disabled={!imageFile || isUploadingImage || !visionReady}
             >
               {isUploadingImage
                 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

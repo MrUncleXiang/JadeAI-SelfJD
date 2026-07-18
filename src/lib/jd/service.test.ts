@@ -127,7 +127,7 @@ describe('JD extraction service', () => {
 
   it('uses only a probed Vision binding and stores an image result for human review', async () => {
     const buffer = await sharp({
-      create: { width: 64, height: 64, channels: 3, background: '#ffffff' },
+      create: { width: 65, height: 65, channels: 3, background: '#fef3c7' },
     }).png().toBuffer();
     mocks.resolveLlmConfig.mockResolvedValueOnce({
       provider: 'openai-compatible',
@@ -175,12 +175,14 @@ describe('JD extraction service', () => {
     expect(mocks.resolveLlmConfig).toHaveBeenCalledWith(userId, 'vision');
     expect(mocks.generateText).toHaveBeenCalledWith(expect.objectContaining({
       system: expect.stringContaining('untrusted data'),
+      maxOutputTokens: 4_096,
       messages: [expect.objectContaining({
         content: expect.arrayContaining([
-          expect.objectContaining({ type: 'image', image: buffer, mediaType: 'image/png' }),
+          expect.objectContaining({ type: 'image', image: expect.any(Buffer), mediaType: 'image/jpeg' }),
         ]),
       })],
     }));
+    expect(mocks.generateText.mock.calls[0]?.[0]).not.toHaveProperty('providerOptions');
 
     const duplicate = await jdService.createImageSource(actor, {
       buffer,
@@ -209,5 +211,39 @@ describe('JD extraction service', () => {
       mimeType: 'image/webp',
     })).rejects.toMatchObject({ code: 'LLM_VISION_REQUIRED', status: 422 });
     expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it('maps provider failures to actionable Vision errors without logging secrets', async () => {
+    const buffer = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#ffffff' },
+    }).png().toBuffer();
+    mocks.resolveLlmConfig.mockResolvedValueOnce({
+      provider: 'openai-compatible',
+      apiKey: 'secret-must-not-be-logged',
+      baseURL: 'https://llm.test/v1',
+      model: 'vision-test-model',
+      profileId: 'profile-safe-id',
+      capabilities: { vision: true },
+    });
+    mocks.generateText.mockRejectedValueOnce(Object.assign(new Error('upstream auth rejected'), {
+      statusCode: 401,
+    }));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(jdService.createImageSource(actor, {
+      buffer,
+      filename: 'auth-failure.png',
+      mimeType: 'image/png',
+    })).rejects.toMatchObject({ code: 'LLM_AUTH_FAILED', status: 422 });
+
+    expect(consoleError).toHaveBeenCalledWith('JD image extraction failed', expect.objectContaining({
+      requestId: actor.requestId,
+      profileId: 'profile-safe-id',
+      code: 'LLM_AUTH_FAILED',
+      upstreamStatus: 401,
+    }));
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('secret-must-not-be-logged');
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('https://llm.test');
+    consoleError.mockRestore();
   });
 });

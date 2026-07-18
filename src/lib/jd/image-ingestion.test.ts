@@ -2,7 +2,9 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
 import {
+  JD_MODEL_IMAGE_MIME,
   jdImageContentHash,
+  MAX_JD_MODEL_IMAGE_DIMENSION,
   MAX_JD_IMAGE_BYTES,
   validateJdImage,
 } from './image-ingestion';
@@ -24,7 +26,29 @@ describe('JD image validation [JD-002]', () => {
       height: 80,
       sizeBytes: buffer.length,
       contentHash: jdImageContentHash(buffer),
+      modelMimeType: JD_MODEL_IMAGE_MIME,
+      modelWidth: 120,
+      modelHeight: 80,
     });
+    expect((await sharp(result.modelBuffer).metadata()).format).toBe('jpeg');
+  });
+
+  it('normalizes large provider input to a bounded, metadata-free JPEG', async () => {
+    const buffer = await sharp({
+      create: { width: 5_000, height: 1_000, channels: 4, background: '#ffffff80' },
+    }).png().withMetadata({ orientation: 1 }).toBuffer();
+    const result = await validateJdImage({
+      buffer,
+      filename: 'wide-jd.png',
+      mimeType: 'image/png',
+    });
+    const metadata = await sharp(result.modelBuffer).metadata();
+    expect(metadata).toMatchObject({
+      format: 'jpeg',
+      width: MAX_JD_MODEL_IMAGE_DIMENSION,
+      height: 819,
+    });
+    expect(metadata.orientation).toBeUndefined();
   });
 
   it('rejects MIME/magic and filename-extension mismatches', async () => {

@@ -323,6 +323,12 @@ test('career knowledge review workspace is authenticated and queries tenant-scop
 });
 
 test('browser directory upload creates tenant-scoped career facts', async ({ page }) => {
+  let careerFactListRequests = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/api/career-facts') {
+      careerFactListRequests += 1;
+    }
+  });
   await login(page, ADMIN_USERNAME, ADMIN_PASSWORD);
   await page.goto('/en/knowledge');
 
@@ -339,11 +345,13 @@ test('browser directory upload creates tenant-scoped career facts', async ({ pag
   await page.getByRole('button', { name: 'Secure import' }).click();
   expect((await createdResponse).status()).toBe(201);
   await expect(page.getByText('Personal information source imported')).toBeVisible();
-  await expect(page.getByText('Atlas', { exact: true })).toBeVisible();
-  await expect(page.getByText('Beacon', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Atlas' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Beacon' })).toBeVisible();
+  await expect(page.getByRole('table')).toBeVisible();
 
   await page.getByRole('button', { name: 'Select all drafts (4)' }).click();
   await expect(page.getByText('4 draft facts selected')).toBeVisible();
+  const listRequestsBeforeReview = careerFactListRequests;
   const reviewedResponse = page.waitForResponse((response) => (
     response.url().endsWith('/api/career-facts/review')
     && response.request().method() === 'POST'
@@ -351,6 +359,9 @@ test('browser directory upload creates tenant-scoped career facts', async ({ pag
   await page.getByRole('button', { name: 'Approve selected' }).click();
   expect((await reviewedResponse).status()).toBe(200);
   await expect(page.getByText('Approved 4 facts')).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Atlas' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Beacon' })).toBeVisible();
+  expect(careerFactListRequests).toBe(listRequestsBeforeReview);
 
   const facts = await browserJson<Array<{ status: string }>>(page, '/api/career-facts');
   expect(facts.status).toBe(200);
@@ -367,6 +378,7 @@ test('text JD workspace saves, reviews, and explicitly confirms tenant-scoped re
   await expect(page.getByRole('heading', { name: 'Job Descriptions & Targeted Resumes' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Job JD' })).toBeVisible();
   await expect(page.getByText('Upload a job-description image')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Configure Vision model' })).toBeVisible();
   const imageInput = page.locator('#jd-image');
   await expect(imageInput).toHaveAttribute('type', 'file');
   await expect(imageInput).toHaveAttribute('accept', /image\/png/);

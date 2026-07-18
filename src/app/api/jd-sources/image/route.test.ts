@@ -21,6 +21,7 @@ vi.mock('@/lib/jd/service', async (importOriginal) => {
 import { authService } from '@/lib/auth/service';
 import { dbReady } from '@/lib/db';
 import { authRepository } from '@/lib/db/repositories/auth.repository';
+import { JdServiceError } from '@/lib/jd/service';
 
 import { POST } from './route';
 
@@ -112,5 +113,19 @@ describe('POST /api/jd-sources/image [JD-002]', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('returns an actionable Vision profile error and request ID', async () => {
+    mocks.createImageSource.mockRejectedValueOnce(new JdServiceError(
+      'LLM_PROFILE_INVALID',
+      422,
+      'The selected Vision profile failed its latest capability test.',
+    ));
+    const response = await POST(request());
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'LLM_PROFILE_INVALID',
+      requestId: `jd-image-route-${suffix}`,
+    });
   });
 });

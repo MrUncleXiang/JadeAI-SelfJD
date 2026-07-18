@@ -5,6 +5,8 @@ import sharp from 'sharp';
 export const MAX_JD_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_JD_IMAGE_DIMENSION = 8_000;
 export const MAX_JD_IMAGE_PIXELS = 40_000_000;
+export const MAX_JD_MODEL_IMAGE_DIMENSION = 4_096;
+export const JD_MODEL_IMAGE_MIME = 'image/jpeg' as const;
 
 const FORMAT_BY_MIME = {
   'image/png': 'png',
@@ -140,6 +142,25 @@ export async function validateJdImage(input: {
       sequentialRead: true,
     }).stats();
 
+    // Provider gateways vary widely in accepted image encodings and maximum dimensions.
+    // Auto-orient, flatten transparency, strip metadata, cap the longest edge, and send a
+    // predictable JPEG while retaining the original bytes only for hashing/audit metadata.
+    const normalized = await sharp(input.buffer, {
+      failOn: 'error',
+      limitInputPixels: MAX_JD_IMAGE_PIXELS,
+      sequentialRead: true,
+    })
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .resize({
+        width: MAX_JD_MODEL_IMAGE_DIMENSION,
+        height: MAX_JD_MODEL_IMAGE_DIMENSION,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 88, chromaSubsampling: '4:4:4', mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+
     return {
       mimeType: supportedMime,
       originalFilename,
@@ -147,6 +168,10 @@ export async function validateJdImage(input: {
       height: metadata.height,
       sizeBytes: input.buffer.length,
       contentHash: jdImageContentHash(input.buffer),
+      modelBuffer: normalized.data,
+      modelMimeType: JD_MODEL_IMAGE_MIME,
+      modelWidth: normalized.info.width,
+      modelHeight: normalized.info.height,
     };
   } catch (error) {
     if (error instanceof JdImageValidationError) throw error;
