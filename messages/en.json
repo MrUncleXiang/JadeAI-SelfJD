@@ -42,7 +42,9 @@
     "noAccount": "Need an account?",
     "hasAccount": "Already have an account?",
     "backToLogin": "Back to login",
-    "loading": "Loading"
+    "loading": "Loading",
+    "signInRequired": "Sign in to use your workspace",
+    "signInRequiredDescription": "Automatic login redirects are disabled. Your facts, job descriptions, resumes, and model settings load after sign-in."
   },
   "admin": {
     "nav": "User admin",

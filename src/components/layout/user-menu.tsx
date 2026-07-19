@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from 'next-intl';
-import { User, LogOut } from 'lucide-react';
+import { User, LogIn, LogOut } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -13,13 +13,26 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
+import { Button } from '@/components/ui/button';
 
 export function UserMenu() {
-  const { user, signOut } = useAuth();
+  const { user, isLoading, signIn, signOut } = useAuth();
   const t = useTranslations('auth');
   const { authEnabled } = useRuntimeConfig();
 
-  if (!user) return null;
+  if (authEnabled && isLoading) {
+    return <div className="h-8 w-16 animate-pulse rounded-md bg-zinc-100 dark:bg-zinc-800" aria-hidden="true" />;
+  }
+
+  if (!user) {
+    if (!authEnabled) return null;
+    return (
+      <Button variant="outline" size="sm" onClick={signIn} className="cursor-pointer gap-1.5">
+        <LogIn className="h-4 w-4" />
+        <span>{t('login')}</span>
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu>

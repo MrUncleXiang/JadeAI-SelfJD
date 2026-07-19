@@ -62,15 +62,17 @@ export function Header() {
         </div>
         <div className="flex items-center gap-3">
           <LocaleSwitcher />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => openModal('settings')}
-            className="cursor-pointer text-zinc-500"
-            title={t('settings.title')}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+          {user && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => openModal('settings')}
+              className="cursor-pointer text-zinc-500"
+              title={t('settings.title')}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
           <UserMenu />
           {/* Mobile menu */}
           <div className="md:hidden">

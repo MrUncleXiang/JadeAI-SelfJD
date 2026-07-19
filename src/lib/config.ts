@@ -15,9 +15,22 @@ export function isPublicLandingPageEnabled(
   return value !== 'false';
 }
 
+/**
+ * Controls whether the edge guard redirects every unauthenticated page view
+ * to the login screen. Account/API authentication remains enabled separately;
+ * when this is false, pages can render a sign-in prompt instead of producing
+ * a redirect loop or a raw UNAUTHORIZED toast.
+ */
+export function isLoginRequired(
+  value = process.env.AUTH_REQUIRED,
+): boolean {
+  return value === 'true';
+}
+
 export const config = {
   auth: {
     enabled: isAccountAuthEnabled(),
+    required: isLoginRequired(),
     fingerprintEnabled:
       process.env.AUTH_ENABLED === 'false'
       && process.env.NODE_ENV !== 'production'

@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/layout/theme-provider';
 import { RuntimeConfigProvider } from '@/components/providers/runtime-config-provider';
 import { BrandProvider } from '@/components/layout/brand-provider';
 import { AuthProvider } from '@/components/providers/auth-provider';
+import { SettingsHydrator } from '@/components/providers/settings-hydrator';
 import { isAccountAuthEnabled } from '@/lib/config';
 
 export default async function LocaleLayout({
@@ -29,6 +30,7 @@ export default async function LocaleLayout({
     <RuntimeConfigProvider authEnabled={authEnabled}>
       <NextIntlClientProvider locale={locale} messages={messages}>
         <AuthProvider>
+          <SettingsHydrator />
           <ThemeProvider
             attribute="class"
             defaultTheme="light"

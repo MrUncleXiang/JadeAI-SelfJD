@@ -270,11 +270,12 @@ Open [http://localhost:3000](http://localhost:3000).
 | `DATABASE_URL` | When PostgreSQL | — | PostgreSQL connection string |
 | `SQLITE_PATH` | No | `./data/jade.db` | SQLite database file path |
 | `AUTH_ENABLED` | No | `true` | Account authentication; only explicit `false` in development enables the legacy fallback path |
+| `AUTH_REQUIRED` | No | `false` | Set to `true` to redirect every personal workspace page to login; otherwise pages show an explicit sign-in prompt |
 | `REGISTRATION_MODE` | No | `closed` | Initial mode: `closed`, `invite`, or `open` |
 | `SESSION_TTL_DAYS` | No | `30` | Session lifetime, clamped to 1–90 days |
 | `AUTH_URL` | Public standalone deployment | — | Exact browser-facing origin used for same-origin checks on authentication state changes |
 | `AUTH_COOKIE_SECURE` | No | `true` in production | Set to `false` only for a temporary direct-HTTP deployment; production should use HTTPS |
-| `PUBLIC_LANDING_PAGE` | No | `true` | Set to `false` to redirect unauthenticated `/` and locale home pages to account login |
+| `PUBLIC_LANDING_PAGE` | No | `true` | When `AUTH_REQUIRED=true`, set to `false` to protect `/` and locale home pages too |
 | `TRUST_PROXY_HEADERS` | No | `false` | Trust proxy-supplied client IP headers for coarse auth rate limits; enable only behind a sanitizing reverse proxy |
 | `ENABLE_FINGERPRINT_AUTH` | No | `false` | Development-only legacy fallback; ignored in production |
 | `SEED_DEMO_DATA` | No | `false` | Explicit development fixture; rejected in production |
@@ -463,7 +464,7 @@ Yes. Set the `DB_TYPE` environment variable to `sqlite` or `postgresql`. SQLite 
 <details>
 <summary><b>How does authentication work without OAuth?</b></summary>
 
-Account/password authentication is enabled by default and is always enforced in production. For local compatibility testing only, set both `AUTH_ENABLED=false` and `ENABLE_FINGERPRINT_AUTH=true` to enable the legacy browser-fingerprint flow.
+Account/password authentication protects all personal APIs in production. Page redirects are separate: `AUTH_REQUIRED=false` keeps routes reachable and renders a clear sign-in prompt, while `AUTH_REQUIRED=true` redirects protected pages to login. For local compatibility testing only, set both `AUTH_ENABLED=false` and `ENABLE_FINGERPRINT_AUTH=true` to enable the legacy browser-fingerprint flow.
 
 </details>
 

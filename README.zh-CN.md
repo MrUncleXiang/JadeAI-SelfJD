@@ -274,10 +274,12 @@ pnpm dev
 | `DATABASE_URL` | PostgreSQL 时 | — | PostgreSQL 连接字符串 |
 | `SQLITE_PATH` | 否 | `./data/jade.db` | SQLite 数据库文件路径 |
 | `AUTH_ENABLED` | 否 | `true` | 账号认证；生产环境始终 Fail Closed，本地显式设为 `false` 才可进入兼容路径 |
+| `AUTH_REQUIRED` | 否 | `false` | 设为 `true` 时个人工作区页面会强制跳转登录；否则页面保持可访问并显示明确登录提示 |
 | `REGISTRATION_MODE` | 否 | `closed` | 初始注册模式：`closed`、`invite` 或 `open` |
 | `SESSION_TTL_DAYS` | 否 | `30` | Session 有效期，限制在 1–90 天 |
 | `AUTH_URL` | standalone 公网部署时 | — | 浏览器访问服务的精确 Origin，用于认证状态变更的同源校验 |
 | `AUTH_COOKIE_SECURE` | 否 | 生产环境为 `true` | 仅临时直连 HTTP 部署可显式设为 `false`；正式环境应使用 HTTPS |
+| `PUBLIC_LANDING_PAGE` | 否 | `true` | 仅在 `AUTH_REQUIRED=true` 时生效；设为 `false` 可同时保护首页 |
 | `TRUST_PROXY_HEADERS` | 否 | `false` | 信任代理写入的客户端 IP Header；仅在反向代理会清除伪造 Header 时启用 |
 | `ENABLE_FINGERPRINT_AUTH` | 否 | `false` | 仅本地开发可显式启用的旧指纹兼容模式 |
 | `SEED_DEMO_DATA` | 否 | `false` | 显式开发 Fixture；生产环境禁止启用 |
@@ -467,7 +469,7 @@ API Key 使用版本化 AES-256-GCM Keyring 在服务端加密。系统会一次
 <details>
 <summary><b>账号认证如何工作？</b></summary>
 
-用户名/密码认证默认启用，浏览器只持有 `HttpOnly` 的不透明 Session Cookie，数据库只保存 Token 哈希。生产环境始终强制账号认证；只有本地兼容测试同时设置 `AUTH_ENABLED=false` 和 `ENABLE_FINGERPRINT_AUTH=true` 时才启用旧指纹流程。
+用户名/密码认证默认启用，浏览器只持有 `HttpOnly` 的不透明 Session Cookie，数据库只保存 Token 哈希。个人 API 在生产环境始终校验账号会话；页面跳转由 `AUTH_REQUIRED` 独立控制：`false` 时不强制跳转，而是在工作区内显示登录提示，`true` 时跳转登录。只有本地兼容测试同时设置 `AUTH_ENABLED=false` 和 `ENABLE_FINGERPRINT_AUTH=true` 时才启用旧指纹流程。
 
 </details>
 

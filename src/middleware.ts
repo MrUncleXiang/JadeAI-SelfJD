@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
-import { isAccountAuthEnabled, isPublicLandingPageEnabled } from './lib/config';
+import { isAccountAuthEnabled, isLoginRequired, isPublicLandingPageEnabled } from './lib/config';
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -23,9 +23,11 @@ export default async function middleware(request: NextRequest) {
   // Always run i18n middleware first
   const response = intlMiddleware(request);
 
-  // Only check auth when account authentication is enabled.
+  // Account authentication protects APIs and personal data. Page-level login
+  // redirects are opt-in so an unauthenticated visitor can still reach a
+  // clear sign-in prompt and find the login entry from the shared header.
   const authEnabled = isAccountAuthEnabled();
-  if (!authEnabled) return response;
+  if (!authEnabled || !isLoginRequired()) return response;
 
   // Skip auth check for public paths and API routes
   const { pathname } = request.nextUrl;

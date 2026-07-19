@@ -42,7 +42,9 @@
     "noAccount": "还没有账号？",
     "hasAccount": "已有账号？",
     "backToLogin": "返回登录",
-    "loading": "加载中"
+    "loading": "加载中",
+    "signInRequired": "登录后使用个人工作区",
+    "signInRequiredDescription": "已取消自动跳转登录。个人事实库、岗位 JD、简历和模型配置需要登录后加载。"
   },
   "admin": {
     "nav": "用户管理",

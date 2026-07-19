@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isAccountAuthEnabled, isPublicLandingPageEnabled } from './config';
+import { isAccountAuthEnabled, isLoginRequired, isPublicLandingPageEnabled } from './config';
 
 describe('isAccountAuthEnabled', () => {
   it('enables account authentication by default', () => {
@@ -24,5 +24,13 @@ describe('isPublicLandingPageEnabled', () => {
 
   it('supports private instances that gate the landing page behind login', () => {
     expect(isPublicLandingPageEnabled('false')).toBe(false);
+  });
+});
+
+describe('isLoginRequired', () => {
+  it('keeps page navigation optional unless explicitly required', () => {
+    expect(isLoginRequired(undefined)).toBe(false);
+    expect(isLoginRequired('false')).toBe(false);
+    expect(isLoginRequired('true')).toBe(true);
   });
 });

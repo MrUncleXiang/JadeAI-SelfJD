@@ -11,6 +11,7 @@
 | AUTH-004 | Must | 数据库会话、密码修改和会话撤销 | 修改密码或禁用用户后旧会话失效 |
 | AUTH-005 | Must | 全资源严格用户隔离 | 跨用户 ID 访问在 API、AI 和任务层均失败 |
 | AUTH-006 | Should | 可扩展第三方身份绑定 | 身份冲突进入显式绑定流程，不按邮箱静默合并 |
+| AUTH-007 | Must | 页面可选登录与明确入口 | 未登录访问不强制跳转；个人数据仍受会话保护并提供可定位登录入口 |
 | LLM-001 | Must | 每用户可维护多个 LLM 档案 | 用户只能 CRUD 自己的档案 |
 | LLM-002 | Must | API Key 服务端加密存储 | 数据库和 API 均不返回明文 Key |
 | LLM-003 | Must | 连通性及能力探测 | 能识别 JSON、Tool、Vision 能力和错误原因 |
@@ -49,7 +50,7 @@
 
 | 阶段 | 需求 |
 |---|---|
-| Phase 1 | AUTH-001 至 AUTH-006、AUTH-005、OPS-001、SEC-001 |
+| Phase 1 | AUTH-001 至 AUTH-007、OPS-001、SEC-001 |
 | Phase 2 | LLM-001 至 LLM-005 |
 | Phase 3 | RES-003、AI-001 至 AI-004 |
 | Phase 4 | KB-001、KB-002、MYR-001 |

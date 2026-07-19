@@ -1,6 +1,6 @@
 # 认证与账号设计
 
-关联需求：AUTH-001 至 AUTH-006、SEC-001。
+关联需求：AUTH-001 至 AUTH-007、SEC-001。
 
 ## 1. 设计选择
 
@@ -15,6 +15,13 @@ JadeAI Career 使用项目内的账号领域服务和数据库会话，不再暴
 - 每次鉴权同时校验用户状态、Session 到期时间和 `token_version`。
 
 不采用把 Access Token 或 Refresh Token 保存到 `localStorage` 的方式。
+
+页面导航和个人数据鉴权分开控制：
+
+- `AUTH_ENABLED=true` 时，个人 API 始终校验数据库 Session 和租户归属。
+- `AUTH_REQUIRED=false` 时不强制把页面导航重定向到登录页；未登录用户会在工作区看到稳定的登录提示和入口。
+- `AUTH_REQUIRED=true` 时，中间件才对非公开页面执行登录重定向。
+- 可选登录模式不会把匿名访问映射成管理员，也不会放宽 API 的 `401 UNAUTHORIZED` 边界。
 
 ## 2. 登录标识
 

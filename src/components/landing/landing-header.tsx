@@ -37,6 +37,7 @@ function formatStars(n: number): string {
 
 export function LandingHeader() {
   const t = useTranslations('landing.header');
+  const authT = useTranslations('auth');
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const { isAuthenticated } = useAuth();
@@ -104,6 +105,11 @@ export function LandingHeader() {
             )}
           </a>
           <LocaleSwitcher />
+          {authEnabled && !isAuthenticated && (
+            <Button variant="ghost" asChild className="hidden sm:inline-flex">
+              <Link href="/login">{authT('login')}</Link>
+            </Button>
+          )}
           <Button
             asChild
             className="hidden cursor-pointer bg-brand text-white hover:bg-brand-hover sm:inline-flex"
@@ -161,6 +167,11 @@ export function LandingHeader() {
                       </>
                     )}
                   </a>
+                  {authEnabled && !isAuthenticated && (
+                    <Button variant="outline" asChild className="mb-3 h-11 w-full">
+                      <Link href="/login" onClick={() => setOpen(false)}>{authT('login')}</Link>
+                    </Button>
+                  )}
                   <Button
                     asChild
                     className="h-11 w-full cursor-pointer rounded-lg bg-brand text-[15px] font-medium text-white shadow-sm shadow-brand/20 hover:bg-brand-hover"

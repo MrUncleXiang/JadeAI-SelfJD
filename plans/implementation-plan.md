@@ -346,6 +346,12 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - [x] `KB-002` / `AI-001`：工作台和知识库显式提供“从已批准知识生成简历”，结果进入 Change Set 审阅而不直接写入。
 - [x] `JD-002` Phase 6B.1：上传 PNG/JPEG/WebP，完成 MIME/Magic/尺寸/像素门禁、Vision 能力校验、识别及人工复核。
 
+### 用户反馈闭环（2026-07-19）
+
+- [x] 页面登录重定向与个人 API 鉴权解耦；`AUTH_REQUIRED=false` 时允许访问页面，但不匿名暴露租户数据。
+- [x] 未登录工作区显示稳定登录提示，桌面、移动端和工作区 Header 均提供明确登录入口。
+- [x] 登录入口保留当前 locale 和 callback URL，避免 `/login` 无语言前缀导致入口失效。
+
 自动化证据（2026-07-18）：
 
 - `pnpm test`：55 个测试文件、260 个测试通过；覆盖批量审核原子性/租户隔离、Approved Fact

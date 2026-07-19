@@ -252,10 +252,19 @@ test.beforeEach(async ({ context }) => {
   await installStableBrowserState(context);
 });
 
-test('private instance redirects the public-IP landing page to account login', async ({ page }) => {
-  await page.goto('/');
-  await expect(page).toHaveURL(/\/zh\/login\?callbackUrl=%2F$/);
-  await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
+test('optional-login instance keeps pages reachable and exposes an explicit login entry', async ({ page }) => {
+  await page.goto('/zh');
+  await expect(page).toHaveURL(/\/zh\/?$/);
+  await expect(page.getByRole('link', { name: '登录' }).first()).toBeVisible();
+
+  await page.goto('/en/knowledge');
+  await expect(page).toHaveURL(/\/en\/knowledge$/);
+  await expect(page.getByText('Sign in to use your workspace')).toBeVisible();
+  await expect(page.getByText('UNAUTHORIZED')).toHaveCount(0);
+
+  await page.locator('header').getByRole('button', { name: 'Log in' }).click();
+  await expect(page).toHaveURL(/\/en\/login\?callbackUrl=%2Fen%2Fknowledge$/);
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
 });
 
 test('career knowledge review workspace is authenticated and queries tenant-scoped facts', async ({ page }) => {
@@ -446,7 +455,8 @@ test('registration, invitation, login, logout, CSRF, and last-admin lifecycle', 
   const invitedUser = uniqueUsername('invite-user');
 
   await page.goto('/en/dashboard');
-  await expect(page).toHaveURL(/\/en\/login\?callbackUrl=%2Fen%2Fdashboard$/);
+  await expect(page).toHaveURL(/\/en\/dashboard$/);
+  await expect(page.getByText('Sign in to use your workspace')).toBeVisible();
 
   await page.goto('/en/register');
   await expect(page.getByText('Self-registration is closed.')).toBeVisible();

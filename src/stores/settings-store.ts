@@ -233,7 +233,3 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set({ _hydrated: true, _syncing: false });
   },
 }));
-
-if (typeof window !== 'undefined') {
-  void useSettingsStore.getState().hydrate();
-}

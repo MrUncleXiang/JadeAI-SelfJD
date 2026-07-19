@@ -91,6 +91,20 @@ scenarios:
       - src/app/api/admin/admin-routes.test.ts
       - tests/e2e/auth-and-tenancy.spec.ts
 
+  - id: ACC-AUTH-007
+    requirement: AUTH-007
+    phase: 1
+    priority: must
+    title: 可选登录页面入口
+    given: 账号认证开启且 AUTH_REQUIRED=false 的未登录浏览器
+    when: 访问首页或个人工作区页面
+    then: 页面不被强制重定向，工作区不请求租户数据，并显示可定位到当前语言登录页的入口
+    layers: [unit, e2e]
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/config.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
+
   - id: ACC-AUTH-003
     requirement: AUTH-003
     phase: 1

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useLocale } from 'next-intl';
 
 import { useFingerprint } from '@/hooks/use-fingerprint';
 import { useRuntimeConfig } from './runtime-config-provider';
@@ -37,6 +38,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const locale = useLocale();
   const { fingerprint, isLoading: fingerprintLoading } = useFingerprint();
   const { authEnabled } = useRuntimeConfig();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -75,13 +77,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  const signIn = useCallback(() => {
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    const loginPath = `/${locale}/login`;
+    const loginUrl = new URL(loginPath, window.location.origin);
+    if (currentPath !== loginPath) {
+      loginUrl.searchParams.set('callbackUrl', currentPath);
+    }
+    window.location.assign(`${loginUrl.pathname}${loginUrl.search}`);
+  }, [locale]);
+
   const value = useMemo<AuthContextValue>(() => {
     if (authEnabled) {
       return {
         user,
         isLoading: sessionLoading,
         isAuthenticated: Boolean(user),
-        signIn: () => window.location.assign('/login'),
+        signIn,
         signOut: async () => {
           try {
             await fetch('/api/auth/logout', {
@@ -116,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut: () => {},
       refresh: async () => {},
     };
-  }, [authEnabled, fingerprint, fingerprintLoading, refresh, sessionLoading, user]);
+  }, [authEnabled, fingerprint, fingerprintLoading, refresh, sessionLoading, signIn, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
