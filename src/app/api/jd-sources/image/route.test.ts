@@ -59,6 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.createImageSource.mockResolvedValue({
     created: true,
+    deduplicated: false,
     source: {
       id: `jd-image-${suffix}`,
       inputType: 'image',
@@ -75,6 +76,7 @@ beforeEach(() => {
       parserId: 'vision-jd-extractor',
       parserVersion: '1.0.0',
       errorCode: null,
+      lastRequestId: `jd-image-route-${suffix}`,
       confirmedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),

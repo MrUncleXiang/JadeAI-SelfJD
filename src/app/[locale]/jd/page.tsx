@@ -76,6 +76,7 @@ interface JdSource {
   status: JdStatus;
   parserId: string | null;
   errorCode: string | null;
+  lastRequestId: string | null;
   confirmedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -205,17 +206,27 @@ export default function JdPage() {
     () => sources.find((source) => source.id === draft?.sourceId) || null,
     [draft?.sourceId, sources],
   );
+  const recentImageSources = useMemo(
+    () => sources.filter((source) => source.inputType === 'image').slice(0, 6),
+    [sources],
+  );
+  const hasRecentImageParsing = useMemo(
+    () => sources.some((source) => source.inputType === 'image' && source.status === 'parsing'),
+    [sources],
+  );
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       setSources(await api<JdSource[]>('/api/jd-sources'));
     } catch (error) {
-      toast.error(t('requestFailed'), {
-        description: error instanceof Error ? error.message : undefined,
-      });
+      if (!silent) {
+        toast.error(t('requestFailed'), {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [t]);
 
@@ -227,13 +238,18 @@ export default function JdPage() {
     if (!llmLoaded) void hydrate();
   }, [hydrate, llmLoaded]);
 
+  useEffect(() => {
+    if (!isUploadingImage && !hasRecentImageParsing) return;
+    const timer = window.setInterval(() => void load(true), 3_000);
+    return () => window.clearInterval(timer);
+  }, [hasRecentImageParsing, isUploadingImage, load]);
+
   function openVisionSettings() {
     setSettingsTab('ai');
     openModal('settings');
   }
 
-  function imageErrorDescription(error: unknown) {
-    const code = error instanceof ApiRequestError ? error.code : '';
+  function imageErrorMessage(code: string, fallback?: string) {
     let description: string;
     switch (code) {
       case 'LLM_PROFILE_REQUIRED':
@@ -268,10 +284,23 @@ export default function JdPage() {
         description = t('errors.providerError');
         break;
       default:
-        description = error instanceof Error ? error.message : t('requestFailed');
+        description = fallback || code || t('requestFailed');
     }
+    return description;
+  }
+
+  function imageErrorDescription(error: unknown) {
+    const code = error instanceof ApiRequestError ? error.code : '';
+    const description = imageErrorMessage(code, error instanceof Error ? error.message : undefined);
     return error instanceof ApiRequestError && error.requestId
       ? `${description} · ${t('requestId')}: ${error.requestId}`
+      : description;
+  }
+
+  function persistentImageErrorDescription(source: JdSource) {
+    const description = imageErrorMessage(source.errorCode || '', source.errorCode || undefined);
+    return source.lastRequestId
+      ? `${description} · ${t('requestId')}: ${source.lastRequestId}`
       : description;
   }
 
@@ -314,8 +343,13 @@ export default function JdPage() {
       await load();
       if (source.requirements.length > 0) setDraft(reviewDraft(source));
     } catch (error) {
+      await load(true);
+      const persisted = error instanceof ApiRequestError
+        && (error.code.startsWith('LLM_') || error.code === 'JD_EXTRACTION_INVALID');
       toast.error(t('imageUploadFailed'), {
-        description: imageErrorDescription(error),
+        description: persisted
+          ? `${imageErrorDescription(error)} · ${t('failurePersisted')}`
+          : imageErrorDescription(error),
       });
     } finally {
       setIsUploadingImage(false);
@@ -535,6 +569,77 @@ export default function JdPage() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">{t('imagePrivacyNote')}</p>
+          <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">{t('imageHistoryTitle')}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{t('imageHistoryDescription')}</p>
+              </div>
+              {(isUploadingImage || hasRecentImageParsing) && (
+                <Badge variant="outline" className="gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t('status.parsing')}
+                </Badge>
+              )}
+            </div>
+            {recentImageSources.length === 0 ? (
+              <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+                {t('imageHistoryEmpty')}
+              </p>
+            ) : (
+              <div className="divide-y rounded-md border bg-background">
+                {recentImageSources.map((source) => (
+                  <div key={source.id} className="space-y-2 px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        {source.status === 'parsing' ? (
+                          <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-brand" />
+                        ) : source.status === 'failed' ? (
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                        ) : (
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{source.title}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {[source.originalFilename, source.updatedAt
+                              ? new Date(source.updatedAt).toLocaleString()
+                              : null].filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant={statusVariant(source.status)} className="shrink-0">
+                        {t(`status.${source.status}`)}
+                      </Badge>
+                    </div>
+                    {source.status === 'parsing' && (
+                      <p className="pl-6 text-xs text-muted-foreground">{t('parsingPersistent')}</p>
+                    )}
+                    {source.status === 'failed' && (
+                      <div className="space-y-1 pl-6">
+                        <p className="break-words text-xs text-destructive">
+                          {persistentImageErrorDescription(source)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{t('imageRetryHint')}</p>
+                      </div>
+                    )}
+                    {source.status === 'needs_review' && source.requirements.length > 0 && (
+                      <div className="flex justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setDraft(reviewDraft(source))}>
+                          <PencilLine className="mr-2 h-4 w-4" /> {t('reviewResult')}
+                        </Button>
+                      </div>
+                    )}
+                    {source.status !== 'failed' && source.lastRequestId && (
+                      <p className="break-all pl-6 text-[11px] text-muted-foreground">
+                        {t('requestId')}: {source.lastRequestId}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

@@ -24,8 +24,8 @@ export class LlmOutboundRequestError extends Error {
   }
 }
 
-function configuredTimeout(): number {
-  const value = Number(process.env.LLM_REQUEST_TIMEOUT_MS);
+function configuredTimeout(override?: number): number {
+  const value = Number.isFinite(override) ? Number(override) : Number(process.env.LLM_REQUEST_TIMEOUT_MS);
   if (!Number.isFinite(value)) return DEFAULT_TIMEOUT_MS;
   return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, Math.floor(value)));
 }
@@ -72,15 +72,15 @@ function pinnedLookup(addresses: LookupAddress[]): LookupFunction {
   };
 }
 
-function scheduleDispatcherClose(dispatcher: Agent) {
+function scheduleDispatcherClose(dispatcher: Agent, timeoutMs: number) {
   const timer = setTimeout(() => {
     void dispatcher.close();
-  }, configuredTimeout() + DISPATCHER_CLOSE_GRACE_MS);
+  }, timeoutMs + DISPATCHER_CLOSE_GRACE_MS);
   timer.unref?.();
 }
 
-function combinedSignal(signal: AbortSignal | null | undefined): AbortSignal {
-  const timeout = AbortSignal.timeout(configuredTimeout());
+function combinedSignal(signal: AbortSignal | null | undefined, timeoutMs: number): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
@@ -89,7 +89,11 @@ function combinedSignal(signal: AbortSignal | null | undefined): AbortSignal {
  * destination for every request, pins the validated IPs into the socket lookup,
  * and rejects all redirects rather than allowing a second unvalidated hop.
  */
-export function createLlmProviderFetch(configuredBaseUrl: string): typeof globalThis.fetch {
+export function createLlmProviderFetch(
+  configuredBaseUrl: string,
+  options: { timeoutMs?: number } = {},
+): typeof globalThis.fetch {
+  const timeoutMs = configuredTimeout(options.timeoutMs);
   return async (input, init) => {
     let target;
     try {
@@ -101,20 +105,20 @@ export function createLlmProviderFetch(configuredBaseUrl: string): typeof global
 
     const dispatcher = new Agent({
       connect: { lookup: pinnedLookup(target.addresses) },
-      connectTimeout: Math.min(configuredTimeout(), 10_000),
-      headersTimeout: configuredTimeout(),
-      bodyTimeout: configuredTimeout(),
+      connectTimeout: Math.min(timeoutMs, 10_000),
+      headersTimeout: timeoutMs,
+      bodyTimeout: timeoutMs,
       keepAliveTimeout: 1_000,
       keepAliveMaxTimeout: 1_000,
     });
-    scheduleDispatcherClose(dispatcher);
+    scheduleDispatcherClose(dispatcher, timeoutMs);
 
     try {
       const response = await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
         ...(init as Parameters<typeof undiciFetch>[1]),
         dispatcher,
         redirect: 'manual',
-        signal: combinedSignal(init?.signal),
+        signal: combinedSignal(init?.signal, timeoutMs),
       });
 
       if (response.status >= 300 && response.status < 400) {

@@ -221,10 +221,24 @@ export const jdService = {
   }) {
     await dbReady;
     let aiConfig: AIConfig | undefined;
+    let parsingSourceId: string | undefined;
     try {
       const image = await validateJdImage(input);
-      const existing = await jdRepository.findSourceByContentHashOwned(actor.userId, image.contentHash);
-      if (existing) return { source: existing, created: false };
+      const pending = await jdRepository.beginImageParsingOwned({
+        userId: actor.userId,
+        title: sourceTitle(input.title || image.originalFilename, 'Job description image'),
+        originalFilename: image.originalFilename,
+        mimeType: image.mimeType,
+        sizeBytes: image.sizeBytes,
+        contentHash: image.contentHash,
+        parserId: JD_IMAGE_PARSER_ID,
+        parserVersion: JD_IMAGE_PARSER_VERSION,
+        requestId: actor.requestId,
+      });
+      if (!pending.started) {
+        return { source: pending.source, created: false, deduplicated: true };
+      }
+      parsingSourceId = pending.source.id;
 
       aiConfig = await resolveLlmConfig(actor.userId, 'vision');
       if (aiConfig.capabilities?.vision !== true) {
@@ -265,39 +279,56 @@ export const jdService = {
       }
       const normalizedText = normalizeJdText(candidate.normalizedText);
       const requirements = reviewRequirements(normalizedText, candidate, { image: 1 });
-      return await jdRepository.createImageReviewOwned({
-        userId: actor.userId,
+      const source = await jdRepository.completeImageReviewOwned(actor.userId, parsingSourceId, {
         title: sourceTitle(candidate.title || input.title, normalizedText),
         company: cleanJdField(candidate.company, 240),
         jobTitle: cleanJdField(candidate.jobTitle, 240),
         location: cleanJdField(candidate.location, 240),
-        originalFilename: image.originalFilename,
-        mimeType: image.mimeType,
-        sizeBytes: image.sizeBytes,
-        contentHash: image.contentHash,
         normalizedText,
         parserId: JD_IMAGE_PARSER_ID,
         parserVersion: JD_IMAGE_PARSER_VERSION,
+        requestId: actor.requestId,
         requirements,
       });
+      if (!source) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
+      return { source, created: pending.created, deduplicated: false };
     } catch (error) {
-      if (error instanceof JdServiceError) throw error;
-      if (error instanceof JdImageValidationError) {
-        throw new JdServiceError(error.code, error.status, error.message);
-      }
-      if (error instanceof AIConfigError) {
-        throw new JdServiceError(error.code, error.status, error.message);
-      }
-      if (error instanceof JdRepositoryError) throw mapRepositoryError(error);
-      if (error instanceof JdValidationError) {
-        throw new JdServiceError(
+      let mapped: JdServiceError;
+      if (error instanceof JdServiceError) {
+        mapped = error;
+      } else if (error instanceof JdImageValidationError) {
+        mapped = new JdServiceError(error.code, error.status, error.message);
+      } else if (error instanceof AIConfigError) {
+        mapped = new JdServiceError(error.code, error.status, error.message);
+      } else if (error instanceof JdRepositoryError) {
+        mapped = mapRepositoryError(error);
+      } else if (error instanceof JdValidationError) {
+        mapped = new JdServiceError(
           'JD_EXTRACTION_INVALID',
           502,
           'The vision model returned invalid job-description text or requirements.',
         );
+      } else {
+        mapped = mapVisionRuntimeError(error);
+        logVisionFailure(actor, aiConfig, error, mapped);
       }
-      const mapped = mapVisionRuntimeError(error);
-      logVisionFailure(actor, aiConfig, error, mapped);
+
+      if (parsingSourceId) {
+        try {
+          await jdRepository.markFailedOwned(
+            actor.userId,
+            parsingSourceId,
+            mapped.code,
+            actor.requestId,
+          );
+        } catch (persistenceError) {
+          console.error('JD image failure state could not be persisted', {
+            requestId: actor.requestId,
+            sourceId: parsingSourceId,
+            errorName: persistenceError instanceof Error ? persistenceError.name : 'UnknownError',
+          });
+        }
+      }
       throw mapped;
     }
   },
@@ -318,7 +349,7 @@ export const jdService = {
     await dbReady;
     const source = await jdRepository.findSourceOwned(actor.userId, jdSourceId);
     if (!source) throw new JdServiceError('JD_SOURCE_NOT_FOUND', 404);
-    await jdRepository.markParsingOwned(actor.userId, jdSourceId);
+    await jdRepository.markParsingOwned(actor.userId, jdSourceId, actor.requestId);
     try {
       const aiConfig = await resolveLlmConfig(actor.userId, 'jd');
       const result = await generateText({
@@ -339,7 +370,7 @@ export const jdService = {
       );
     } catch (error) {
       const code = error instanceof AIConfigError ? error.code : 'JD_EXTRACTION_FAILED';
-      await jdRepository.markFailedOwned(actor.userId, jdSourceId, code);
+      await jdRepository.markFailedOwned(actor.userId, jdSourceId, code, actor.requestId);
       if (error instanceof AIConfigError) {
         throw new JdServiceError(error.code, error.status, error.message);
       }

@@ -119,64 +119,167 @@ export const jdRepository = {
     return rows[0] ? (await attachRequirements(rows))[0] : null;
   },
 
-  async createImageReviewOwned(input: {
+  async beginImageParsingOwned(input: {
     userId: string;
     title: string;
-    company: string;
-    jobTitle: string;
-    location: string;
     originalFilename: string;
     mimeType: string;
     sizeBytes: number;
     contentHash: string;
-    normalizedText: string;
     parserId: string;
     parserVersion: string;
-    requirements: Array<JdRequirementInput & { sortOrder: number; importance: number }>;
+    requestId: string;
   }) {
     const id = crypto.randomUUID();
-    const requirements = requirementValues(input.userId, id, input.requirements);
     const sourceValues = {
       id,
       userId: input.userId,
       inputType: 'image' as const,
       title: input.title,
-      company: input.company,
-      jobTitle: input.jobTitle,
-      location: input.location,
       originalFilename: input.originalFilename,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,
+      // Uploaded image bytes are deliberately not persisted. The empty text is
+      // replaced atomically after Vision extraction succeeds.
+      rawText: '',
+      normalizedText: '',
+      status: 'parsing' as const,
+      parserId: input.parserId,
+      parserVersion: input.parserVersion,
+      lastRequestId: input.requestId,
+    } satisfies typeof jdSources.$inferInsert;
+
+    let created = false;
+    if (config.db.type === 'sqlite') {
+      created = db.insert(jdSources).values(sourceValues).onConflictDoNothing().run().changes > 0;
+    } else {
+      const inserted = await db.insert(jdSources).values(sourceValues)
+        .onConflictDoNothing()
+        .returning({ id: jdSources.id });
+      created = inserted.length > 0;
+    }
+
+    let source = await this.findSourceByContentHashOwned(input.userId, input.contentHash);
+    if (!source) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
+    if (created) return { source, created: true, started: true };
+    if (source.status !== 'failed') return { source, created: false, started: false };
+
+    const reset = {
+      title: input.title,
+      company: '',
+      jobTitle: '',
+      location: '',
+      originalFilename: input.originalFilename,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+      rawText: '',
+      normalizedText: '',
+      status: 'parsing' as const,
+      parserId: input.parserId,
+      parserVersion: input.parserVersion,
+      errorCode: null,
+      lastRequestId: input.requestId,
+      confirmedAt: null,
+      updatedAt: new Date(),
+    };
+    let started = false;
+    if (config.db.type === 'sqlite') {
+      db.transaction((tx: typeof db) => {
+        const updated = tx.update(jdSources).set(reset).where(and(
+          eq(jdSources.id, source!.id),
+          eq(jdSources.userId, input.userId),
+          eq(jdSources.status, 'failed'),
+        )).run();
+        started = updated.changes > 0;
+        if (started) {
+          tx.delete(jdRequirements).where(and(
+            eq(jdRequirements.jdSourceId, source!.id),
+            eq(jdRequirements.userId, input.userId),
+          )).run();
+        }
+      });
+    } else {
+      await db.transaction(async (tx: typeof db) => {
+        const updated = await tx.update(jdSources).set(reset).where(and(
+          eq(jdSources.id, source!.id),
+          eq(jdSources.userId, input.userId),
+          eq(jdSources.status, 'failed'),
+        )).returning({ id: jdSources.id });
+        started = updated.length > 0;
+        if (started) {
+          await tx.delete(jdRequirements).where(and(
+            eq(jdRequirements.jdSourceId, source!.id),
+            eq(jdRequirements.userId, input.userId),
+          ));
+        }
+      });
+    }
+
+    source = await this.findSourceOwned(input.userId, source.id);
+    if (!source) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
+    return { source, created: false, started };
+  },
+
+  async completeImageReviewOwned(userId: string, jdSourceId: string, input: {
+    title: string;
+    company: string;
+    jobTitle: string;
+    location: string;
+    normalizedText: string;
+    parserId: string;
+    parserVersion: string;
+    requestId: string;
+    requirements: Array<JdRequirementInput & { sortOrder: number; importance: number }>;
+  }) {
+    const values = requirementValues(userId, jdSourceId, input.requirements);
+    const update = {
+      title: input.title,
+      company: input.company,
+      jobTitle: input.jobTitle,
+      location: input.location,
       // Phase 6B.1 intentionally stores extracted text, not uploaded binary data.
       rawText: input.normalizedText,
       normalizedText: input.normalizedText,
       status: 'needs_review' as const,
       parserId: input.parserId,
       parserVersion: input.parserVersion,
-    } satisfies typeof jdSources.$inferInsert;
+      errorCode: null,
+      lastRequestId: input.requestId,
+      confirmedAt: null,
+      updatedAt: new Date(),
+    };
 
     if (config.db.type === 'sqlite') {
       db.transaction((tx: typeof db) => {
-        const inserted = tx.insert(jdSources).values(sourceValues).onConflictDoNothing().run();
-        if (inserted.changes > 0 && requirements.length > 0) {
-          tx.insert(jdRequirements).values(requirements).run();
-        }
+        const source = tx.select({ id: jdSources.id }).from(jdSources).where(and(
+          eq(jdSources.id, jdSourceId), eq(jdSources.userId, userId),
+        )).limit(1).get();
+        if (!source) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
+        tx.delete(jdRequirements).where(and(
+          eq(jdRequirements.jdSourceId, jdSourceId), eq(jdRequirements.userId, userId),
+        )).run();
+        if (values.length > 0) tx.insert(jdRequirements).values(values).run();
+        tx.update(jdSources).set(update).where(and(
+          eq(jdSources.id, jdSourceId), eq(jdSources.userId, userId),
+        )).run();
       });
     } else {
       await db.transaction(async (tx: typeof db) => {
-        const inserted = await tx.insert(jdSources).values(sourceValues)
-          .onConflictDoNothing()
-          .returning({ id: jdSources.id });
-        if (inserted.length > 0 && requirements.length > 0) {
-          await tx.insert(jdRequirements).values(requirements);
-        }
+        const sources = await tx.select({ id: jdSources.id }).from(jdSources).where(and(
+          eq(jdSources.id, jdSourceId), eq(jdSources.userId, userId),
+        )).limit(1);
+        if (!sources[0]) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
+        await tx.delete(jdRequirements).where(and(
+          eq(jdRequirements.jdSourceId, jdSourceId), eq(jdRequirements.userId, userId),
+        ));
+        if (values.length > 0) await tx.insert(jdRequirements).values(values);
+        await tx.update(jdSources).set(update).where(and(
+          eq(jdSources.id, jdSourceId), eq(jdSources.userId, userId),
+        ));
       });
     }
-
-    const source = await this.findSourceByContentHashOwned(input.userId, input.contentHash);
-    if (!source) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
-    return { source, created: source.id === id };
+    return this.findSourceOwned(userId, jdSourceId);
   },
 
   async listSourcesOwned(userId: string) {
@@ -194,12 +297,13 @@ export const jdRepository = {
     return rows[0] ? (await attachRequirements(rows))[0] : null;
   },
 
-  async markParsingOwned(userId: string, jdSourceId: string) {
+  async markParsingOwned(userId: string, jdSourceId: string, requestId?: string) {
     const existing = await this.findSourceOwned(userId, jdSourceId);
     if (!existing) throw new JdRepositoryError('JD_SOURCE_NOT_FOUND');
     await db.update(jdSources).set({
       status: 'parsing',
       errorCode: null,
+      ...(requestId ? { lastRequestId: requestId } : {}),
       confirmedAt: null,
       updatedAt: new Date(),
     }).where(and(eq(jdSources.id, jdSourceId), eq(jdSources.userId, userId)));
@@ -275,10 +379,11 @@ export const jdRepository = {
     return this.findSourceOwned(userId, jdSourceId);
   },
 
-  async markFailedOwned(userId: string, jdSourceId: string, errorCode: string) {
+  async markFailedOwned(userId: string, jdSourceId: string, errorCode: string, requestId?: string) {
     await db.update(jdSources).set({
       status: 'failed',
       errorCode: errorCode.slice(0, 120),
+      ...(requestId ? { lastRequestId: requestId } : {}),
       confirmedAt: null,
       updatedAt: new Date(),
     }).where(and(eq(jdSources.id, jdSourceId), eq(jdSources.userId, userId)));

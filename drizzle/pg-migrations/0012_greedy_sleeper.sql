@@ -1,0 +1,1 @@
+ALTER TABLE "jd_sources" ADD COLUMN "last_request_id" text;

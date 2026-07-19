@@ -425,6 +425,7 @@ export const jdSources = pgTable('jd_sources', {
   parserId: text('parser_id'),
   parserVersion: text('parser_version'),
   errorCode: text('error_code'),
+  lastRequestId: text('last_request_id'),
   confirmedAt: integer('confirmed_at'),
   createdAt: integer('created_at').notNull().default(epochNow),
   updatedAt: integer('updated_at').notNull().default(epochNow),

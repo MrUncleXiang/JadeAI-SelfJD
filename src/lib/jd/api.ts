@@ -61,6 +61,7 @@ export function toJdSource(source: Record<string, unknown>) {
     parserId: source.parserId,
     parserVersion: source.parserVersion,
     errorCode: source.errorCode,
+    lastRequestId: source.lastRequestId,
     confirmedAt: dateString(source.confirmedAt as Date | number | string | null),
     createdAt: dateString(source.createdAt as Date | number | string | null),
     updatedAt: dateString(source.updatedAt as Date | number | string | null),

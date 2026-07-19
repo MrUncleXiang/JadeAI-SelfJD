@@ -1089,6 +1089,13 @@
       "providerError": "Vision 供应商拒绝或未能完成请求；请根据请求 ID 查看服务日志，并重新检测该档案。"
     },
     "imagePrivacyNote": "当前版本不会长期保存原始图片二进制，只保存文件元数据、原图哈希、识别文本和待审要求。",
+    "imageHistoryTitle": "最近图片解析记录",
+    "imageHistoryDescription": "解析中、成功或失败状态会保存在账号中；刷新或重新登录后仍可查看。",
+    "imageHistoryEmpty": "上传图片后，解析状态和结果会显示在这里。",
+    "parsingPersistent": "Vision 正在识别图片。耗时较长时可以留在本页等待，状态会自动刷新。",
+    "failurePersisted": "失败记录及请求 ID 已保存在下方。",
+    "imageRetryHint": "请重新选择同一张图片后再次上传；失败记录会原地重试，不会生成重复 JD。",
+    "reviewResult": "查看并审核结果",
     "created": "JD 已保存",
     "duplicateFound": "检测到相同内容，已复用现有 JD",
     "savedSources": "已保存 JD",

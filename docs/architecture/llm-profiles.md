@@ -52,6 +52,7 @@ Cookie Session
 LLM_ENCRYPTION_KEYS={"1":"<base64-32-byte-key>","2":"<base64-32-byte-key>"}
 LLM_ENCRYPTION_ACTIVE_KEY_VERSION=2
 LLM_REQUEST_TIMEOUT_MS=60000
+LLM_VISION_REQUEST_TIMEOUT_MS=180000
 ```
 
 生成密钥：
@@ -88,7 +89,8 @@ LLM_BASE_URL_ALLOWLIST=http://127.0.0.1:11434,10.30.0.0/16
 2. 仅允许配置 BaseURL 的同 Origin、同路径子树；Provider SDK 添加的 Query 可以保留。
 3. 将校验通过的 IP 固定到该请求的 Socket Lookup，降低 DNS Rebinding 风险。
 4. 禁止自动重定向，任何 `3xx` 都以 `OUTBOUND_REDIRECT_BLOCKED` 失败。
-5. 连接、Header 和 Body 使用 `LLM_REQUEST_TIMEOUT_MS`，配置值限制在 1 秒至 5 分钟。
+5. 连接、Header 和 Body 默认使用 `LLM_REQUEST_TIMEOUT_MS`；Vision 功能单独使用
+   `LLM_VISION_REQUEST_TIMEOUT_MS`（默认 180 秒），两者都限制在 1 秒至 5 分钟。
 6. 模型列表响应在完整分配前限制为 1 MiB，且最多返回 1,000 个模型 ID。
 
 ## 5. API

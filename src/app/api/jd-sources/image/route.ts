@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     });
     return jdJson({
       ...toJdSource(result.source),
-      deduplicated: !result.created,
+      deduplicated: result.deduplicated,
     }, metadata.requestId, result.created ? 201 : 200);
   } catch (error) {
     return jdErrorResponse(error, metadata.requestId);

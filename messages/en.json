@@ -1089,6 +1089,13 @@
       "providerError": "The Vision provider rejected or failed the request. Use the request ID to inspect service logs and retest the profile."
     },
     "imagePrivacyNote": "This phase does not retain the original image binary. It stores only file metadata, the original hash, extracted text, and reviewable requirements.",
+    "imageHistoryTitle": "Recent image extraction records",
+    "imageHistoryDescription": "In-progress, successful, and failed states are saved to your account and remain visible after refresh or sign-in.",
+    "imageHistoryEmpty": "Upload an image to see its extraction status and result here.",
+    "parsingPersistent": "Vision is reading the image. You can keep this page open for long requests; the status refreshes automatically.",
+    "failurePersisted": "The failed record and request ID were saved below.",
+    "imageRetryHint": "Select and upload the same image again to retry the failed record without creating a duplicate JD.",
+    "reviewResult": "View and review result",
     "created": "JD saved",
     "duplicateFound": "Identical content found; the existing JD was reused",
     "savedSources": "Saved JDs",

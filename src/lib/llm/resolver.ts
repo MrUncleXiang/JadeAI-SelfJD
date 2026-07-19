@@ -11,6 +11,7 @@ import { LlmBaseUrlPolicyError, validateLlmBaseUrl } from './outbound-url';
 import { createLlmProviderFetch } from './transport';
 
 type ProfileRecord = NonNullable<Awaited<ReturnType<typeof llmProfileRepository.findOwnedById>>>;
+const DEFAULT_VISION_REQUEST_TIMEOUT_MS = 180_000;
 
 function parseCapabilities(value: unknown): AIConfig['capabilities'] {
   let parsed = value;
@@ -52,7 +53,7 @@ function resolverError(error: unknown): never {
 async function materializeProfile(
   userId: string,
   profile: ProfileRecord,
-  options: { allowInvalid?: boolean } = {},
+  options: { allowInvalid?: boolean; requestTimeoutMs?: number } = {},
 ): Promise<AIConfig> {
   if (profile.status === 'disabled') {
     throw new AIConfigError(
@@ -93,7 +94,7 @@ async function materializeProfile(
       model: profile.modelName,
       profileId: profile.id,
       capabilities: parseCapabilities(profile.capabilities),
-      fetch: createLlmProviderFetch(baseURL),
+      fetch: createLlmProviderFetch(baseURL, { timeoutMs: options.requestTimeoutMs }),
     };
   } catch (error) {
     resolverError(error);
@@ -113,7 +114,14 @@ export async function resolveLlmConfig(
       422,
     );
   }
-  return materializeProfile(userId, profile);
+  const configuredVisionTimeout = Number(process.env.LLM_VISION_REQUEST_TIMEOUT_MS);
+  return materializeProfile(userId, profile, {
+    requestTimeoutMs: feature === 'vision'
+      ? (Number.isFinite(configuredVisionTimeout)
+          ? configuredVisionTimeout
+          : DEFAULT_VISION_REQUEST_TIMEOUT_MS)
+      : undefined,
+  });
 }
 
 export async function resolveOwnedLlmConfig(

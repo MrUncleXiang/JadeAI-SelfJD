@@ -437,6 +437,7 @@ export const jdSources = sqliteTable('jd_sources', {
   parserId: text('parser_id'),
   parserVersion: text('parser_version'),
   errorCode: text('error_code'),
+  lastRequestId: text('last_request_id'),
   confirmedAt: integer('confirmed_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),

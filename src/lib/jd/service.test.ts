@@ -189,8 +189,66 @@ describe('JD extraction service', () => {
       filename: 'unity-jd.png',
       mimeType: 'image/png',
     });
-    expect(duplicate).toMatchObject({ created: false, source: { id: created.source.id } });
+    expect(duplicate).toMatchObject({
+      created: false,
+      deduplicated: true,
+      source: { id: created.source.id },
+    });
     expect(mocks.generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists an image parsing record before the Vision request completes', async () => {
+    const buffer = await sharp({
+      create: { width: 73, height: 73, channels: 3, background: '#dbeafe' },
+    }).png().toBuffer();
+    mocks.resolveLlmConfig.mockResolvedValueOnce({
+      provider: 'openai-compatible',
+      apiKey: 'test-only',
+      baseURL: 'https://llm.test/v1',
+      model: 'vision-test-model',
+      capabilities: { vision: true },
+    });
+    let completeVision!: (value: { text: string }) => void;
+    mocks.generateText.mockReturnValueOnce(new Promise((resolve) => {
+      completeVision = resolve;
+    }));
+
+    const extraction = jdService.createImageSource(actor, {
+      buffer,
+      filename: 'slow-vision.png',
+      mimeType: 'image/png',
+    });
+    await vi.waitFor(async () => {
+      const sources = await jdService.listSources(actor);
+      expect(sources.find((source) => source.originalFilename === 'slow-vision.png')).toMatchObject({
+        status: 'parsing',
+        lastRequestId: actor.requestId,
+      });
+    });
+
+    completeVision({
+      text: JSON.stringify({
+        normalizedText: `Unity Technical Artist ${suffix}\n要求：熟悉 Shader`,
+        title: 'Unity Technical Artist',
+        company: '',
+        jobTitle: 'Unity Technical Artist',
+        location: '',
+        requirements: [{
+          requirementType: 'hard_skill',
+          text: '熟悉 Shader',
+          normalizedTerm: 'shader',
+          aliases: [],
+          priority: 'required',
+          importance: 1,
+          sourceText: '熟悉 Shader',
+        }],
+      }),
+    });
+    await expect(extraction).resolves.toMatchObject({
+      created: true,
+      deduplicated: false,
+      source: { status: 'needs_review', lastRequestId: actor.requestId },
+    });
   });
 
   it('does not send an image when the bound profile has not passed the Vision probe', async () => {
@@ -211,6 +269,13 @@ describe('JD extraction service', () => {
       mimeType: 'image/webp',
     })).rejects.toMatchObject({ code: 'LLM_VISION_REQUIRED', status: 422 });
     expect(mocks.generateText).not.toHaveBeenCalled();
+    const failed = (await jdService.listSources(actor))
+      .find((source) => source.originalFilename === 'text-only.webp');
+    expect(failed).toMatchObject({
+      status: 'failed',
+      errorCode: 'LLM_VISION_REQUIRED',
+      lastRequestId: actor.requestId,
+    });
   });
 
   it('maps provider failures to actionable Vision errors without logging secrets', async () => {
@@ -244,6 +309,54 @@ describe('JD extraction service', () => {
     }));
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain('secret-must-not-be-logged');
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain('https://llm.test');
+    const failed = (await jdService.listSources(actor))
+      .find((source) => source.originalFilename === 'auth-failure.png');
+    expect(failed).toMatchObject({
+      status: 'failed',
+      errorCode: 'LLM_AUTH_FAILED',
+      lastRequestId: actor.requestId,
+    });
+
+    mocks.resolveLlmConfig.mockResolvedValueOnce({
+      provider: 'openai-compatible',
+      apiKey: 'test-only',
+      baseURL: 'https://llm.test/v1',
+      model: 'vision-test-model',
+      capabilities: { vision: true },
+    });
+    mocks.generateText.mockResolvedValueOnce({
+      text: JSON.stringify({
+        normalizedText: `Unity Engineer ${suffix}\nRequired: C#`,
+        title: 'Unity Engineer',
+        company: '',
+        jobTitle: 'Unity Engineer',
+        location: '',
+        requirements: [{
+          requirementType: 'hard_skill',
+          text: 'C#',
+          normalizedTerm: 'c#',
+          aliases: [],
+          priority: 'required',
+          importance: 1,
+          sourceText: 'C#',
+        }],
+      }),
+    });
+    const retried = await jdService.createImageSource(actor, {
+      buffer,
+      filename: 'auth-failure.png',
+      mimeType: 'image/png',
+    });
+    expect(retried).toMatchObject({
+      created: false,
+      deduplicated: false,
+      source: {
+        id: failed?.id,
+        status: 'needs_review',
+        errorCode: null,
+        lastRequestId: actor.requestId,
+      },
+    });
     consoleError.mockRestore();
   });
 });

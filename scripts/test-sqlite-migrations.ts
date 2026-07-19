@@ -107,6 +107,11 @@ function testFreshInstall(): void {
   );
   assert(documentColumns.has('security_findings'));
   assert(documentColumns.has('llm_eligible'));
+  const jdSourceColumns = new Set(
+    (sqlite.prepare('PRAGMA table_info(jd_sources)').all() as Array<{ name: string }>)
+      .map((row) => row.name),
+  );
+  assert(jdSourceColumns.has('last_request_id'));
   const githubColumns = sqlite.prepare(`
     SELECT m.name AS table_name, p.name AS column_name
     FROM sqlite_master AS m, pragma_table_info(m.name) AS p
