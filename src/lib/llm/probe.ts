@@ -45,7 +45,7 @@ export function classifyLlmProbeError(error: unknown): LlmCapabilityError {
   const status = statusCode(error);
   if (status === 401 || status === 403) return 'AUTH_FAILED';
   if (status === 404) return 'MODEL_NOT_FOUND';
-  if (status === 408 || status === 504) return 'TIMEOUT';
+  if (status === 408 || status === 504 || status === 524) return 'TIMEOUT';
   if (status === 429) return 'RATE_LIMITED';
   if (error instanceof SyntaxError) return 'INVALID_RESPONSE';
   if (error instanceof Error && /timeout|timed out/i.test(error.name + error.message)) return 'TIMEOUT';

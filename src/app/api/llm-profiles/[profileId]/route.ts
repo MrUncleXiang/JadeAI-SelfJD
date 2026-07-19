@@ -14,6 +14,7 @@ import { llmProfileService } from '@/lib/llm/service';
 const updateProfileSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   provider: z.enum(['openai-compatible', 'anthropic', 'gemini']).optional(),
+  wireApi: z.enum(['chat-completions', 'responses']).optional(),
   baseUrl: z.string().trim().min(1).max(2_048).optional(),
   modelName: z.string().trim().min(1).max(200).optional(),
   apiKey: z.string().trim().min(1).max(8_192).optional(),

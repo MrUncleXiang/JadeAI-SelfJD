@@ -80,6 +80,8 @@ describe('LLM capability probe', () => {
     expect(JSON.stringify(result)).not.toContain('tool calling is not supported');
     expect(classifyLlmProbeError(Object.assign(new Error('missing'), { status: 404 })))
       .toBe('MODEL_NOT_FOUND');
+    expect(classifyLlmProbeError(Object.assign(new Error('gateway timeout'), { statusCode: 524 })))
+      .toBe('TIMEOUT');
     expect(classifyLlmProbeError(new Error('provider-specific secret response')))
       .toBe('PROVIDER_ERROR');
   });

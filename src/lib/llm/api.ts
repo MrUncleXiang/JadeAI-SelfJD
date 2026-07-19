@@ -61,6 +61,7 @@ export function toLlmProfile(profile: ProfileRecord) {
     id: profile.id,
     name: profile.name,
     provider: profile.provider,
+    wireApi: profile.wireApi,
     baseUrl: profile.baseUrl,
     modelName: profile.modelName,
     hasApiKey: Boolean(profile.encryptedApiKey),

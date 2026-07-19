@@ -116,6 +116,7 @@ export const llmProfiles = pgTable('llm_profiles', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   provider: text('provider').notNull(),
+  wireApi: text('wire_api').notNull().default('chat-completions'),
   baseUrl: text('base_url').notNull(),
   modelName: text('model_name').notNull(),
   encryptedApiKey: text('encrypted_api_key').notNull(),

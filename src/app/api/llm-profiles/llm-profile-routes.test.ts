@@ -90,8 +90,13 @@ describe('LLM profile routes', () => {
     const createdText = await createdResponse.text();
     expect(createdText).not.toContain(firstKey);
     expect(createdText).not.toContain('encryptedApiKey');
-    const created = JSON.parse(createdText) as { id: string; hasApiKey: boolean };
+    const created = JSON.parse(createdText) as {
+      id: string;
+      hasApiKey: boolean;
+      wireApi: 'chat-completions' | 'responses';
+    };
     expect(created.hasApiKey).toBe(true);
+    expect(created.wireApi).toBe('chat-completions');
 
     const rows = await db.select().from(llmProfiles).where(eq(llmProfiles.id, created.id)).limit(1);
     expect(rows[0]?.encryptedApiKey).not.toBe(firstKey);
@@ -136,6 +141,13 @@ describe('LLM profile routes', () => {
     expect(renamed.status).toBe(200);
     const afterRename = await db.select().from(llmProfiles).where(eq(llmProfiles.id, created.id)).limit(1);
     expect(afterRename[0].encryptedApiKey).toBe(rows[0].encryptedApiKey);
+
+    const switchedProtocol = await updateProfile(
+      jsonRequest(`/api/llm-profiles/${created.id}`, { wireApi: 'responses' }, ownerCookie, 'PATCH'),
+      { params: Promise.resolve({ profileId: created.id }) },
+    );
+    expect(switchedProtocol.status).toBe(200);
+    await expect(switchedProtocol.json()).resolves.toMatchObject({ wireApi: 'responses', status: 'untested' });
 
     const rotated = await updateProfile(
       jsonRequest(`/api/llm-profiles/${created.id}`, { apiKey: secondKey }, ownerCookie, 'PATCH'),
@@ -190,6 +202,7 @@ describe('LLM profile routes', () => {
     expect(resolved).toMatchObject({
       profileId: created.id,
       provider: 'openai-compatible',
+      wireApi: 'responses',
       baseURL: 'https://8.8.8.8/v1',
       model: 'test-model',
       apiKey: secondKey,

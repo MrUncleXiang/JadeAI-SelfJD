@@ -89,6 +89,9 @@ async function materializeProfile(
 
     return {
       provider: profile.provider,
+      wireApi: profile.provider === 'openai-compatible' && profile.wireApi === 'responses'
+        ? 'responses'
+        : 'chat-completions',
       apiKey,
       baseURL,
       model: profile.modelName,

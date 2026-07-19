@@ -1,0 +1,1 @@
+ALTER TABLE `llm_profiles` ADD `wire_api` text DEFAULT 'chat-completions' NOT NULL;

@@ -5,6 +5,7 @@ import { llmFeatureBindings, llmProfiles } from '../schema';
 
 export type LlmFeature = 'resume' | 'jd' | 'vision' | 'interview';
 export type LlmProvider = 'openai-compatible' | 'anthropic' | 'gemini';
+export type LlmWireApi = 'chat-completions' | 'responses';
 export type LlmProfileStatus = 'active' | 'invalid' | 'disabled' | 'untested';
 
 type EncryptedKeyColumns = {
@@ -18,6 +19,7 @@ type CreateProfileInput = EncryptedKeyColumns & {
   id: string;
   name: string;
   provider: LlmProvider;
+  wireApi: LlmWireApi;
   baseUrl: string;
   modelName: string;
   capabilities: unknown;
@@ -27,6 +29,7 @@ type CreateProfileInput = EncryptedKeyColumns & {
 type UpdateProfileInput = Partial<EncryptedKeyColumns & {
   name: string;
   provider: LlmProvider;
+  wireApi: LlmWireApi;
   baseUrl: string;
   modelName: string;
   capabilities: unknown;

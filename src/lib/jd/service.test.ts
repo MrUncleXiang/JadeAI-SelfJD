@@ -6,13 +6,19 @@ vi.hoisted(() => {
   process.env.SQLITE_PATH = ':memory:';
 });
 
-const mocks = vi.hoisted(() => ({
-  generateText: vi.fn(),
-  resolveLlmConfig: vi.fn(),
-  getModel: vi.fn(() => ({ modelId: 'jd-test-model' })),
-}));
+const mocks = vi.hoisted(() => {
+  const generateText = vi.fn();
+  return {
+    generateText,
+    streamText: vi.fn((options) => ({
+      text: Promise.resolve(generateText(options)).then((result: { text: string }) => result.text),
+    })),
+    resolveLlmConfig: vi.fn(),
+    getModel: vi.fn(() => ({ modelId: 'jd-test-model' })),
+  };
+});
 
-vi.mock('ai', () => ({ generateText: mocks.generateText }));
+vi.mock('ai', () => ({ generateText: mocks.generateText, streamText: mocks.streamText }));
 vi.mock('@/lib/llm/resolver', () => ({ resolveLlmConfig: mocks.resolveLlmConfig }));
 vi.mock('@/lib/ai/provider', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/ai/provider')>();
@@ -173,7 +179,7 @@ describe('JD extraction service', () => {
       })],
     });
     expect(mocks.resolveLlmConfig).toHaveBeenCalledWith(userId, 'vision');
-    expect(mocks.generateText).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.streamText).toHaveBeenCalledWith(expect.objectContaining({
       system: expect.stringContaining('untrusted data'),
       maxOutputTokens: 4_096,
       messages: [expect.objectContaining({
@@ -182,7 +188,7 @@ describe('JD extraction service', () => {
         ]),
       })],
     }));
-    expect(mocks.generateText.mock.calls[0]?.[0]).not.toHaveProperty('providerOptions');
+    expect(mocks.streamText.mock.calls[0]?.[0]).not.toHaveProperty('providerOptions');
 
     const duplicate = await jdService.createImageSource(actor, {
       buffer,
@@ -194,7 +200,7 @@ describe('JD extraction service', () => {
       deduplicated: true,
       source: { id: created.source.id },
     });
-    expect(mocks.generateText).toHaveBeenCalledTimes(1);
+    expect(mocks.streamText).toHaveBeenCalledTimes(1);
   });
 
   it('persists an image parsing record before the Vision request completes', async () => {
@@ -268,6 +274,7 @@ describe('JD extraction service', () => {
       filename: 'text-only.webp',
       mimeType: 'image/webp',
     })).rejects.toMatchObject({ code: 'LLM_VISION_REQUIRED', status: 422 });
+    expect(mocks.streamText).not.toHaveBeenCalled();
     expect(mocks.generateText).not.toHaveBeenCalled();
     const failed = (await jdService.listSources(actor))
       .find((source) => source.originalFilename === 'text-only.webp');

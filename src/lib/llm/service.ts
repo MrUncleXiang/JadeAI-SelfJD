@@ -3,6 +3,7 @@ import {
   llmProfileRepository,
   type LlmFeature,
   type LlmProvider,
+  type LlmWireApi,
 } from '@/lib/db/repositories/llm-profile.repository';
 import { authRepository } from '@/lib/db/repositories/auth.repository';
 import type { ActorContext } from '@/lib/auth/service';
@@ -26,6 +27,7 @@ export type LlmCapabilities = {
 export type CreateLlmProfileInput = {
   name: string;
   provider: LlmProvider;
+  wireApi?: LlmWireApi;
   baseUrl: string;
   modelName: string;
   apiKey: string;
@@ -104,6 +106,7 @@ export const llmProfileService = {
         id: profileId,
         name: input.name,
         provider: input.provider,
+        wireApi: input.wireApi ?? 'chat-completions',
         baseUrl,
         modelName: input.modelName,
         encryptedApiKey: encrypted.ciphertext,
@@ -131,6 +134,7 @@ export const llmProfileService = {
       const changes: Parameters<typeof llmProfileRepository.updateOwned>[2] = {};
       if (input.name !== undefined) changes.name = input.name;
       if (input.provider !== undefined) changes.provider = input.provider;
+      if (input.wireApi !== undefined) changes.wireApi = input.wireApi;
       if (input.modelName !== undefined) changes.modelName = input.modelName;
       if (input.baseUrl !== undefined) changes.baseUrl = await validateLlmBaseUrl(input.baseUrl);
       if (input.apiKey !== undefined) {
@@ -142,6 +146,7 @@ export const llmProfileService = {
       }
 
       const invalidatesProbe = input.provider !== undefined
+        || input.wireApi !== undefined
         || input.modelName !== undefined
         || input.baseUrl !== undefined
         || input.apiKey !== undefined;

@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 
 export type LlmProvider = 'openai-compatible' | 'anthropic' | 'gemini';
+export type LlmWireApi = 'chat-completions' | 'responses';
 export type LlmFeature = 'resume' | 'jd' | 'vision' | 'interview';
 
 export interface LlmProfileSummary {
   id: string;
   name: string;
   provider: LlmProvider;
+  wireApi: LlmWireApi;
   baseUrl: string;
   modelName: string;
   hasApiKey: boolean;

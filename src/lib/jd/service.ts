@@ -1,4 +1,4 @@
-import { generateText } from 'ai';
+import { generateText, streamText } from 'ai';
 
 import { extractJson } from '@/lib/ai/extract-json';
 import {
@@ -40,7 +40,7 @@ import type { JdExtractionCandidate, JdRequirementInput } from './types';
 const JD_PARSER_ID = 'llm-jd-extractor';
 const JD_PARSER_VERSION = '1.0.0';
 const JD_IMAGE_PARSER_ID = 'vision-jd-extractor';
-const JD_IMAGE_PARSER_VERSION = '1.1.0';
+const JD_IMAGE_PARSER_VERSION = '1.2.0';
 
 export class JdServiceError extends Error {
   constructor(
@@ -136,6 +136,7 @@ function logVisionFailure(
     requestId: actor.requestId,
     profileId: aiConfig?.profileId || null,
     provider: aiConfig?.provider || null,
+    wireApi: aiConfig?.wireApi || null,
     model: aiConfig?.model || null,
     code: mapped.code,
     upstreamStatus: upstreamStatus(error),
@@ -248,7 +249,10 @@ export const jdService = {
           'Bind a vision-capable LLM profile and run its capability test before uploading an image JD.',
         );
       }
-      const result = await generateText({
+      // Consume a provider stream even though this server route ultimately returns JSON.
+      // Codex-style Responses gateways emit early SSE events, which prevents intermediary
+      // proxies from treating a long vision inference as an idle request (for example 524).
+      const result = streamText({
         model: getModel(aiConfig),
         maxOutputTokens: 4_096,
         maxRetries: 0,
@@ -264,10 +268,11 @@ export const jdService = {
           ],
         }],
       });
+      const responseText = await result.text;
 
       let candidate: JdExtractionCandidate & { normalizedText: string };
       try {
-        candidate = extractJson(result.text, jdImageExtractionSchema);
+        candidate = extractJson(responseText, jdImageExtractionSchema);
       } catch (error) {
         const mapped = new JdServiceError(
           'JD_EXTRACTION_INVALID',

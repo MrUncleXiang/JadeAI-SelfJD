@@ -109,6 +109,9 @@ export const llmProfiles = sqliteTable('llm_profiles', {
   provider: text('provider', {
     enum: ['openai-compatible', 'anthropic', 'gemini'],
   }).notNull(),
+  wireApi: text('wire_api', {
+    enum: ['chat-completions', 'responses'],
+  }).notNull().default('chat-completions'),
   baseUrl: text('base_url').notNull(),
   modelName: text('model_name').notNull(),
   encryptedApiKey: text('encrypted_api_key').notNull(),

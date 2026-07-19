@@ -37,6 +37,7 @@ import {
   type LlmFeature,
   type LlmProfileSummary,
   type LlmProvider,
+  type LlmWireApi,
   useSettingsStore,
 } from '@/stores/settings-store';
 
@@ -71,6 +72,7 @@ const FEATURES: Array<{ value: LlmFeature; zh: string; en: string }> = [
 type ProfileForm = {
   name: string;
   provider: LlmProvider;
+  wireApi: LlmWireApi;
   baseUrl: string;
   modelName: string;
   apiKey: string;
@@ -79,6 +81,7 @@ type ProfileForm = {
 const NEW_FORM: ProfileForm = {
   name: '',
   provider: 'openai-compatible',
+  wireApi: 'chat-completions',
   baseUrl: PROVIDERS[0].baseUrl,
   modelName: PROVIDERS[0].model,
   apiKey: '',
@@ -154,6 +157,7 @@ export function LlmProfileSettings() {
     setForm({
       name: profile.name,
       provider: profile.provider,
+      wireApi: profile.wireApi || 'chat-completions',
       baseUrl: profile.baseUrl,
       modelName: profile.modelName,
       apiKey: '',
@@ -179,6 +183,7 @@ export function LlmProfileSettings() {
       const payload = {
         name: form.name.trim(),
         provider: form.provider,
+        ...(form.provider === 'openai-compatible' ? { wireApi: form.wireApi } : {}),
         baseUrl: form.baseUrl.trim(),
         modelName: form.modelName.trim(),
         ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
@@ -357,6 +362,11 @@ export function LlmProfileSettings() {
                 <p className="mt-1 truncate text-xs text-zinc-500">
                   {providerLabel(profile.provider)} · {profile.modelName}
                 </p>
+                <p className="truncate text-[11px] text-zinc-400">
+                  {profile.provider === 'openai-compatible'
+                    ? (profile.wireApi === 'responses' ? 'Responses API' : 'Chat Completions API')
+                    : providerLabel(profile.provider)}
+                </p>
                 <p className="truncate text-[11px] text-zinc-400">{profile.baseUrl}</p>
               </div>
               <div className="flex shrink-0 gap-1">
@@ -423,6 +433,7 @@ export function LlmProfileSettings() {
                 setForm({
                   ...form,
                   provider: selected.value,
+                  wireApi: selected.value === 'openai-compatible' ? form.wireApi : 'chat-completions',
                   ...(!editingId ? { baseUrl: selected.baseUrl, modelName: selected.model } : {}),
                 });
                 setModels([]);
@@ -442,6 +453,30 @@ export function LlmProfileSettings() {
             {zh ? '默认仅允许公网 HTTPS；私网地址需由管理员加入 Allowlist。' : 'Public HTTPS only by default; private endpoints require an operator allowlist.'}
           </p>
         </div>
+        {form.provider === 'openai-compatible' && (
+          <div className="space-y-1.5">
+            <Label>{zh ? '接口协议' : 'Wire API'}</Label>
+            <Select
+              value={form.wireApi}
+              onValueChange={(wireApi) => setForm({ ...form, wireApi: wireApi as LlmWireApi })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="chat-completions">
+                  {zh ? 'Chat Completions（传统兼容）' : 'Chat Completions (classic compatible)'}
+                </SelectItem>
+                <SelectItem value="responses">
+                  {zh ? 'Responses（Codex/新式视觉）' : 'Responses (Codex / newer vision)'}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-zinc-400">
+              {zh
+                ? '如果同一 Provider 在 Codex 中可用、但 Chat Completions 超时，请选择 Responses。'
+                : 'Choose Responses when the same provider works in Codex but Chat Completions times out.'}
+            </p>
+          </div>
+        )}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label>{zh ? '模型名称' : 'Model name'}</Label>

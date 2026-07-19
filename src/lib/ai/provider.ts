@@ -4,6 +4,9 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 export interface AIConfig {
   provider: 'openai-compatible' | 'anthropic' | 'gemini';
+  /** OpenAI-compatible transport protocol. Most providers expose Chat Completions;
+   * Codex-style gateways may require the Responses API instead. */
+  wireApi?: 'chat-completions' | 'responses';
   apiKey: string;
   baseURL: string;
   model: string;
@@ -50,7 +53,7 @@ export function getModel(config: AIConfig) {
         baseURL: config.baseURL,
         fetch: config.fetch,
       });
-      return p.chat(modelId);
+      return config.wireApi === 'responses' ? p.responses(modelId) : p.chat(modelId);
     }
   }
 }
@@ -59,7 +62,7 @@ export function getModel(config: AIConfig) {
  * Returns providerOptions for JSON mode — only applicable to OpenAI-compatible providers.
  */
 export function getJsonProviderOptions(config: AIConfig) {
-  if (config.provider === 'openai-compatible') {
+  if (config.provider === 'openai-compatible' && config.wireApi !== 'responses') {
     return { openai: { response_format: { type: 'json_object' as const } } };
   }
   return {} as Record<string, never>;
