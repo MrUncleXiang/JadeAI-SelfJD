@@ -12,8 +12,12 @@ import type { ResumeSnapshot } from '@/lib/resume-patch/snapshot';
 import {
   assertTargetedDraftReferences,
   buildTargetedResumeDraftPrompt,
+  buildTargetedResumeModelDraftSchema,
+  buildTargetedResumeReferenceCatalog,
+  resolveTargetedResumeDraftReferences,
   targetedDraftToResumePatch,
   type TargetedResumeDraft,
+  type TargetedResumeModelDraft,
 } from './targeted-draft';
 
 const evidenceId = 'evidence-approved';
@@ -134,6 +138,31 @@ function draft(): TargetedResumeDraft {
   };
 }
 
+function modelDraft(): TargetedResumeModelDraft {
+  return {
+    summary: {
+      text: 'Evidence-backed Unity client engineer.',
+      factRefs: ['F01'],
+      jdRequirementRefs: ['J01'],
+    },
+    skillCategories: [{
+      name: 'Client Development',
+      skills: ['Unity', 'C#'],
+      factRefs: ['F01'],
+      jdRequirementRefs: ['J01'],
+    }],
+    projects: [{
+      name: 'Unity Client Project',
+      description: 'Built a Unity client from approved project evidence.',
+      technologies: ['Unity', 'C#'],
+      highlights: ['Implemented evidence-backed client functionality.'],
+      factRefs: ['F01'],
+      jdRequirementRefs: ['J01'],
+    }],
+    warnings: [],
+  };
+}
+
 describe('targeted resume draft', () => {
   it('converts a compact draft into a validated patch with server-generated hashes and IDs', () => {
     const base = snapshot();
@@ -215,7 +244,25 @@ describe('targeted resume draft', () => {
     )).toThrow(expect.objectContaining({ code: 'INVALID_MODEL_OUTPUT' }));
   });
 
-  it('builds a compact prompt without repository commit or content hashes', () => {
+  it('maps short model references to server-owned evidence and requirement IDs', () => {
+    const catalog = buildTargetedResumeReferenceCatalog(policy, jdContext);
+    expect(catalog.facts.map((item) => item.ref)).toEqual(['F01']);
+    expect(catalog.requirements.map((item) => item.ref)).toEqual(['J01']);
+    const generationSchema = buildTargetedResumeModelDraftSchema(catalog);
+    expect(generationSchema.safeParse(modelDraft()).success).toBe(true);
+    expect(resolveTargetedResumeDraftReferences(modelDraft(), catalog)).toEqual({
+      ...draft(),
+      warnings: [],
+    });
+
+    const invalid = modelDraft();
+    invalid.projects[0].jdRequirementRefs = ['J99'];
+    expect(generationSchema.safeParse(invalid).success).toBe(false);
+    expect(() => resolveTargetedResumeDraftReferences(invalid, catalog))
+      .toThrow(expect.objectContaining({ code: 'INVALID_MODEL_OUTPUT' }));
+  });
+
+  it('builds a compact prompt with short refs and without internal UUIDs or repository hashes', () => {
     const prompt = buildTargetedResumeDraftPrompt({
       language: 'zh',
       instruction: '更突出客户端性能优化。',
@@ -224,9 +271,11 @@ describe('targeted resume draft', () => {
       snapshot: snapshot(),
     });
     expect(prompt).toContain('更突出客户端性能优化。');
-    expect(prompt).toContain(evidenceId);
-    expect(prompt).toContain(jdRequirementId);
+    expect(prompt).toContain('"ref":"F01"');
+    expect(prompt).toContain('"ref":"J01"');
     expect(prompt).toContain('Built a Unity client from approved project evidence.');
+    expect(prompt).not.toContain(evidenceId);
+    expect(prompt).not.toContain(jdRequirementId);
     expect(prompt).not.toContain('commitSha');
     expect(prompt).not.toContain('contentHash');
     expect(prompt.length).toBeLessThan(10_000);

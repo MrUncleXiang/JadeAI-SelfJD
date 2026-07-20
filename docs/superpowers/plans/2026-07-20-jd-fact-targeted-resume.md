@@ -11,8 +11,8 @@
 Approved Career Facts
   + Confirmed JD Requirements
   + 可选的基准简历
-  -> AI 生成有证据引用的精简 TargetedResumeDraft
-  -> 服务端生成 ID/Hash 并转换为 ResumePatch
+  -> AI 生成使用 F/J 短引用的精简 TargetedResumeDraft
+  -> 服务端解析真实 Evidence/JD ID，生成 ID/Hash 并转换为 ResumePatch
   -> 用户审阅 Diff
   -> 应用到独立 Targeted Resume
   -> PDF / DOCX 导出
@@ -37,7 +37,8 @@ Approved Career Facts
    - 从事实库新建定向简历；
    - 从一份现有简历复制为定向副本。
 4. 新简历记录类型、父简历和目标 JD，基准简历不被修改。
-5. AI 只生成摘要、技能组、项目及证据/JD 引用；服务端确定性转换为 Change Set，不直接写入简历正文。
+5. AI 只生成摘要、技能组、项目及本次请求内的事实/JD 短引用；服务端解析真实 ID 并确定性转换为
+   Change Set，不直接写入简历正文。
 6. 每个新增事实仍必须引用 Approved Evidence；JD 引用只能来自当前选中的已确认 JD。
 7. 用户进入现有 Change Set 审阅页，选择后应用。
 
