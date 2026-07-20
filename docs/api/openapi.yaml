@@ -141,6 +141,44 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
+  /api/user/settings:
+    get:
+      tags: [Auth]
+      operationId: getUserSettings
+      x-requirement-id: AUTH-008
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Current user non-secret settings and resume personal defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Auth]
+      operationId: updateUserSettings
+      x-requirement-id: AUTH-008
+      x-implementation-status: implemented
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettingsInput'
+      responses:
+        '200':
+          description: Updated non-secret settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/me/password:
     post:
       tags: [Auth]
@@ -2182,6 +2220,87 @@ components:
         disabledAt:
           type: [string, 'null']
           format: date-time
+    ResumePersonalInfo:
+      type: object
+      additionalProperties: false
+      required: [fullName, jobTitle, email, phone, wechat, location, website, linkedin, github, age, gender, politicalStatus, ethnicity, hometown, maritalStatus, yearsOfExperience, educationLevel]
+      properties:
+        fullName:
+          type: string
+          maxLength: 100
+        jobTitle:
+          type: string
+          maxLength: 120
+        email:
+          type: string
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 40
+        wechat:
+          type: string
+          maxLength: 60
+        location:
+          type: string
+          maxLength: 120
+        website:
+          type: string
+          maxLength: 300
+        linkedin:
+          type: string
+          maxLength: 300
+        github:
+          type: string
+          maxLength: 300
+        age:
+          type: string
+          maxLength: 20
+        gender:
+          type: string
+          maxLength: 20
+        politicalStatus:
+          type: string
+          maxLength: 40
+        ethnicity:
+          type: string
+          maxLength: 40
+        hometown:
+          type: string
+          maxLength: 80
+        maritalStatus:
+          type: string
+          maxLength: 20
+        yearsOfExperience:
+          type: string
+          maxLength: 40
+        educationLevel:
+          type: string
+          maxLength: 40
+
+    UserSettings:
+      type: object
+      additionalProperties: true
+      required: [resumePersonalInfo]
+      properties:
+        autoSave:
+          type: boolean
+        autoSaveInterval:
+          type: number
+        resumePersonalInfo:
+          $ref: '#/components/schemas/ResumePersonalInfo'
+
+    UserSettingsInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        autoSave:
+          type: boolean
+        autoSaveInterval:
+          type: number
+        resumePersonalInfo:
+          $ref: '#/components/schemas/ResumePersonalInfo'
+
 
     LlmProfileCreateInput:
       type: object

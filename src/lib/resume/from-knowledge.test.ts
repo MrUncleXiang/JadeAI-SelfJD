@@ -12,6 +12,7 @@ import { db, dbReady } from '@/lib/db';
 import { careerRepository } from '@/lib/db/repositories/career.repository';
 import { resumeChangeRepository } from '@/lib/db/repositories/resume-change.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { users } from '@/lib/db/schema';
 import { expectedHashForOperation } from '@/lib/resume-patch/operations';
 import { resumeChangeService } from '@/lib/resume-patch/service';
@@ -121,4 +122,95 @@ describe('knowledge resume service [KB-002]', () => {
       propose.mockRestore();
     }
   });
+  it('seeds account personal profile into personal_info before proposing changes', async () => {
+    await userRepository.updateSettings(userId, {
+      resumePersonalInfo: {
+        fullName: '知识库用户',
+        jobTitle: 'Unity 工程师',
+        email: 'kb-user@example.com',
+        phone: '13800138000',
+        wechat: '',
+        location: '深圳',
+        website: '',
+        linkedin: '',
+        github: 'https://github.com/example',
+        age: '',
+        gender: '',
+        politicalStatus: '',
+        ethnicity: '',
+        hometown: '',
+        maritalStatus: '',
+        yearsOfExperience: '5',
+        educationLevel: '',
+      },
+    });
+
+    const drafts = await careerRepository.listFactsOwned(userId, { status: 'draft' });
+    const approvedCandidates = await careerRepository.listFactsOwned(userId, { status: 'approved' });
+    const approvedFact = approvedCandidates[0]
+      || drafts.find((fact) => fact.evidence.length > 0)
+      || drafts[0];
+    if (!approvedFact) throw new Error('Expected career fact');
+    if (approvedFact.status !== 'approved') {
+      await careerRepository.reviewFactOwned(userId, approvedFact.id, 'approve');
+    }
+    const evidenceId = approvedFact.evidence[0]?.id;
+    if (!evidenceId) throw new Error('Expected evidence');
+
+    const propose = vi.spyOn(resumeChangeService, 'propose').mockImplementation(async (input) => {
+      const resume = await resumeRepository.findOwnedById(input.userId, input.resumeId);
+      const personal = resume?.sections.find((section: { type: string }) => section.type === 'personal_info');
+      expect(personal?.content).toMatchObject({
+        fullName: '知识库用户',
+        email: 'kb-user@example.com',
+        phone: '13800138000',
+        location: '深圳',
+        jobTitle: 'Unity 工程师',
+      });
+
+      const version = await resumeChangeRepository.ensureCurrentVersionOwned(input.userId, input.resumeId);
+      const snapshot = parseResumeSnapshot(version.snapshot);
+      const summary = snapshot.sections.find((section) => section.type === 'summary');
+      if (!summary) throw new Error('Expected summary section');
+      const operation = {
+        operationId: `knowledge-profile-summary-${suffix}`,
+        type: 'set_field' as const,
+        sectionId: summary.id,
+        expectedHash: '',
+        value: { field: 'text', value: approvedFact.summary },
+        reason: 'Seed-check summary from approved fact.',
+        evidenceIds: [evidenceId],
+        jdRequirementIds: [],
+        confidence: 1,
+      };
+      operation.expectedHash = expectedHashForOperation(snapshot, operation);
+      return resumeChangeService.createFromCandidate({
+        userId: input.userId,
+        resumeId: input.resumeId,
+        baseVersionId: version.id,
+        candidate: {
+          schemaVersion: 1,
+          resumeId: input.resumeId,
+          baseVersionId: version.id,
+          summary: 'Generate a resume from approved knowledge with profile seed.',
+          operations: [operation],
+          warnings: [],
+        },
+        requestId: input.requestId,
+      });
+    });
+
+    try {
+      const created = await knowledgeResumeService.create({
+        userId,
+        title: '账号资料预填简历',
+        requestId: `knowledge-profile-${suffix}`,
+      });
+      expect(created.resumeId).toBeTruthy();
+      expect(created.operationCount).toBe(1);
+    } finally {
+      propose.mockRestore();
+    }
+  });
+
 });

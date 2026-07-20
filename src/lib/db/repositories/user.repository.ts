@@ -72,7 +72,17 @@ export const userRepository = {
 
   async getSettings(id: string) {
     const result = await db.select({ settings: users.settings }).from(users).where(eq(users.id, id)).limit(1);
-    return (result[0]?.settings || {}) as Record<string, unknown>;
+    const settings = result[0]?.settings;
+    if (!settings) return {};
+    if (typeof settings === 'string') {
+      try {
+        const parsed = JSON.parse(settings);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+      } catch {
+        return {};
+      }
+    }
+    return settings as Record<string, unknown>;
   },
 
   async updateSettings(id: string, settings: Record<string, unknown>) {

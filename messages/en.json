@@ -429,7 +429,26 @@
       "changePassword": "Change password",
       "currentPasswordInvalid": "The current password is incorrect",
       "passwordPolicy": "The new password must contain 12 to 256 characters",
-      "passwordMismatch": "The new passwords do not match"
+      "passwordMismatch": "The new passwords do not match",
+      "resumeProfileTitle": "Default resume personal info",
+      "resumeProfileDescription": "Save once, and new template, knowledge-based, targeted, and AI-generated resumes will prefill these contact and profile fields.",
+      "resumeProfileLoading": "Loading resume personal info…",
+      "saveResumeProfile": "Save resume personal info",
+      "resumeProfileSaved": "Resume personal info saved",
+      "resumeFullName": "Full name",
+      "resumeJobTitle": "Job title",
+      "resumeEmail": "Resume email",
+      "resumePhone": "Phone",
+      "resumeWechat": "WeChat",
+      "resumeLocation": "Location",
+      "resumeWebsite": "Website",
+      "resumeLinkedin": "LinkedIn",
+      "resumeGithub": "GitHub",
+      "resumeYearsOfExperience": "Years of experience",
+      "resumeEducationLevel": "Education level",
+      "resumeAge": "Age",
+      "resumeGender": "Gender",
+      "resumeHometown": "Hometown"
     }
   },
   "brand": {

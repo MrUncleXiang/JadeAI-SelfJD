@@ -3,6 +3,12 @@ import { DEFAULT_SECTIONS, TEMPLATES } from '@/lib/constants';
 import { dbReady } from '@/lib/db';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resumeChangeService } from '@/lib/resume-patch/service';
+import {
+  formatProfileForPrompt,
+  hasResumePersonalProfileContent,
+  personalInfoContentFromProfile,
+} from '@/lib/user/resume-personal-profile';
+import { loadResumePersonalProfile } from '@/lib/user/resume-personal-profile-service';
 
 const TEMPLATE_SET = new Set<string>(TEMPLATES);
 
@@ -23,9 +29,14 @@ function clean(value: string | undefined, max: number) {
   return normalized;
 }
 
-function emptySectionContent(type: string): Record<string, unknown> {
+function emptySectionContent(
+  type: string,
+  personalInfo?: unknown,
+): Record<string, unknown> {
   if (type === 'personal_info') {
-    return { fullName: '', jobTitle: '', email: '', phone: '', location: '' };
+    return personalInfo && typeof personalInfo === 'object' && !Array.isArray(personalInfo)
+      ? personalInfo as Record<string, unknown>
+      : { fullName: '', jobTitle: '', email: '', phone: '', location: '' };
   }
   if (type === 'summary') return { text: '' };
   if (type === 'skills') return { categories: [] };
@@ -72,6 +83,10 @@ export const knowledgeResumeService = {
       );
     }
 
+    const { profile, fallback } = await loadResumePersonalProfile(input.userId);
+    const personalInfo = personalInfoContentFromProfile(profile, fallback, {
+      ...(targetRole ? { jobTitle: targetRole } : {}),
+    });
     const resume = await resumeRepository.createOwned(input.userId, { title, template, language });
     if (!resume) throw new KnowledgeResumeError('RESUME_CREATE_FAILED', 500);
 
@@ -83,14 +98,27 @@ export const knowledgeResumeService = {
           type: section.type,
           title: language === 'en' ? section.titleEn : section.titleZh,
           sortOrder: index,
-          content: emptySectionContent(section.type),
+          content: emptySectionContent(section.type, personalInfo),
         });
       }
+
+      const profilePrompt = hasResumePersonalProfileContent(profile) || personalInfo.fullName || personalInfo.email
+        ? formatProfileForPrompt({
+            ...profile,
+            fullName: personalInfo.fullName,
+            email: personalInfo.email,
+          })
+        : '';
 
       const instruction = [
         language === 'en'
           ? 'Create a concise, complete resume from the approved career facts. Populate every relevant section, but do not invent or infer unstated employers, dates, responsibilities, technologies, education, contact details, or achievements. Cite approved evidence for every factual addition. Leave unsupported fields empty.'
           : '仅使用已批准的职业事实生成一份精炼且完整的简历，填充所有相关章节。不得编造或推断未声明的雇主、日期、职责、技术、教育、联系方式或成果；每项事实新增都必须引用已批准证据，无证据字段留空。',
+        profilePrompt
+          ? (language === 'en'
+            ? `Account personal profile is already seeded into personal_info and is authoritative for contact fields. Keep or lightly refine these values; do not invent different contact details.\n${profilePrompt}`
+            : `账号简历个人信息已写入 personal_info，联系方式以账号资料为准；可保留或轻度润色，不得编造不同联系方式。\n${profilePrompt}`)
+          : '',
         targetRole
           ? (language === 'en'
             ? `Target-role preference: ${targetRole}. Use it only for emphasis and positioning, not as evidence of experience.`

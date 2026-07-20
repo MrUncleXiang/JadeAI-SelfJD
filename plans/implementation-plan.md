@@ -55,7 +55,7 @@ Gate：
 
 ## 4. Phase 1：账号、管理员和租户隔离
 
-关联：AUTH-001 至 AUTH-006、OPS-001、SEC-001。
+关联：AUTH-001 至 AUTH-008、OPS-001、SEC-001。
 
 实现：
 
@@ -71,6 +71,7 @@ Gate：
 10. [x] 登录/注册数据库限流、Origin 校验和会话撤销。
 11. [x] PostgreSQL 旧库迁移、登录和 Session 撤销集成验收。
 12. [x] Playwright E2E 和全资源租户参数化验收。
+13. [x] 账号级简历个人信息：账号页可编辑，模板/导入/知识库/JD 定向/AI 生成简历自动带入或补空。
 
 自动测试：
 
@@ -82,6 +83,12 @@ Gate：
 - Session 撤销、并发 Last Admin、CSRF、限流。
 
 Gate：所有现有测试和 Phase 1 安全测试通过。
+
+账号级简历个人信息补丁（2026-07-20）：
+
+- `users.settings.resumePersonalInfo` 作为非机密账号偏好保存，无数据库迁移。
+- 自动化验收：`src/app/api/user/resume-personal-info.route.test.ts`、`src/lib/user/resume-personal-profile.test.ts`、`src/lib/resume/from-knowledge.test.ts`、`src/lib/resume/targeted.test.ts`。
+
 
 人工 Gate：Schema、密码参数、Bootstrap Admin 和迁移方案评审。
 

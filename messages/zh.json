@@ -429,7 +429,26 @@
       "changePassword": "修改密码",
       "currentPasswordInvalid": "当前密码不正确",
       "passwordPolicy": "新密码需为 12 至 256 个字符",
-      "passwordMismatch": "两次输入的新密码不一致"
+      "passwordMismatch": "两次输入的新密码不一致",
+      "resumeProfileTitle": "简历默认个人信息",
+      "resumeProfileDescription": "保存一次后，新建模板简历、知识库生成简历、定向简历和 AI 生成简历都会自动带入这些联系方式与基础信息。",
+      "resumeProfileLoading": "正在加载简历个人信息…",
+      "saveResumeProfile": "保存简历个人信息",
+      "resumeProfileSaved": "简历个人信息已保存",
+      "resumeFullName": "姓名",
+      "resumeJobTitle": "目标职位 / 头衔",
+      "resumeEmail": "简历邮箱",
+      "resumePhone": "手机号",
+      "resumeWechat": "微信",
+      "resumeLocation": "所在地",
+      "resumeWebsite": "个人网站",
+      "resumeLinkedin": "LinkedIn",
+      "resumeGithub": "GitHub",
+      "resumeYearsOfExperience": "工作年限",
+      "resumeEducationLevel": "学历",
+      "resumeAge": "年龄",
+      "resumeGender": "性别",
+      "resumeHometown": "籍贯"
     }
   },
   "brand": {

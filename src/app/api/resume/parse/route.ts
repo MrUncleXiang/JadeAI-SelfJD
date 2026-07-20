@@ -6,6 +6,11 @@ import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import type { ParsedResume } from '@/lib/ai/parse-schema';
+import {
+  mergePersonalInfoPreferImported,
+  type ResumePersonalProfile,
+} from '@/lib/user/resume-personal-profile';
+import { loadResumePersonalProfile } from '@/lib/user/resume-personal-profile-service';
 
 const ACCEPTED_TYPES = [
   'application/pdf',
@@ -127,10 +132,11 @@ export async function POST(request: NextRequest) {
 
     // Map to our schema (handles models that return different field names)
     const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
+    const { profile, fallback } = await loadResumePersonalProfile(user.id);
 
     // Create resume with parsed data
     const resume = await resumeRepository.createOwned(user.id, {
-      title: resumeData.personalInfo?.fullName || '未命名简历',
+      title: resumeData.personalInfo?.fullName || fallback.displayName || '未命名简历',
       template,
       language,
     });
@@ -140,7 +146,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create sections from parsed data
-    const sections = buildSections(resumeData, language);
+    const sections = buildSections(resumeData, language, profile, fallback);
     for (let i = 0; i < sections.length; i++) {
       await resumeRepository.createSectionOwned(user.id, {
         resumeId: resume.id,
@@ -435,32 +441,19 @@ function mapSkills(raw: unknown): { name: string; skills: string[] }[] {
 
 // ─── Build Sections ──────────────────────────────────────────────────────────
 
-function buildSections(parsed: ParsedResume, language: string) {
+function buildSections(
+  parsed: ParsedResume,
+  language: string,
+  profile: ResumePersonalProfile,
+  fallback: { displayName: string | null; email: string | null },
+) {
   const isEn = language === 'en';
   const sections: { type: string; title: string; content: unknown }[] = [];
 
   sections.push({
     type: 'personal_info',
     title: isEn ? 'Personal Info' : '个人信息',
-    content: {
-      fullName: parsed.personalInfo?.fullName || '',
-      jobTitle: parsed.personalInfo?.jobTitle || '',
-      age: parsed.personalInfo?.age || '',
-      gender: parsed.personalInfo?.gender || '',
-      politicalStatus: parsed.personalInfo?.politicalStatus || '',
-      ethnicity: parsed.personalInfo?.ethnicity || '',
-      hometown: parsed.personalInfo?.hometown || '',
-      maritalStatus: parsed.personalInfo?.maritalStatus || '',
-      yearsOfExperience: parsed.personalInfo?.yearsOfExperience || '',
-      educationLevel: parsed.personalInfo?.educationLevel || '',
-      email: parsed.personalInfo?.email || '',
-      phone: parsed.personalInfo?.phone || '',
-      wechat: parsed.personalInfo?.wechat || '',
-      location: parsed.personalInfo?.location || '',
-      website: parsed.personalInfo?.website || '',
-      linkedin: parsed.personalInfo?.linkedin || '',
-      github: parsed.personalInfo?.github || '',
-    },
+    content: mergePersonalInfoPreferImported(parsed.personalInfo || {}, profile, fallback),
   });
 
   if (parsed.summary) {

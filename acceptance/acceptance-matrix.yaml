@@ -1,6 +1,6 @@
 version: 1
 product: JadeAI Career
-updatedAt: 2026-07-17
+updatedAt: 2026-07-20
 
 scope:
   deployment: self-hosted-single-instance
@@ -104,6 +104,22 @@ scenarios:
     automationEvidence:
       - src/lib/config.test.ts
       - tests/e2e/auth-and-tenancy.spec.ts
+
+  - id: ACC-AUTH-008
+    requirement: AUTH-008
+    phase: 1
+    priority: must
+    title: 账号级简历个人信息复用
+    given: 已登录用户保存账号级简历个人信息
+    when: 新建模板简历、JSON 导入简历、知识库生成简历或 JD 定向生成简历
+    then: personal_info 自动带入该用户资料；导入内容优先补空；跨用户不可读取或写入
+    layers: [unit, integration, route]
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/user/resume-personal-profile.test.ts
+      - src/app/api/user/resume-personal-info.route.test.ts
+      - src/lib/resume/from-knowledge.test.ts
+      - src/lib/resume/targeted.test.ts
 
   - id: ACC-AUTH-003
     requirement: AUTH-003

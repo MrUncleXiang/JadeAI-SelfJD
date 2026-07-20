@@ -5,6 +5,11 @@ import { resolveLlmConfig } from '@/lib/llm/resolver';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { generateResumeInputSchema, type GenerateResumeOutput } from '@/lib/ai/generate-resume-schema';
+import {
+  formatProfileForPrompt,
+  mergePersonalInfoPreferProfile,
+} from '@/lib/user/resume-personal-profile';
+import { loadResumePersonalProfile } from '@/lib/user/resume-personal-profile-service';
 
 const SECTION_TITLES: Record<string, Record<string, string>> = {
   zh: {
@@ -36,7 +41,7 @@ Resume generation guidelines:
 - Create believable company names, institution names, and project names
 - Use strong action verbs to start bullet points (e.g., "Spearheaded", "Architected", "Optimized")
 - Dates should be in YYYY-MM format
-- For personal_info, generate a plausible name, email, phone, and location — do NOT use obviously fake data like "John Doe" or "jane@example.com"
+- For personal_info, if the user account profile is provided, reuse those exact contact/name fields and do not invent replacements. Only fill remaining blank fields with plausible professional values — do NOT use obviously fake data like "John Doe" or "jane@example.com"
 - Skills should be organized into relevant categories (e.g., "Programming Languages", "Frameworks", "Tools")
 - The number of work experience items should scale with years of experience (1-2 for junior, 2-3 for mid, 3-4 for senior)
 - Include 1-2 education entries
@@ -77,6 +82,12 @@ export async function POST(request: NextRequest) {
 
     const { jobTitle, yearsOfExperience, skills, industry, experience, template, language } = parsed.data;
     const lang = language || 'zh';
+    const { profile, fallback } = await loadResumePersonalProfile(user.id);
+    const profilePrompt = formatProfileForPrompt({
+      ...profile,
+      fullName: profile.fullName || (fallback.displayName || ''),
+      email: profile.email || (fallback.email || ''),
+    });
 
     const aiConfig = await resolveLlmConfig(user.id, 'resume');
     const model = getModel(aiConfig);
@@ -91,7 +102,11 @@ export async function POST(request: NextRequest) {
       ? `\n\nThe candidate provided the following work experience description. Parse this into structured work_experience items, and use it to inform the summary, skills, and projects sections:\n---\n${experience}\n---`
       : '';
 
-    const promptText = `Generate a complete resume for a ${jobTitle} ${yearsOfExperience === 0 ? 'at entry level (fresh graduate / no prior experience)' : `with ${yearsOfExperience} years of experience`}.${skillsContext}${industryContext}${experienceContext}
+    const accountProfileContext = profilePrompt
+      ? `\n\nUse this account personal profile for personal_info fields whenever present:\n${profilePrompt}`
+      : '';
+
+    const promptText = `Generate a complete resume for a ${jobTitle} ${yearsOfExperience === 0 ? 'at entry level (fresh graduate / no prior experience)' : `with ${yearsOfExperience} years of experience`}.${skillsContext}${industryContext}${experienceContext}${accountProfileContext}
 
 Return a JSON object with these exact top-level keys: personal_info, summary, work_experience, education, skills, projects.
 
@@ -156,13 +171,18 @@ Respond with JSON only.`;
       const type = sectionTypes[i];
       const content = generatedData[type];
 
+      const normalized = normalizeSectionContent(type, content);
+      const sectionContent = type === 'personal_info'
+        ? mergePersonalInfoPreferProfile(normalized, profile, fallback, { jobTitle })
+        : normalized;
+
       await resumeRepository.createSectionOwned(user.id, {
         resumeId: newResume.id,
         type,
         title: titles[type],
         sortOrder: i,
         // Guard against the model returning list fields as strings (issue #87).
-        content: normalizeSectionContent(type, content),
+        content: sectionContent,
       });
     }
 

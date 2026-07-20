@@ -10,9 +10,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import {
+  EMPTY_RESUME_PERSONAL_PROFILE,
+  type ResumePersonalProfile,
+  normalizeResumePersonalProfile,
+} from '@/lib/user/resume-personal-profile';
 
 interface ApiErrorBody {
   code?: string;
+}
+
+function getFingerprint(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('jade_fingerprint');
 }
 
 export function AccountSettings() {
@@ -22,6 +32,9 @@ export function AccountSettings() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [resumeProfile, setResumeProfile] = useState<ResumePersonalProfile>(EMPTY_RESUME_PERSONAL_PROFILE);
+  const [resumeProfileLoading, setResumeProfileLoading] = useState(false);
+  const [resumeProfileSaving, setResumeProfileSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,6 +43,38 @@ export function AccountSettings() {
   useEffect(() => {
     setDisplayName(user?.name || '');
     setEmail(user?.email || '');
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    setResumeProfileLoading(true);
+    const fingerprint = getFingerprint();
+    void fetch('/api/user/settings', {
+      credentials: 'same-origin',
+      headers: {
+        ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
+      },
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('load failed');
+        const data = await response.json();
+        if (!cancelled) {
+          setResumeProfile(normalizeResumePersonalProfile(data.resumePersonalInfo));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResumeProfile(EMPTY_RESUME_PERSONAL_PROFILE);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setResumeProfileLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -57,6 +102,40 @@ export function AccountSettings() {
     } finally {
       setProfileSaving(false);
     }
+  }
+
+  async function saveResumeProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setResumeProfileSaving(true);
+    try {
+      const fingerprint = getFingerprint();
+      const response = await fetch('/api/user/settings', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          'content-type': 'application/json',
+          ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
+        },
+        body: JSON.stringify({
+          resumePersonalInfo: normalizeResumePersonalProfile(resumeProfile),
+        }),
+      });
+      if (!response.ok) {
+        toast.error(t('saveFailed'));
+        return;
+      }
+      const data = await response.json();
+      setResumeProfile(normalizeResumePersonalProfile(data.resumePersonalInfo));
+      toast.success(t('resumeProfileSaved'));
+    } catch {
+      toast.error(t('saveFailed'));
+    } finally {
+      setResumeProfileSaving(false);
+    }
+  }
+
+  function updateResumeField<K extends keyof ResumePersonalProfile>(key: K, value: string) {
+    setResumeProfile((current) => ({ ...current, [key]: value }));
   }
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
@@ -92,6 +171,23 @@ export function AccountSettings() {
   }
 
   if (!user) return null;
+
+  const resumeFields: Array<{ key: keyof ResumePersonalProfile; label: string; type?: string; maxLength?: number }> = [
+    { key: 'fullName', label: t('resumeFullName') },
+    { key: 'jobTitle', label: t('resumeJobTitle') },
+    { key: 'email', label: t('resumeEmail'), type: 'email', maxLength: 254 },
+    { key: 'phone', label: t('resumePhone') },
+    { key: 'wechat', label: t('resumeWechat') },
+    { key: 'location', label: t('resumeLocation') },
+    { key: 'website', label: t('resumeWebsite') },
+    { key: 'linkedin', label: t('resumeLinkedin') },
+    { key: 'github', label: t('resumeGithub') },
+    { key: 'yearsOfExperience', label: t('resumeYearsOfExperience') },
+    { key: 'educationLevel', label: t('resumeEducationLevel') },
+    { key: 'age', label: t('resumeAge') },
+    { key: 'gender', label: t('resumeGender') },
+    { key: 'hometown', label: t('resumeHometown') },
+  ];
 
   return (
     <div className="space-y-6">
@@ -129,6 +225,40 @@ export function AccountSettings() {
         <Button type="submit" disabled={profileSaving}>
           {profileSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {t('saveProfile')}
+        </Button>
+      </form>
+
+      <Separator />
+
+      <form className="space-y-4" onSubmit={saveResumeProfile}>
+        <div>
+          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('resumeProfileTitle')}</h3>
+          <p className="mt-1 text-xs text-zinc-500">{t('resumeProfileDescription')}</p>
+        </div>
+        {resumeProfileLoading ? (
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t('resumeProfileLoading')}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {resumeFields.map(({ key, label, type, maxLength }) => (
+              <div key={key} className="space-y-2">
+                <Label htmlFor={`resume-${key}`}>{label}</Label>
+                <Input
+                  id={`resume-${key}`}
+                  type={type || 'text'}
+                  value={resumeProfile[key]}
+                  onChange={(event) => updateResumeField(key, event.target.value)}
+                  maxLength={maxLength || 300}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        <Button type="submit" disabled={resumeProfileLoading || resumeProfileSaving}>
+          {resumeProfileSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {t('saveResumeProfile')}
         </Button>
       </form>
 

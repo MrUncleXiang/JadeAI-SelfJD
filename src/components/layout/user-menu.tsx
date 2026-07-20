@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from 'next-intl';
-import { User, LogIn, LogOut } from 'lucide-react';
+import { User, LogIn, LogOut, UserRound } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -14,11 +14,14 @@ import {
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
 import { Button } from '@/components/ui/button';
+import { useUIStore } from '@/stores/ui-store';
 
 export function UserMenu() {
   const { user, isLoading, signIn, signOut } = useAuth();
   const t = useTranslations('auth');
+  const settingsT = useTranslations('settings.account');
   const { authEnabled } = useRuntimeConfig();
+  const { openModal, setSettingsTab } = useUIStore();
 
   if (authEnabled && isLoading) {
     return <div className="h-8 w-16 animate-pulse rounded-md bg-zinc-100 dark:bg-zinc-800" aria-hidden="true" />;
@@ -56,6 +59,16 @@ export function UserMenu() {
         {authEnabled && (
           <>
             <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                setSettingsTab('account');
+                openModal('settings');
+              }}
+              className="cursor-pointer"
+            >
+              <UserRound className="mr-2 h-4 w-4" />
+              {settingsT('title')}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={signOut} className="cursor-pointer text-red-600">
               <LogOut className="mr-2 h-4 w-4" />
               {t('logout')}

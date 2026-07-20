@@ -26,6 +26,13 @@
 | token_version | 密码修改、禁用时递增 |
 | last_login_at | 最近登录 |
 | created_at/updated_at/deleted_at | 生命周期 |
+| settings | JSON 非机密账号偏好；当前包含 `resumePersonalInfo`，用于新简历 `personal_info` 默认值 |
+
+#### `users.settings.resumePersonalInfo`
+
+不保存密码、Token 或 API Key，仅保存用户主动填写的简历默认个人信息：姓名、目标职位、邮箱、电话、微信、所在地、个人网站、LinkedIn、GitHub、年龄、性别、籍贯、工作年限、学历等。
+
+读取时服务端会用账号显示名和登录邮箱作为空字段默认值；写入时完整替换并按字段长度归一化。新建模板简历、知识库简历、无基准 JD 定向简历和 AI 生成简历使用该值初始化 `personal_info`；导入简历只用它补空，避免覆盖上传文件中已有的姓名或联系方式。
 
 ### `password_credentials`
 
