@@ -11,7 +11,8 @@
 Approved Career Facts
   + Confirmed JD Requirements
   + 可选的基准简历
-  -> AI 生成有证据引用的 ResumePatch
+  -> AI 生成有证据引用的精简 TargetedResumeDraft
+  -> 服务端生成 ID/Hash 并转换为 ResumePatch
   -> 用户审阅 Diff
   -> 应用到独立 Targeted Resume
   -> PDF / DOCX 导出
@@ -36,7 +37,7 @@ Approved Career Facts
    - 从事实库新建定向简历；
    - 从一份现有简历复制为定向副本。
 4. 新简历记录类型、父简历和目标 JD，基准简历不被修改。
-5. AI 只生成 Change Set，不直接写入简历正文。
+5. AI 只生成摘要、技能组、项目及证据/JD 引用；服务端确定性转换为 Change Set，不直接写入简历正文。
 6. 每个新增事实仍必须引用 Approved Evidence；JD 引用只能来自当前选中的已确认 JD。
 7. 用户进入现有 Change Set 审阅页，选择后应用。
 
@@ -90,6 +91,7 @@ POST /api/jd-sources/{jdSourceId}/target-resume
 7. 生成异常时 Targeted Resume 被回收。
 8. API 强制账号 Session、可信 Origin 和严格请求 Schema。
 9. TypeScript、Migration Replay、规格检查、生产构建全部通过。
+10. 真实生产 LLM 档案可在超时上限内返回精简 Draft，且失败/中断不会遗留空壳简历。
 
 ## 7. 后续切片
 

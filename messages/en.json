@@ -1158,6 +1158,10 @@
         "NO_APPROVED_FACTS": "There are no approved career facts yet. Review and approve facts first.",
         "JD_SOURCE_NOT_CONFIRMED": "This JD is not confirmed or was edited again. Review and confirm it first.",
         "BASE_RESUME_NOT_FOUND": "The selected base resume does not exist or belongs to another account.",
+        "LLM_PROFILE_REQUIRED": "No LLM profile is bound to Resume. Select a tested profile in Settings.",
+        "LLM_PROFILE_INVALID": "The Resume LLM profile failed its latest test. Re-test it or select another profile in Settings.",
+        "LLM_RESUME_TIMEOUT": "The resume model did not finish in time. Shorten the extra instruction or select a faster model and retry.",
+        "INVALID_MODEL_OUTPUT": "The model did not return reviewable structured resume changes. Retry or select another model.",
         "default": "Targeted resume generation failed. Check the Resume LLM profile and retry."
       }
     },

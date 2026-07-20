@@ -1158,6 +1158,10 @@
         "NO_APPROVED_FACTS": "事实库中还没有已批准事实，请先完成事实审核。",
         "JD_SOURCE_NOT_CONFIRMED": "该 JD 尚未确认或已被重新编辑，请先审核并确认。",
         "BASE_RESUME_NOT_FOUND": "所选基准简历不存在或不属于当前账号。",
+        "LLM_PROFILE_REQUIRED": "简历功能尚未绑定 LLM 档案，请前往设置选择一个已检测的档案。",
+        "LLM_PROFILE_INVALID": "简历功能当前绑定的 LLM 档案未通过检测，请在设置中重新检测或切换档案。",
+        "LLM_RESUME_TIMEOUT": "简历模型未在限定时间内完成，请缩短额外要求、切换更快的模型后重试。",
+        "INVALID_MODEL_OUTPUT": "模型未返回可审阅的结构化简历变更，请重试或切换模型。",
         "default": "定向简历生成失败，请检查 Resume LLM 档案后重试。"
       }
     },

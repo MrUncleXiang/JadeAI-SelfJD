@@ -12,6 +12,7 @@ import { createLlmProviderFetch } from './transport';
 
 type ProfileRecord = NonNullable<Awaited<ReturnType<typeof llmProfileRepository.findOwnedById>>>;
 const DEFAULT_VISION_REQUEST_TIMEOUT_MS = 180_000;
+const DEFAULT_RESUME_REQUEST_TIMEOUT_MS = 180_000;
 
 function parseCapabilities(value: unknown): AIConfig['capabilities'] {
   let parsed = value;
@@ -118,11 +119,16 @@ export async function resolveLlmConfig(
     );
   }
   const configuredVisionTimeout = Number(process.env.LLM_VISION_REQUEST_TIMEOUT_MS);
+  const configuredResumeTimeout = Number(process.env.LLM_RESUME_REQUEST_TIMEOUT_MS);
   return materializeProfile(userId, profile, {
     requestTimeoutMs: feature === 'vision'
       ? (Number.isFinite(configuredVisionTimeout)
           ? configuredVisionTimeout
           : DEFAULT_VISION_REQUEST_TIMEOUT_MS)
+      : feature === 'resume'
+        ? (Number.isFinite(configuredResumeTimeout)
+            ? configuredResumeTimeout
+            : DEFAULT_RESUME_REQUEST_TIMEOUT_MS)
       : undefined,
   });
 }

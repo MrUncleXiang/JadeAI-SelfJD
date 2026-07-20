@@ -1,12 +1,16 @@
 import { careerService } from '@/lib/career/service';
+import type { CareerKnowledgePolicy } from '@/lib/career/types';
 import { DEFAULT_SECTIONS, TEMPLATES } from '@/lib/constants';
 import { dbReady } from '@/lib/db';
 import { jdRepository } from '@/lib/db/repositories/jd.repository';
 import { resumeChangeRepository } from '@/lib/db/repositories/resume-change.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
-import { resumeChangeService, type ResumePatchJdContext } from '@/lib/resume-patch/service';
+import type { ResumePatchJdContext } from '@/lib/resume-patch/service';
+
+import { targetedDraftService } from './targeted-draft';
 
 const TEMPLATE_SET = new Set<string>(TEMPLATES);
+const MAX_TARGETED_FACTS = 20;
 
 const TARGET_SECTION_TYPES = [
   ...DEFAULT_SECTIONS.filter((section) => section.type !== 'qr_codes'),
@@ -60,6 +64,71 @@ function jdContext(source: NonNullable<Awaited<ReturnType<typeof jdRepository.fi
   };
 }
 
+function matchTerms(context: ResumePatchJdContext) {
+  const values = [
+    context.title,
+    context.company,
+    context.jobTitle,
+    ...context.requirements.flatMap((requirement) => [
+      requirement.normalizedTerm,
+      ...requirement.aliases,
+      ...requirement.text.match(/[\p{L}\p{N}+#.]{2,40}/gu) || [],
+    ]),
+  ];
+  return [...new Set(values
+    .map((value) => value.normalize('NFKC').trim().toLocaleLowerCase())
+    .filter((value) => value.length >= 2 && value.length <= 80))];
+}
+
+function factMatchScore(
+  fact: CareerKnowledgePolicy['facts'][number],
+  terms: string[],
+) {
+  const title = fact.title.normalize('NFKC').toLocaleLowerCase();
+  const haystack = [
+    fact.title,
+    fact.summary,
+    ...fact.allowedClaims,
+    JSON.stringify(fact.structuredData),
+  ].join('\n').normalize('NFKC').toLocaleLowerCase();
+  const typeWeight = fact.factType === 'project'
+    ? 8
+    : fact.factType === 'employment'
+      ? 6
+      : fact.factType === 'profile'
+        ? 4
+        : fact.factType === 'achievement'
+          ? 3
+          : 0;
+  return terms.reduce((score, term) => (
+    score + (title.includes(term) ? 12 : haystack.includes(term) ? 4 : 0)
+  ), typeWeight);
+}
+
+export function selectTargetFactsForJd(
+  policy: CareerKnowledgePolicy,
+  context: ResumePatchJdContext,
+): CareerKnowledgePolicy {
+  if (policy.facts.length <= MAX_TARGETED_FACTS) return policy;
+  const terms = matchTerms(context);
+  const ranked = policy.facts
+    .map((fact) => ({ fact, score: factMatchScore(fact, terms) }))
+    .sort((left, right) => (
+      right.score - left.score
+      || left.fact.factType.localeCompare(right.fact.factType)
+      || left.fact.title.localeCompare(right.fact.title)
+      || left.fact.id.localeCompare(right.fact.id)
+    ));
+  const nonSkills = ranked.filter(({ fact }) => fact.factType !== 'skill');
+  const skills = ranked.filter(({ fact }) => fact.factType === 'skill');
+  const selected = [...nonSkills, ...skills].slice(0, MAX_TARGETED_FACTS).map(({ fact }) => fact);
+  return {
+    facts: selected,
+    approvedEvidenceIds: new Set(selected.flatMap((fact) => fact.evidence.map((item) => item.id))),
+    forbiddenClaims: policy.forbiddenClaims,
+  };
+}
+
 async function createEmptyTarget(input: {
   userId: string;
   jdSourceId: string;
@@ -93,6 +162,34 @@ async function createEmptyTarget(input: {
   }
 }
 
+async function ensureGeneratedSections(input: {
+  userId: string;
+  resumeId: string;
+  language: 'zh' | 'en';
+}) {
+  const resume = await resumeRepository.findOwnedById(input.userId, input.resumeId);
+  if (!resume) throw new TargetedResumeError('RESUME_CREATE_FAILED', 500);
+  const sections = resume.sections as Array<{ type: string; sortOrder: number }>;
+  const existingTypes = new Set(sections.map((section) => section.type));
+  let sortOrder = sections.reduce(
+    (highest, section) => Math.max(highest, section.sortOrder),
+    -1,
+  ) + 1;
+  for (const type of ['summary', 'skills', 'projects'] as const) {
+    if (existingTypes.has(type)) continue;
+    const definition = TARGET_SECTION_TYPES.find((section) => section.type === type);
+    if (!definition) throw new TargetedResumeError('RESUME_CREATE_FAILED', 500);
+    await resumeRepository.createSectionOwned(input.userId, {
+      resumeId: input.resumeId,
+      type,
+      title: input.language === 'en' ? definition.titleEn : definition.titleZh,
+      sortOrder,
+      content: emptySectionContent(type),
+    });
+    sortOrder += 1;
+  }
+}
+
 export const targetedResumeService = {
   async create(input: {
     userId: string;
@@ -104,6 +201,7 @@ export const targetedResumeService = {
     language?: string;
     instruction?: string;
     requestId?: string | null;
+    abortSignal?: AbortSignal;
   }) {
     await dbReady;
     const source = await jdRepository.findSourceOwned(input.userId, input.jdSourceId);
@@ -185,6 +283,11 @@ export const targetedResumeService = {
             ...(requestedTemplate ? { template } : {}),
           });
         }
+        await ensureGeneratedSections({
+          userId: input.userId,
+          resumeId: duplicated.id,
+          language,
+        });
       } else {
         const created = await createEmptyTarget({
           userId: input.userId,
@@ -199,13 +302,15 @@ export const targetedResumeService = {
       if (!targetResumeId) throw new TargetedResumeError('RESUME_CREATE_FAILED', 500);
       const resumeId = targetResumeId;
 
+      const context = jdContext(source);
+      const targetedPolicy = selectTargetFactsForJd(policy, context);
       const allowedJdRequirementIds = new Set(
         source.requirements.map((requirement) => requirement.id),
       );
       const instruction = [
         language === 'en'
-          ? 'Create a concise targeted resume proposal for the confirmed job description. Use only approved career facts as proof. Prioritize the strongest supported matches, preserve relevant truthful content, and omit unsupported requirements instead of implying that the user meets them. Every factual addition needs approved evidence, and every JD-specific operation needs the relevant confirmed requirement IDs.'
-          : '请针对已确认的岗位 JD 生成一份精炼的定向简历提案。只能使用已批准职业事实作为证明；优先呈现有充分证据的匹配项，保留相关且真实的内容，对缺少事实支持的岗位要求应省略而不是暗示用户已经满足。每项事实新增必须引用已批准证据，每项针对 JD 的调整必须引用对应的已确认岗位要求 ID。',
+          ? 'Create a concise targeted resume draft for the confirmed job description. Use only approved career facts as proof. Prioritize the strongest supported matches, preserve relevant truthful content, and omit unsupported requirements instead of implying that the user meets them. Prefer a small set of high-signal summary, skill, and project blocks instead of mirroring every available fact.'
+          : '请针对已确认的岗位 JD 生成一份精炼的定向简历草稿。只能使用已批准职业事实作为证明；优先呈现有充分证据的匹配项，保留相关且真实的内容，对缺少事实支持的岗位要求应省略而不是暗示用户已经满足。优先生成少量高价值的职业摘要、技能组和项目内容，不要机械复制全部事实。',
         input.baseResumeId
           ? (language === 'en'
             ? 'This is an independent copy of a base resume. Reorder, rewrite, add, or remove only where it improves JD relevance; do not modify the base resume.'
@@ -220,13 +325,15 @@ export const targetedResumeService = {
           : '',
       ].filter(Boolean).join('\n\n');
 
-      const changeSet = await resumeChangeService.propose({
+      const changeSet = await targetedDraftService.propose({
         userId: input.userId,
         resumeId,
+        language,
         instruction,
         requestId: input.requestId,
-        policy: { ...policy, allowedJdRequirementIds },
-        jdContext: jdContext(source),
+        policy: { ...targetedPolicy, allowedJdRequirementIds },
+        jdContext: context,
+        abortSignal: input.abortSignal,
       });
       if (!changeSet) throw new TargetedResumeError('CHANGE_SET_CREATE_FAILED', 500);
       return {

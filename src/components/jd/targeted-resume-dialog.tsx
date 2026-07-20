@@ -51,6 +51,15 @@ interface TargetedResumeDialogProps {
 type GenerateState = 'form' | 'generating' | 'success' | 'error';
 
 const KNOWLEDGE_ONLY = '__knowledge_only__';
+const TRANSLATED_ERROR_CODES = [
+  'NO_APPROVED_FACTS',
+  'JD_SOURCE_NOT_CONFIRMED',
+  'BASE_RESUME_NOT_FOUND',
+  'LLM_PROFILE_REQUIRED',
+  'LLM_PROFILE_INVALID',
+  'LLM_RESUME_TIMEOUT',
+  'INVALID_MODEL_OUTPUT',
+] as const;
 
 export function TargetedResumeDialog({ source, onOpenChange }: TargetedResumeDialogProps) {
   const t = useTranslations('jd.targeted');
@@ -122,15 +131,17 @@ export function TargetedResumeDialog({ source, onOpenChange }: TargetedResumeDia
       const body = await response.json().catch(() => ({})) as {
         code?: string;
         message?: string;
+        error?: string;
         resumeId?: string;
         changeSetId?: string;
         operationCount?: number;
       };
       if (!response.ok) {
-        const translated = body.code && ['NO_APPROVED_FACTS', 'JD_SOURCE_NOT_CONFIRMED', 'BASE_RESUME_NOT_FOUND']
-          .includes(body.code)
+        const translated = body.code && TRANSLATED_ERROR_CODES.includes(
+          body.code as typeof TRANSLATED_ERROR_CODES[number],
+        )
           ? t(`errors.${body.code}`)
-          : body.message || body.code || t('errors.default');
+          : body.message || body.error || body.code || t('errors.default');
         throw new Error(translated);
       }
       if (!body.resumeId || !body.changeSetId) throw new Error(t('errors.default'));

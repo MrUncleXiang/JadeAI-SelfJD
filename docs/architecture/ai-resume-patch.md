@@ -235,6 +235,9 @@ Diff 由服务器根据规范化前后内容计算，不信任 LLM 自报的 Bef
   `jdRequirementIds`，同时仍须用 Approved Evidence 支撑事实性陈述。
 - 定向生成会创建独立 Targeted Resume，并把 `evidenceIds` 与 `jdRequirementIds` 保存到 Operation；
   应用前重新加载当前事实与 JD 状态，防止使用已撤销确认的要求。
+- 定向生成使用 `targeted-resume-draft-v1` 两阶段协议：模型返回较小的摘要/技能/项目 Draft，
+  服务端验证双重引用并确定性生成 ResumePatch 的 Operation ID、Item ID 与 `expectedHash`。
+  通用编辑器提案仍可使用完整 ResumePatch 协议；两条路径最终都进入相同的 Diff、Apply 和 Version 流程。
 
 尚未关闭的发布边界：
 

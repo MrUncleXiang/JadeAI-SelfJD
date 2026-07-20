@@ -48,6 +48,7 @@ export const knowledgeResumeService = {
     targetRole?: string;
     instruction?: string;
     requestId?: string | null;
+    abortSignal?: AbortSignal;
   }) {
     await dbReady;
     const language = input.language === 'en' ? 'en' : 'zh';
@@ -107,6 +108,7 @@ export const knowledgeResumeService = {
         resumeId: resume.id,
         instruction,
         requestId: input.requestId,
+        abortSignal: input.abortSignal,
       });
       if (!changeSet) {
         throw new KnowledgeResumeError('CHANGE_SET_CREATE_FAILED', 500);

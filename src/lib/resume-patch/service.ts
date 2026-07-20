@@ -1,4 +1,4 @@
-import { streamText, tool } from 'ai';
+import { Output, streamText, tool } from 'ai';
 
 import { getJsonProviderOptions, getModel, type AIConfig } from '@/lib/ai/provider';
 import { careerService } from '@/lib/career/service';
@@ -21,6 +21,10 @@ import { resumePatchSchema, type ResumePatch } from './schema';
 import { contentHash, parseResumeSnapshot, type ResumeSnapshot } from './snapshot';
 
 export const RESUME_PATCH_PROMPT_VERSION = 'resume-patch-v3-confirmed-jd';
+
+const DEFAULT_RESUME_REQUEST_TIMEOUT_MS = 180_000;
+const MIN_RESUME_REQUEST_TIMEOUT_MS = 1_000;
+const MAX_RESUME_REQUEST_TIMEOUT_MS = 5 * 60_000;
 
 export interface ResumePatchJdContext {
   id: string;
@@ -103,6 +107,60 @@ function hashManifest(snapshot: ResumeSnapshot) {
   };
 }
 
+function compactStructuredValue(value: unknown, depth = 0): unknown {
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.length > 500 ? `${value.slice(0, 500)}…` : value;
+  if (Array.isArray(value)) {
+    const primitiveOnly = value.every((item) => (
+      item === null || ['string', 'number', 'boolean'].includes(typeof item)
+    ));
+    if (primitiveOnly) return value.slice(0, 20).map((item) => compactStructuredValue(item, depth + 1));
+    return { itemCount: value.length };
+  }
+  if (!value || typeof value !== 'object') return String(value);
+  if (depth >= 3) return { fieldCount: Object.keys(value as Record<string, unknown>).length };
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .slice(0, 30)
+      .map(([key, item]) => [key, compactStructuredValue(item, depth + 1)]),
+  );
+}
+
+function configuredResumeRequestTimeoutMs() {
+  const configured = Number(process.env.LLM_RESUME_REQUEST_TIMEOUT_MS);
+  if (!Number.isFinite(configured)) return DEFAULT_RESUME_REQUEST_TIMEOUT_MS;
+  return Math.min(
+    MAX_RESUME_REQUEST_TIMEOUT_MS,
+    Math.max(MIN_RESUME_REQUEST_TIMEOUT_MS, Math.floor(configured)),
+  );
+}
+
+function resumeProviderOptions(config: AIConfig, jsonMode = false) {
+  if (config.provider === 'openai-compatible' && config.wireApi === 'responses') {
+    return { openai: { reasoningEffort: 'low' as const } };
+  }
+  return jsonMode && config.capabilities?.json ? getJsonProviderOptions(config) : undefined;
+}
+
+function throwIfGenerationAborted(
+  signal: AbortSignal,
+  requestSignal?: AbortSignal,
+): void {
+  if (!signal.aborted) return;
+  if (requestSignal?.aborted) {
+    throw new ResumeChangeServiceError(
+      'REQUEST_ABORTED',
+      'The resume generation request was cancelled.',
+      408,
+    );
+  }
+  throw new ResumeChangeServiceError(
+    'LLM_RESUME_TIMEOUT',
+    'The resume model did not complete within the configured timeout.',
+    504,
+  );
+}
+
 export function buildResumePatchPrompt(
   snapshot: ResumeSnapshot,
   baseVersionId: string,
@@ -119,16 +177,9 @@ export function buildResumePatchPrompt(
     factType: fact.factType,
     title: fact.title,
     summary: fact.summary,
-    structuredData: fact.structuredData,
+    structuredDataSummary: compactStructuredValue(fact.structuredData),
     allowedClaims: fact.allowedClaims,
-    evidence: fact.evidence.map((evidence) => ({
-      evidenceId: evidence.id,
-      commitSha: evidence.commitSha,
-      path: evidence.path,
-      locator: evidence.locator,
-      contentHash: evidence.contentHash,
-      summary: evidence.summary,
-    })),
+    evidenceIds: fact.evidence.slice(0, 6).map((evidence) => evidence.id),
   }));
   const confirmedJd = jdContext ? {
     id: jdContext.id,
@@ -161,6 +212,7 @@ ${jdRules}
 - Do not add new items, quantitative achievements, responsibilities, employers, technologies, dates, degrees, or certifications without approved evidence.
 - Expression-only rewrites of existing supported content are allowed.
 - Keep every value concise and preserve stable section/item IDs.
+- structuredDataSummary is deliberately compact. Prefer allowedClaims and evidence summaries for factual wording.
 
 <resume_snapshot>
 ${JSON.stringify(snapshot)}
@@ -173,10 +225,6 @@ ${JSON.stringify(hashManifest(snapshot))}
 <approved_career_facts>
 ${JSON.stringify(approvedFacts)}
 </approved_career_facts>
-
-<approved_evidence_ids>
-${JSON.stringify([...policy.approvedEvidenceIds])}
-</approved_evidence_ids>
 
 <forbidden_claims>
 ${JSON.stringify(policy.forbiddenClaims)}
@@ -192,7 +240,17 @@ ${JSON.stringify([...(policy.allowedJdRequirementIds || new Set<string>())])}
 
 <user_instruction>
 ${instruction}
-</user_instruction>`;
+</user_instruction>
+
+<response_contract>
+Return one object with schemaVersion=1, the exact resumeId/baseVersionId above, a concise summary,
+1-50 operations, and optional warnings. Every operation needs a unique operationId, one allowed type,
+the exact expectedHash from hash_manifest, a reason, evidenceIds, jdRequirementIds, and confidence from 0 to 1.
+Allowed types: set_field, add_item, update_item, remove_item, add_section, remove_section,
+move_section, set_visibility, set_template. set_field value is {"field":"camelCase","value":...};
+add_item/update_item value is an object; remove operations use null/omitted value; move_section value is
+{"sortOrder":number}; set_visibility value is boolean; set_template value is a template name.
+</response_contract>`;
 }
 
 const patchTool = tool({
@@ -203,8 +261,37 @@ const patchTool = tool({
 async function generatePatchCandidate(
   config: AIConfig,
   prompt: string,
+  requestSignal?: AbortSignal,
 ): Promise<{ patch: ResumePatch; rawOutput: string }> {
   const model = getModel(config);
+  const timeoutMs = configuredResumeRequestTimeoutMs();
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const abortSignal = requestSignal
+    ? AbortSignal.any([requestSignal, timeoutSignal])
+    : timeoutSignal;
+  const timeout = { totalMs: timeoutMs, chunkMs: Math.min(60_000, timeoutMs) };
+
+  if (config.capabilities?.json) {
+    try {
+      const result = streamText({
+        model,
+        system: 'You are a resume change planner. Return a concise, evidence-grounded ResumePatch for human review.',
+        prompt,
+        output: Output.object({ schema: resumePatchSchema }),
+        providerOptions: resumeProviderOptions(config),
+        maxOutputTokens: 6_000,
+        maxRetries: 0,
+        abortSignal,
+        timeout,
+      });
+      const patch = await result.output;
+      return { patch, rawOutput: JSON.stringify(patch) };
+    } catch {
+      throwIfGenerationAborted(abortSignal, requestSignal);
+      // Some JSON-capable gateways do not implement schema-constrained output.
+      // Fall through to tool or portable JSON text generation.
+    }
+  }
 
   if (config.capabilities?.tools) {
     try {
@@ -214,8 +301,11 @@ async function generatePatchCandidate(
         prompt,
         tools: { proposeResumePatch: patchTool },
         toolChoice: { type: 'tool', toolName: 'proposeResumePatch' },
-        maxOutputTokens: 12_000,
+        providerOptions: resumeProviderOptions(config),
+        maxOutputTokens: 6_000,
         maxRetries: 0,
+        abortSignal,
+        timeout,
       });
       const call = (await result.toolCalls)
         .find((candidate) => candidate.toolName === 'proposeResumePatch');
@@ -224,6 +314,7 @@ async function generatePatchCandidate(
         return { patch, rawOutput: JSON.stringify(call.input) };
       }
     } catch {
+      throwIfGenerationAborted(abortSignal, requestSignal);
       // Capability probes can become stale. Fall through to portable text JSON.
     }
   }
@@ -237,14 +328,22 @@ async function generatePatchCandidate(
       model,
       system: `You are a JSON-only resume change planner. Return one object matching ResumePatch v1. Do not use Markdown fences or commentary.`,
       prompt: `${prompt}${repairInstruction}`,
-      providerOptions: config.capabilities?.json ? getJsonProviderOptions(config) : undefined,
-      maxOutputTokens: 12_000,
+      providerOptions: resumeProviderOptions(config, true),
+      maxOutputTokens: 6_000,
       maxRetries: 0,
+      abortSignal,
+      timeout,
     });
-    previousOutput = await result.text;
+    try {
+      previousOutput = await result.text;
+    } catch {
+      throwIfGenerationAborted(abortSignal, requestSignal);
+      previousOutput = '';
+    }
     try {
       return { patch: extractResumePatch(previousOutput), rawOutput: previousOutput };
     } catch {
+      throwIfGenerationAborted(abortSignal, requestSignal);
       // Feed a bounded prior response back for at most two repair attempts.
     }
   }
@@ -311,6 +410,7 @@ export const resumeChangeService = {
     config?: Pick<AIConfig, 'profileId' | 'provider' | 'model'>;
     requestId?: string | null;
     rawModelOutput?: string | null;
+    promptVersion?: string;
     policy?: ResumePatchReferencePolicy;
   }) {
     try {
@@ -330,7 +430,7 @@ export const resumeChangeService = {
         llmProfileId: input.config?.profileId,
         provider: input.config?.provider,
         modelName: input.config?.model,
-        promptVersion: RESUME_PATCH_PROMPT_VERSION,
+        promptVersion: input.promptVersion || RESUME_PATCH_PROMPT_VERSION,
         requestId: input.requestId,
         rawModelOutput: input.rawModelOutput,
       });
@@ -353,6 +453,7 @@ export const resumeChangeService = {
     requestId?: string | null;
     policy?: ResumePatchPromptPolicy;
     jdContext?: ResumePatchJdContext;
+    abortSignal?: AbortSignal;
   }) {
     const instruction = input.instruction.normalize('NFKC').trim();
     if (!instruction || instruction.length > 10_000) {
@@ -364,6 +465,7 @@ export const resumeChangeService = {
     const generated = await generatePatchCandidate(
       config,
       buildResumePatchPrompt(snapshot, latest.id, instruction, policy, input.jdContext),
+      input.abortSignal,
     );
     return this.createFromCandidate({
       userId: input.userId,

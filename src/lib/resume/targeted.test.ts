@@ -14,10 +14,10 @@ import { jdRepository } from '@/lib/db/repositories/jd.repository';
 import { resumeChangeRepository } from '@/lib/db/repositories/resume-change.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { users } from '@/lib/db/schema';
-import { expectedHashForOperation } from '@/lib/resume-patch/operations';
 import { resumeChangeService } from '@/lib/resume-patch/service';
 import { canonicalJson, parseResumeSnapshot } from '@/lib/resume-patch/snapshot';
 
+import { targetedDraftService, targetedDraftToResumePatch } from './targeted-draft';
 import { targetedResumeService } from './targeted';
 
 const suffix = crypto.randomUUID();
@@ -138,36 +138,44 @@ describe('targeted resume service [JD-003, JD-004]', () => {
   it('clones a base resume, creates a doubly-referenced change set, and leaves the base unchanged', async () => {
     const baseBefore = await resumeRepository.findOwnedById(userId, baseResumeId);
     const baseVersionBefore = await resumeChangeRepository.findLatestVersionOwned(userId, baseResumeId);
-    const propose = vi.spyOn(resumeChangeService, 'propose').mockImplementation(async (input) => {
+    const propose = vi.spyOn(targetedDraftService, 'propose').mockImplementation(async (input) => {
       expect(input.jdContext).toMatchObject({ id: jdSourceId });
       expect(input.policy?.allowedJdRequirementIds?.has(jdRequirementId)).toBe(true);
       const version = await resumeChangeRepository.ensureCurrentVersionOwned(input.userId, input.resumeId);
       const snapshot = parseResumeSnapshot(version.snapshot);
-      const summary = snapshot.sections.find((section) => section.type === 'summary')!;
-      const operation = {
-        operationId: `target-summary-${suffix}`,
-        type: 'set_field' as const,
-        sectionId: summary.id,
-        expectedHash: '',
-        value: { field: 'text', value: 'Evidence-backed Unity client engineer.' },
-        reason: 'Prioritize an approved Unity fact for the confirmed JD.',
-        evidenceIds: [evidenceId],
-        jdRequirementIds: [jdRequirementId],
-        confidence: 1,
-      };
-      operation.expectedHash = expectedHashForOperation(snapshot, operation);
+      let nextId = 0;
+      const patch = targetedDraftToResumePatch({
+        snapshot,
+        baseVersionId: version.id,
+        idFactory: () => `generated-${++nextId}-${suffix}`,
+        draft: {
+          summary: {
+            text: 'Evidence-backed Unity client engineer.',
+            evidenceIds: [evidenceId],
+            jdRequirementIds: [jdRequirementId],
+          },
+          skillCategories: [{
+            name: 'Client Development',
+            skills: ['Unity'],
+            evidenceIds: [evidenceId],
+            jdRequirementIds: [jdRequirementId],
+          }],
+          projects: [{
+            name: 'Approved Unity Project',
+            description: 'Built a Unity client from approved project evidence.',
+            technologies: ['Unity'],
+            highlights: [],
+            evidenceIds: [evidenceId],
+            jdRequirementIds: [jdRequirementId],
+          }],
+          warnings: [],
+        },
+      });
       return resumeChangeService.createFromCandidate({
         userId: input.userId,
         resumeId: input.resumeId,
         baseVersionId: version.id,
-        candidate: {
-          schemaVersion: 1,
-          resumeId: input.resumeId,
-          baseVersionId: version.id,
-          summary: 'Tailor the resume for the confirmed JD.',
-          operations: [operation],
-          warnings: [],
-        },
+        candidate: patch,
         requestId: input.requestId,
         policy: input.policy,
       });
@@ -185,7 +193,7 @@ describe('targeted resume service [JD-003, JD-004]', () => {
         baseResumeId,
         jdSourceId,
         title: 'Unity Targeted Resume',
-        operationCount: 1,
+        operationCount: 3,
       });
 
       const target = await resumeRepository.findOwnedById(userId, created.resumeId);
@@ -201,21 +209,28 @@ describe('targeted resume service [JD-003, JD-004]', () => {
         created.resumeId,
         created.changeSetId,
       );
-      expect(changeSet?.operations[0]).toMatchObject({
-        evidenceIds: [evidenceId],
-        jdRequirementIds: [jdRequirementId],
-      });
+      expect(changeSet?.operations).toHaveLength(3);
+      expect(changeSet?.operations).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          evidenceIds: [evidenceId],
+          jdRequirementIds: [jdRequirementId],
+        }),
+      ]));
 
       await resumeChangeService.apply({
         userId,
         resumeId: created.resumeId,
         changeSetId: created.changeSetId,
-        operationIds: [changeSet!.operations[0].operationId],
+        operationIds: changeSet!.operations.map((operation) => operation.operationId),
       });
       const appliedTarget = await resumeRepository.findOwnedById(userId, created.resumeId);
-      expect(appliedTarget?.sections[0].content).toEqual({
+      expect(appliedTarget?.sections.find((section: { type: string }) => section.type === 'summary')?.content).toEqual({
         text: 'Evidence-backed Unity client engineer.',
       });
+      expect(appliedTarget?.sections.find((section: { type: string }) => section.type === 'skills')?.content)
+        .toMatchObject({ categories: [expect.objectContaining({ name: 'Client Development', skills: ['Unity'] })] });
+      expect(appliedTarget?.sections.find((section: { type: string }) => section.type === 'projects')?.content)
+        .toMatchObject({ items: [expect.objectContaining({ name: 'Approved Unity Project' })] });
 
       const baseAfter = await resumeRepository.findOwnedById(userId, baseResumeId);
       const baseVersionAfter = await resumeChangeRepository.findLatestVersionOwned(userId, baseResumeId);
@@ -255,7 +270,7 @@ describe('targeted resume service [JD-003, JD-004]', () => {
 
   it('deletes a newly-created targeted resume if proposal generation fails', async () => {
     const before = await resumeRepository.findAllByUserId(userId);
-    const propose = vi.spyOn(resumeChangeService, 'propose')
+    const propose = vi.spyOn(targetedDraftService, 'propose')
       .mockRejectedValueOnce(new Error('provider failed'));
     try {
       await expect(targetedResumeService.create({

@@ -50,6 +50,7 @@ export async function POST(
         baseVersionId,
         instruction: typeof body?.instruction === 'string' ? body.instruction : '',
         requestId,
+        abortSignal: request.signal,
       });
     return NextResponse.json(changeSet, { status: 201 });
   } catch (error) {

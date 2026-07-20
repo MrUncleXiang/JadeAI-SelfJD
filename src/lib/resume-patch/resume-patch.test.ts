@@ -66,7 +66,12 @@ describe('ResumePatch v1', () => {
         factType: 'skill',
         title: 'Distributed systems',
         summary: 'Designed idempotent workflows.',
-        structuredData: { level: 'advanced' },
+        structuredData: {
+          level: 'advanced',
+          capabilities: Array.from({ length: 50 }, (_, index) => ({
+            detail: `large-nested-detail-${index}`,
+          })),
+        },
         evidence: [{
           id: 'evidence-approved',
           commitSha: 'a'.repeat(40),
@@ -82,10 +87,15 @@ describe('ResumePatch v1', () => {
     });
 
     expect(prompt).toContain('"id":"fact-approved"');
-    expect(prompt).toContain('"evidenceId":"evidence-approved"');
+    expect(prompt).toContain('"evidenceIds":["evidence-approved"]');
     expect(prompt).toContain('Can design idempotent workflows.');
     expect(prompt).toContain('Created the OpenTelemetry standard.');
     expect(prompt).toContain('Only facts inside approved_career_facts are reusable.');
+    expect(prompt).toContain('"structuredDataSummary":{"level":"advanced","capabilities":{"itemCount":50}}');
+    expect(prompt).not.toContain('large-nested-detail-49');
+    expect(prompt).not.toContain('a'.repeat(40));
+    expect(prompt).not.toContain('sha256:evidence');
+    expect(prompt).toContain('<response_contract>');
   });
 
   it('limits a targeted proposal to one confirmed JD requirement set', () => {

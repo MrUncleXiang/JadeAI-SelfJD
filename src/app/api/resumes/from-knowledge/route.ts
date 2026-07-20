@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       userId: actor.userId,
       ...input,
       requestId: metadata.requestId,
+      abortSignal: request.signal,
     });
     const response = NextResponse.json(result, { status: 201 });
     response.headers.set('cache-control', 'no-store');
