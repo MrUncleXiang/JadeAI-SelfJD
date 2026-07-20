@@ -12,6 +12,14 @@ type CreateSectionData = {
   content?: unknown;
 };
 
+type ResumeKind = 'baseline' | 'targeted' | 'general-copy';
+
+type ResumeLineage = {
+  kind?: ResumeKind;
+  parentResumeId?: string | null;
+  targetJdSourceId?: string | null;
+};
+
 async function createResumeSection(data: CreateSectionData) {
   const id = data.id || crypto.randomUUID();
   await db.insert(resumeSections).values({
@@ -52,11 +60,17 @@ export const resumeRepository = {
     template?: string;
     themeConfig?: unknown;
     language?: string;
+    kind?: ResumeKind;
+    parentResumeId?: string | null;
+    targetJdSourceId?: string | null;
   }) {
     const id = crypto.randomUUID();
     await db.insert(resumes).values({
       id,
       userId,
+      kind: data.kind || 'baseline',
+      parentResumeId: data.parentResumeId || null,
+      targetJdSourceId: data.targetJdSourceId || null,
       title: data.title || '未命名简历',
       template: data.template || 'classic',
       ...(data.themeConfig !== undefined ? { themeConfig: data.themeConfig } : {}),
@@ -81,12 +95,21 @@ export const resumeRepository = {
     const existing = await this.findOwnedById(userId, id);
     if (!existing) return false;
     await db
+      .update(resumes)
+      .set({ parentResumeId: null, updatedAt: new Date() })
+      .where(and(eq(resumes.userId, userId), eq(resumes.parentResumeId, id)));
+    await db
       .delete(resumes)
       .where(and(eq(resumes.id, id), eq(resumes.userId, userId)));
     return true;
   },
 
-  async duplicateOwned(userId: string, id: string, titleOverride?: string) {
+  async duplicateOwned(
+    userId: string,
+    id: string,
+    titleOverride?: string,
+    lineage: ResumeLineage = {},
+  ) {
     const original = await this.findOwnedById(userId, id);
     if (!original) return null;
 
@@ -94,6 +117,9 @@ export const resumeRepository = {
     await db.insert(resumes).values({
       id: newId,
       userId,
+      kind: lineage.kind || 'general-copy',
+      parentResumeId: lineage.parentResumeId === undefined ? original.id : lineage.parentResumeId,
+      targetJdSourceId: lineage.targetJdSourceId || null,
       title: titleOverride ?? `${original.title} (副本)`,
       template: original.template,
       themeConfig: original.themeConfig,

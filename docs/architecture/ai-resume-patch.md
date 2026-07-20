@@ -218,7 +218,7 @@ Diff 由服务器根据规范化前后内容计算，不信任 LLM 自报的 Bef
 - 命中 WorkResume `forbiddenClaims` 的陈述不可应用。
 - 应用后可恢复到旧版本，历史 Change Set 仍可查询。
 
-## 11. 当前实现状态（2026-07-16）
+## 11. 当前实现状态（2026-07-20）
 
 已落地：
 
@@ -231,8 +231,13 @@ Diff 由服务器根据规范化前后内容计算，不信任 LLM 自报的 Bef
 - 提案创建、应用和版本恢复均写入审计事件，且不保存明文 LLM API Key。
 - Phase 4 职业知识库已提供 Approved Fact、非陈旧 Evidence、Allowed Claim 和 Forbidden Claim 适配器；生成提案和应用变更时均重新加载当前用户策略。
 - 新增履历或量化陈述必须引用当前 Approved Evidence；事实被拒绝或失效后，已生成但尚未应用的 Change Set 会在应用阶段被再次阻断。
+- Phase 6C.1 已接入已确认 JD 的真实引用策略：定向提案可引用且只能引用目标 JD 的
+  `jdRequirementIds`，同时仍须用 Approved Evidence 支撑事实性陈述。
+- 定向生成会创建独立 Targeted Resume，并把 `evidenceIds` 与 `jdRequirementIds` 保存到 Operation；
+  应用前重新加载当前事实与 JD 状态，防止使用已撤销确认的要求。
 
 尚未关闭的发布边界：
 
-- JD Requirement 的真实适配器仍归入 Phase 6；当前 Phase 4 已关闭事实证据闭环，但尚未实现面向招聘 JD 的定向约束。
+- Phase 6C.1 已关闭“已确认 JD + Approved Fact -> 独立 Targeted Resume -> 可审阅 Change Set”的
+  最小闭环；显式 strong/partial/gap/conflict 匹配矩阵和缺口调整 UI 仍待实现。
 - `/api/ai/translate` 的覆盖模式和 `/api/ai/generate-resume` 仍是上游遗留直写路径，必须在发布 Gate 前迁移；当前“AI Chat 写回”已安全化，但不能据此声称所有 AI Route 都已完成迁移。

@@ -21,6 +21,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
+import { TargetedResumeDialog } from '@/components/jd/targeted-resume-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -192,6 +193,7 @@ export default function JdPage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
+  const [targetSource, setTargetSource] = useState<JdSource | null>(null);
 
   const visionProfile = useMemo(
     () => llmProfiles.find((profile) => profile.id === llmBindings.vision) || null,
@@ -685,6 +687,11 @@ export default function JdPage() {
                     {source.errorCode && <span className="text-destructive">{source.errorCode}</span>}
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
+                    {source.status === 'confirmed' && (
+                      <Button size="sm" onClick={() => setTargetSource(source)}>
+                        <Sparkles className="mr-2 h-4 w-4" /> {t('generateTargeted')}
+                      </Button>
+                    )}
                     {source.requirements.length > 0 && (
                       <Button variant="outline" size="sm" onClick={() => setDraft(reviewDraft(source))}>
                         <PencilLine className="mr-2 h-4 w-4" /> {t('review')}
@@ -824,6 +831,11 @@ export default function JdPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TargetedResumeDialog
+        source={targetSource}
+        onOpenChange={(open) => { if (!open) setTargetSource(null); }}
+      />
     </div>
   );
 }

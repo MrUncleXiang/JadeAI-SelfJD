@@ -112,6 +112,13 @@ function testFreshInstall(): void {
       .map((row) => row.name),
   );
   assert(jdSourceColumns.has('last_request_id'));
+  const resumeColumns = new Set(
+    (sqlite.prepare('PRAGMA table_info(resumes)').all() as Array<{ name: string }>)
+      .map((row) => row.name),
+  );
+  assert(resumeColumns.has('kind'));
+  assert(resumeColumns.has('parent_resume_id'));
+  assert(resumeColumns.has('target_jd_source_id'));
   const githubColumns = sqlite.prepare(`
     SELECT m.name AS table_name, p.name AS column_name
     FROM sqlite_master AS m, pragma_table_info(m.name) AS p
@@ -167,6 +174,12 @@ function testLegacyUpgrade(): void {
   assert.equal(
     (sqlite.prepare('SELECT title FROM resumes WHERE id = ?').get('legacy-resume') as { title: string }).title,
     'Preserved resume',
+  );
+  assert.deepEqual(
+    sqlite.prepare(
+      'SELECT kind, parent_resume_id, target_jd_source_id FROM resumes WHERE id = ?',
+    ).get('legacy-resume'),
+    { kind: 'baseline', parent_resume_id: null, target_jd_source_id: null },
   );
   for (const table of [
     'resume_versions',

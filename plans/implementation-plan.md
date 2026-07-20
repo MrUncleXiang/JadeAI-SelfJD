@@ -151,7 +151,8 @@ Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 7. [x] 将现有 Chat Tool 改造成显式“提出变更”，普通对话禁止直接写库。
 8. [ ] 提案编辑后重校验及显式拒绝动作。
 9. [ ] 将旧翻译覆盖模式和 AI 初始简历生成迁移到 Change Set/受控导入边界。
-10. [ ] 接入真实数据源：Phase 4 Approved Fact/Forbidden Claim 和 Phase 6A 文本 JD Requirement 已完成；Phase 6C 匹配与定向 ResumePatch 待实现。
+10. [x] 接入真实数据源：Phase 4 Approved Fact/Forbidden Claim 与 Phase 6A 已确认 JD Requirement
+    共同约束定向 ResumePatch；显式匹配矩阵与缺口分析留在 Phase 6C.2。
 
 自动测试：
 
@@ -169,7 +170,9 @@ Gate：任何 AI 请求都不能绕过 Change Set 直接修改 Resume。
 - AI Chat 已完全移除仓储写入 Tool；“生成提案”与普通聊天分离，提案持久化不会修改在线简历。
 - 真实浏览器已覆盖 `candidate -> 审阅 -> 只应用选中项 -> 恢复 Version 1`，并验证 Change Set 历史仍可查询。
 - SQLite 空库/旧库迁移和真实 PostgreSQL 临时实例均已覆盖新增三张表及 Apply/Restore 流程。
-- Gate 仍为 **partial**：Phase 4 已提供 AI-003 的真实事实证据闭环，Phase 6A 已接入可审核的文本 JD Requirement；上游遗留 `/api/ai/translate` 与 `/api/ai/generate-resume` 尚未迁移，Phase 6C 的事实匹配与定向 ResumePatch 仍待实现。
+- Gate 仍为 **partial**：Phase 4 已提供 AI-003 的真实事实证据闭环，Phase 6C.1 已接入已确认
+  JD Requirement 并生成独立定向 ResumePatch；上游遗留 `/api/ai/translate` 与
+  `/api/ai/generate-resume` 尚未迁移，Phase 6C.2 的显式事实匹配与缺口分析仍待实现。
 
 自动化证据（2026-07-16）：
 
@@ -338,7 +341,9 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - [x] 真实浏览器 E2E 覆盖保存、人工修正、确认状态和租户 API。
 - [x] 生产部署验收：`8783d06` 已部署至 `http://43.138.159.58:3000`，未登录访问根路径会跳转至账号登录页；认证 API、JD 工作区、SQLite 迁移和公网监听验收通过。
 - [ ] Phase 6B：PDF、DOCX 安全导入（图片 Phase 6B.1 已完成）。
-- [ ] Phase 6C：Approved Fact 匹配、缺口分析和定向 ResumePatch。
+- [x] Phase 6C.1：Approved Fact + confirmed JD 约束定向 ResumePatch；支持从事实库新建或复制基准，
+  生成独立 Targeted Resume 并进入 Change Set 审阅。
+- [ ] Phase 6C.2：strong/partial/gap/conflict 显式匹配矩阵、缺口分析和人工调整。
 
 ### 用户反馈闭环（2026-07-18）
 
@@ -351,6 +356,23 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - [x] 页面登录重定向与个人 API 鉴权解耦；`AUTH_REQUIRED=false` 时允许访问页面，但不匿名暴露租户数据。
 - [x] 未登录工作区显示稳定登录提示，桌面、移动端和工作区 Header 均提供明确登录入口。
 - [x] 登录入口保留当前 locale 和 callback URL，避免 `/login` 无语言前缀导致入口失效。
+
+### 用户反馈闭环（2026-07-20）
+
+- [x] 已确认 JD 卡片提供“生成定向简历”入口，可选择从 Approved Fact 新建或复制已有简历。
+- [x] 新增 `baseline | targeted | general-copy` 类型、父简历和目标 JD 关系及 SQLite/PostgreSQL 迁移。
+- [x] 定向生成同时加载 Approved Evidence 和目标 JD Requirement 白名单，AI 输出进入可审核 Change Set。
+- [x] 未确认 JD、跨租户基准、无 Approved Fact、Provider 失败均 fail closed；失败不保留空壳。
+- [x] 应用定向 Change Set 后基准简历内容与版本保持不变。
+
+自动化证据（2026-07-20）：
+
+- `pnpm test`：58 个测试文件、277 个测试通过；覆盖定向克隆、双引用策略、应用后基准不变、
+  租户边界、确认门禁、无事实门禁和 Provider 失败回收。
+- `pnpm test:e2e`：9 个真实 Chromium 场景通过；覆盖已确认 JD 的定向入口、对话框和不覆盖基准提示。
+- `pnpm type-check`、`pnpm spec:check`、`pnpm test:migration`、一次性 PostgreSQL 18
+  `pnpm test:integration` 和 `pnpm build` 通过；新增/修改 TypeScript/TSX 文件通过聚焦 ESLint。
+- 全量 ESLint 仍受上游既存约 1210 个错误和 64 个警告阻断；本次未放宽规则或批量修改无关模板代码。
 
 自动化证据（2026-07-18）：
 

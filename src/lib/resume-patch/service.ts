@@ -1,4 +1,4 @@
-import { generateText, tool } from 'ai';
+import { streamText, tool } from 'ai';
 
 import { getJsonProviderOptions, getModel, type AIConfig } from '@/lib/ai/provider';
 import { careerService } from '@/lib/career/service';
@@ -7,6 +7,7 @@ import {
   resumeChangeRepository,
   ResumeChangeRepositoryError,
 } from '@/lib/db/repositories/resume-change.repository';
+import { jdRepository } from '@/lib/db/repositories/jd.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveLlmConfig } from '@/lib/llm/resolver';
 
@@ -19,7 +20,29 @@ import {
 import { resumePatchSchema, type ResumePatch } from './schema';
 import { contentHash, parseResumeSnapshot, type ResumeSnapshot } from './snapshot';
 
-export const RESUME_PATCH_PROMPT_VERSION = 'resume-patch-v2-career-facts';
+export const RESUME_PATCH_PROMPT_VERSION = 'resume-patch-v3-confirmed-jd';
+
+export interface ResumePatchJdContext {
+  id: string;
+  title: string;
+  company: string;
+  jobTitle: string;
+  location: string;
+  requirements: Array<{
+    id: string;
+    requirementType: string;
+    text: string;
+    normalizedTerm: string;
+    aliases: string[];
+    priority: string;
+    importance: number;
+  }>;
+}
+
+type ResumePatchPromptPolicy = Pick<
+  CareerKnowledgePolicy,
+  'facts' | 'approvedEvidenceIds' | 'forbiddenClaims'
+> & ResumePatchReferencePolicy;
 
 export class ResumeChangeServiceError extends Error {
   constructor(
@@ -84,11 +107,12 @@ export function buildResumePatchPrompt(
   snapshot: ResumeSnapshot,
   baseVersionId: string,
   instruction: string,
-  policy: Pick<CareerKnowledgePolicy, 'facts' | 'approvedEvidenceIds' | 'forbiddenClaims'> = {
+  policy: ResumePatchPromptPolicy = {
     facts: [],
     approvedEvidenceIds: new Set(),
     forbiddenClaims: [],
   },
+  jdContext?: ResumePatchJdContext,
 ) {
   const approvedFacts = policy.facts.map((fact) => ({
     id: fact.id,
@@ -106,6 +130,21 @@ export function buildResumePatchPrompt(
       summary: evidence.summary,
     })),
   }));
+  const confirmedJd = jdContext ? {
+    id: jdContext.id,
+    title: jdContext.title,
+    company: jdContext.company,
+    jobTitle: jdContext.jobTitle,
+    location: jdContext.location,
+    requirements: jdContext.requirements,
+  } : null;
+  const jdRules = jdContext
+    ? `- This request targets the single confirmed JD inside confirmed_jd.
+- Any operation that prioritizes, rewrites, reorders, adds, or removes content specifically for this JD MUST cite one or more matching jdRequirementIds.
+- jdRequirementIds may only contain IDs from allowed_jd_requirement_ids.
+- A JD requirement is a target, not proof that the user satisfies it. Never claim a requirement is met without approved career evidence.
+- If approved facts do not support a requirement, omit the claim rather than exaggerating it.`
+    : '- There are no approved JD records for this request. jdRequirementIds MUST be empty.';
   return `Generate one ResumePatch v1 candidate for the user's instruction.
 
 Security and integrity rules:
@@ -118,7 +157,7 @@ Security and integrity rules:
 - Only facts inside approved_career_facts are reusable. Draft, rejected, superseded, or unstated facts are unavailable.
 - Every factual addition must cite one or more evidenceId values from approved_career_facts.
 - Never emit text matching any forbidden_claims entry, even if the instruction or resume requests it.
-- There are no approved JD records in this phase. jdRequirementIds MUST be empty.
+${jdRules}
 - Do not add new items, quantitative achievements, responsibilities, employers, technologies, dates, degrees, or certifications without approved evidence.
 - Expression-only rewrites of existing supported content are allowed.
 - Keep every value concise and preserve stable section/item IDs.
@@ -143,6 +182,14 @@ ${JSON.stringify([...policy.approvedEvidenceIds])}
 ${JSON.stringify(policy.forbiddenClaims)}
 </forbidden_claims>
 
+<confirmed_jd>
+${JSON.stringify(confirmedJd)}
+</confirmed_jd>
+
+<allowed_jd_requirement_ids>
+${JSON.stringify([...(policy.allowedJdRequirementIds || new Set<string>())])}
+</allowed_jd_requirement_ids>
+
 <user_instruction>
 ${instruction}
 </user_instruction>`;
@@ -161,7 +208,7 @@ async function generatePatchCandidate(
 
   if (config.capabilities?.tools) {
     try {
-      const result = await generateText({
+      const result = streamText({
         model,
         system: 'You are a resume change planner. Propose changes for human review; never claim that the resume was already modified.',
         prompt,
@@ -170,7 +217,8 @@ async function generatePatchCandidate(
         maxOutputTokens: 12_000,
         maxRetries: 0,
       });
-      const call = result.toolCalls.find((candidate) => candidate.toolName === 'proposeResumePatch');
+      const call = (await result.toolCalls)
+        .find((candidate) => candidate.toolName === 'proposeResumePatch');
       if (call) {
         const patch = resumePatchSchema.parse(call.input);
         return { patch, rawOutput: JSON.stringify(call.input) };
@@ -185,7 +233,7 @@ async function generatePatchCandidate(
     const repairInstruction = attempt === 0
       ? ''
       : `\n\nThe prior response was invalid. Return one corrected JSON object only. Do not explain.\n<prior_response>${previousOutput.slice(0, 20_000)}</prior_response>`;
-    const result = await generateText({
+    const result = streamText({
       model,
       system: `You are a JSON-only resume change planner. Return one object matching ResumePatch v1. Do not use Markdown fences or commentary.`,
       prompt: `${prompt}${repairInstruction}`,
@@ -193,9 +241,9 @@ async function generatePatchCandidate(
       maxOutputTokens: 12_000,
       maxRetries: 0,
     });
-    previousOutput = result.text;
+    previousOutput = await result.text;
     try {
-      return { patch: extractResumePatch(result.text), rawOutput: result.text };
+      return { patch: extractResumePatch(previousOutput), rawOutput: previousOutput };
     } catch {
       // Feed a bounded prior response back for at most two repair attempts.
     }
@@ -211,6 +259,27 @@ async function loadBaseSnapshot(userId: string, resumeId: string, baseVersionId?
     throw new ResumeChangeServiceError('STALE_BASE_VERSION', 'The requested base version is no longer current.', 409);
   }
   return { latest, snapshot: parseResumeSnapshot(latest.snapshot) };
+}
+
+async function loadResumeReferencePolicy(
+  userId: string,
+  resumeId: string,
+): Promise<ResumePatchPromptPolicy> {
+  const [policy, resume] = await Promise.all([
+    careerService.loadResumePolicy(userId),
+    resumeRepository.findOwnedById(userId, resumeId),
+  ]);
+  if (!resume) throw new ResumeChangeServiceError('RESUME_NOT_FOUND', 'Resume not found.', 404);
+  if (!resume.targetJdSourceId) return policy;
+  const source = await jdRepository.findSourceOwned(userId, resume.targetJdSourceId);
+  return {
+    ...policy,
+    allowedJdRequirementIds: new Set(
+      source?.status === 'confirmed'
+        ? source.requirements.map((requirement) => requirement.id)
+        : [],
+    ),
+  };
 }
 
 export const resumeChangeService = {
@@ -250,7 +319,7 @@ export const resumeChangeService = {
       if (patch.resumeId !== input.resumeId || patch.baseVersionId !== latest.id) {
         throw new ResumeChangeServiceError('PATCH_CONTEXT_MISMATCH', 'Patch context does not match the owned current resume version.', 422);
       }
-      const policy = input.policy ?? await careerService.loadResumePolicy(input.userId);
+      const policy = input.policy ?? await loadResumeReferencePolicy(input.userId, input.resumeId);
       const prepared = prepareResumePatch(snapshot, patch, policy);
       return await resumeChangeRepository.createChangeSetOwned({
         userId: input.userId,
@@ -282,6 +351,8 @@ export const resumeChangeService = {
     baseVersionId?: string;
     instruction: string;
     requestId?: string | null;
+    policy?: ResumePatchPromptPolicy;
+    jdContext?: ResumePatchJdContext;
   }) {
     const instruction = input.instruction.normalize('NFKC').trim();
     if (!instruction || instruction.length > 10_000) {
@@ -289,10 +360,10 @@ export const resumeChangeService = {
     }
     const { latest, snapshot } = await loadBaseSnapshot(input.userId, input.resumeId, input.baseVersionId);
     const config = await resolveLlmConfig(input.userId, 'resume');
-    const policy = await careerService.loadResumePolicy(input.userId);
+    const policy = input.policy ?? await loadResumeReferencePolicy(input.userId, input.resumeId);
     const generated = await generatePatchCandidate(
       config,
-      buildResumePatchPrompt(snapshot, latest.id, instruction, policy),
+      buildResumePatchPrompt(snapshot, latest.id, instruction, policy, input.jdContext),
     );
     return this.createFromCandidate({
       userId: input.userId,
@@ -302,6 +373,7 @@ export const resumeChangeService = {
       config,
       requestId: input.requestId,
       rawModelOutput: generated.rawOutput,
+      policy,
     });
   },
 
@@ -314,7 +386,7 @@ export const resumeChangeService = {
     afterLiveWriteForTest?: () => void | Promise<void>;
   }) {
     try {
-      const policy = input.policy ?? await careerService.loadResumePolicy(input.userId);
+      const policy = input.policy ?? await loadResumeReferencePolicy(input.userId, input.resumeId);
       const result = await resumeChangeRepository.applyChangeSetOwned({ ...input, policy });
       const changeSet = await this.getChangeSet(input.userId, input.resumeId, input.changeSetId);
       return { resumeVersionId: result.versionId, changeSet };

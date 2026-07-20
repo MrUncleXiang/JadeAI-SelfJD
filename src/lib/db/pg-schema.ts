@@ -457,6 +457,9 @@ export const jdRequirements = pgTable('jd_requirements', {
 export const resumes = pgTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull(),
+  kind: text('kind').notNull().default('baseline'),
+  parentResumeId: text('parent_resume_id'),
+  targetJdSourceId: text('target_jd_source_id').references(() => jdSources.id, { onDelete: 'set null' }),
   title: text('title').notNull().default('未命名简历'),
   template: text('template').notNull().default('classic'),
   themeConfig: text('theme_config').default('{}'),
@@ -468,7 +471,11 @@ export const resumes = pgTable('resumes', {
   viewCount: integer('view_count').notNull().default(0),
   createdAt: integer('created_at').notNull().default(epochNow),
   updatedAt: integer('updated_at').notNull().default(epochNow),
-});
+}, (table) => [
+  index('resumes_user_kind_updated_idx').on(table.userId, table.kind, table.updatedAt),
+  index('resumes_parent_resume_idx').on(table.parentResumeId),
+  index('resumes_target_jd_source_idx').on(table.targetJdSourceId),
+]);
 
 export const resumeVersions = pgTable('resume_versions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),

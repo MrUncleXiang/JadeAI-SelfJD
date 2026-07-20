@@ -581,7 +581,11 @@ scenarios:
     when: 运行匹配
     then: 输出级别、依据、缺口和禁止夸大项
     layers: [unit, contract, e2e]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/resume/targeted.test.ts
+      - src/lib/resume-patch/resume-patch.test.ts
+      - src/app/api/jd-sources/[jdSourceId]/target-resume/route.test.ts
 
   - id: ACC-JD-004
     requirement: JD-004
@@ -592,7 +596,11 @@ scenarios:
     when: 生成并应用定向 Change Set
     then: 新建 Targeted Resume，基准内容和版本不变
     layers: [integration, e2e]
-    automationStatus: planned
+    automationStatus: automated
+    automationEvidence:
+      - src/lib/resume/targeted.test.ts
+      - src/app/api/jd-sources/[jdSourceId]/target-resume/route.test.ts
+      - tests/e2e/auth-and-tenancy.spec.ts
 
   - id: ACC-INT-001
     requirement: INT-001

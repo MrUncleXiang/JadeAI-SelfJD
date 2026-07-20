@@ -88,6 +88,35 @@ describe('ResumePatch v1', () => {
     expect(prompt).toContain('Only facts inside approved_career_facts are reusable.');
   });
 
+  it('limits a targeted proposal to one confirmed JD requirement set', () => {
+    const prompt = buildResumePatchPrompt(snapshot(), 'version-1', 'Tailor the resume', {
+      facts: [],
+      approvedEvidenceIds: new Set(),
+      forbiddenClaims: [],
+      allowedJdRequirementIds: new Set(['jd-requirement-1']),
+    }, {
+      id: 'jd-source-1',
+      title: 'Unity role',
+      company: 'Example Studio',
+      jobTitle: 'Unity Client Engineer',
+      location: 'Shenzhen',
+      requirements: [{
+        id: 'jd-requirement-1',
+        requirementType: 'hard_skill',
+        text: 'Unity production experience',
+        normalizedTerm: 'Unity',
+        aliases: ['Unity3D'],
+        priority: 'required',
+        importance: 1,
+      }],
+    });
+
+    expect(prompt).toContain('"id":"jd-source-1"');
+    expect(prompt).toContain('"id":"jd-requirement-1"');
+    expect(prompt).toContain('<allowed_jd_requirement_ids>\n["jd-requirement-1"]');
+    expect(prompt).toContain('A JD requirement is a target, not proof');
+  });
+
   it('uses stable canonical hashes', () => {
     expect(canonicalJson({ b: 2, a: { d: 4, c: 3 } })).toBe('{"a":{"c":3,"d":4},"b":2}');
     expect(contentHash({ a: 1, b: 2 })).toBe(contentHash({ b: 2, a: 1 }));
@@ -283,6 +312,18 @@ describe('ResumePatch v1', () => {
     expect(() => prepareResumePatch(base, withEvidence, {
       approvedEvidenceIds: new Set(['someone-elses-fact']),
     })).toThrowError(expect.objectContaining({ code: 'EVIDENCE_NOT_APPROVED' }));
+    const withForeignJd = resumePatchSchema.parse({
+      ...quantitativePatch,
+      operations: [{
+        ...quantitative,
+        evidenceIds: ['fact-approved'],
+        jdRequirementIds: ['another-jd-requirement'],
+      }],
+    });
+    expect(() => prepareResumePatch(base, withForeignJd, {
+      approvedEvidenceIds: new Set(['fact-approved']),
+      allowedJdRequirementIds: new Set(['selected-jd-requirement']),
+    })).toThrowError(expect.objectContaining({ code: 'JD_REQUIREMENT_NOT_ALLOWED' }));
 
     const githubMutation = withHash(base, {
       operationId: 'github-stars',

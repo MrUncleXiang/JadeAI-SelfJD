@@ -176,6 +176,7 @@ async function logoutViaUi(page: Page): Promise<void> {
       response.url().endsWith('/api/auth/logout')
       && response.request().method() === 'POST'
     )),
+    page.waitForURL((url) => /^\/(?:en|zh)\/?$/.test(url.pathname)),
     logoutItem.click(),
   ]);
   await expect.poll(async () => (await page.request.get('/api/me')).status()).toBe(401);
@@ -448,6 +449,16 @@ test('text JD workspace saves, reviews, and explicitly confirms tenant-scoped re
   const confirmed = await browserJson<JdSourceRecord>(page, `/api/jd-sources/${source.id}`);
   expect(confirmed.status).toBe(200);
   expect(confirmed.body).toMatchObject({ id: source.id, status: 'confirmed' });
+
+  await page.getByRole('button', { name: 'Generate Targeted Resume' }).first().click();
+  const targetedDialog = page.getByRole('dialog');
+  await expect(targetedDialog.getByRole('heading', {
+    name: 'Generate a Targeted Resume from JD + Facts',
+  })).toBeVisible();
+  await expect(targetedDialog.getByText('Start from approved facts (recommended)')).toBeVisible();
+  await expect(targetedDialog.getByText(/never overwrites a resume directly/i)).toBeVisible();
+  await targetedDialog.getByRole('button', { name: 'Close', exact: true }).first().click();
+  await expect(targetedDialog).not.toBeVisible();
 });
 
 test('registration, invitation, login, logout, CSRF, and last-admin lifecycle', async ({ page }) => {

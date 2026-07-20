@@ -473,6 +473,9 @@ export const jdRequirements = sqliteTable('jd_requirements', {
 export const resumes = sqliteTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id),
+  kind: text('kind', { enum: ['baseline', 'targeted', 'general-copy'] }).notNull().default('baseline'),
+  parentResumeId: text('parent_resume_id'),
+  targetJdSourceId: text('target_jd_source_id').references(() => jdSources.id, { onDelete: 'set null' }),
   title: text('title').notNull().default('未命名简历'),
   template: text('template').notNull().default('classic'),
   themeConfig: text('theme_config', { mode: 'json' }).default('{}'),
@@ -484,7 +487,11 @@ export const resumes = sqliteTable('resumes', {
   viewCount: integer('view_count').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-});
+}, (table) => [
+  index('resumes_user_kind_updated_idx').on(table.userId, table.kind, table.updatedAt),
+  index('resumes_parent_resume_idx').on(table.parentResumeId),
+  index('resumes_target_jd_source_idx').on(table.targetJdSourceId),
+]);
 
 export const resumeVersions = sqliteTable('resume_versions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),

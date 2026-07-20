@@ -1774,7 +1774,7 @@ paths:
       tags: [JD]
       operationId: createTargetedResume
       x-requirement-id: JD-004
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/JdSourceId'
       requestBody:
@@ -1784,7 +1784,6 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [baseResumeId, baseVersionId]
               properties:
                 baseResumeId:
                   type: string
@@ -1792,13 +1791,63 @@ paths:
                 baseVersionId:
                   type: string
                   format: uuid
+                  description: Optional optimistic concurrency guard; requires baseResumeId.
+                title:
+                  type: string
+                  maxLength: 200
+                template:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                language:
+                  type: string
+                  enum: [zh, en]
+                instruction:
+                  type: string
+                  maxLength: 2000
       responses:
-        '202':
-          description: Targeted resume job accepted
+        '201':
+          description: An independent targeted resume and evidence/JD-backed reviewable Change Set were created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Job'
+                type: object
+                additionalProperties: false
+                required: [resumeId, changeSetId, title, operationCount, baseResumeId, jdSourceId]
+                properties:
+                  resumeId:
+                    type: string
+                    format: uuid
+                  changeSetId:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  operationCount:
+                    type: integer
+                    minimum: 0
+                  baseResumeId:
+                    type: [string, 'null']
+                    format: uuid
+                  jdSourceId:
+                    type: string
+                    format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: JD is not confirmed, no approved facts exist, or the selected base version is stale
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
   /api/jobs/{jobId}:
     get:

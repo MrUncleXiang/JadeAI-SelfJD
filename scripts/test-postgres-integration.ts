@@ -120,6 +120,20 @@ async function main(): Promise<void> {
       SELECT title FROM resumes WHERE id = 'legacy-resume'
     `;
     assert.equal(resumes[0].title, 'Preserved resume');
+    const resumeLineage = await client<{
+      kind: string;
+      parent_resume_id: string | null;
+      target_jd_source_id: string | null;
+    }[]>`
+      SELECT kind, parent_resume_id, target_jd_source_id
+      FROM resumes
+      WHERE id = 'legacy-resume'
+    `;
+    assert.deepEqual(resumeLineage[0], {
+      kind: 'baseline',
+      parent_resume_id: null,
+      target_jd_source_id: null,
+    });
     const phaseTables = await client<{ table_name: string }[]>`
       SELECT table_name
       FROM information_schema.tables
