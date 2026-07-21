@@ -21,6 +21,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
+import { MatchMatrixPanel } from '@/components/jd/match-matrix-panel';
 import { TargetedResumeDialog } from '@/components/jd/targeted-resume-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -193,6 +194,7 @@ export default function JdPage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
+  const [matchSource, setMatchSource] = useState<JdSource | null>(null);
   const [targetSource, setTargetSource] = useState<JdSource | null>(null);
 
   const visionProfile = useMemo(
@@ -688,9 +690,14 @@ export default function JdPage() {
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
                     {source.status === 'confirmed' && (
-                      <Button size="sm" onClick={() => setTargetSource(source)}>
-                        <Sparkles className="mr-2 h-4 w-4" /> {t('generateTargeted')}
-                      </Button>
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => setMatchSource(source)}>
+                          <FileSearch className="mr-2 h-4 w-4" /> {t('runMatch')}
+                        </Button>
+                        <Button size="sm" onClick={() => setTargetSource(source)}>
+                          <Sparkles className="mr-2 h-4 w-4" /> {t('generateTargeted')}
+                        </Button>
+                      </>
                     )}
                     {source.requirements.length > 0 && (
                       <Button variant="outline" size="sm" onClick={() => setDraft(reviewDraft(source))}>
@@ -835,6 +842,13 @@ export default function JdPage() {
       <TargetedResumeDialog
         source={targetSource}
         onOpenChange={(open) => { if (!open) setTargetSource(null); }}
+      />
+
+      <MatchMatrixPanel
+        sourceId={matchSource?.id || null}
+        sourceTitle={matchSource?.title}
+        open={Boolean(matchSource)}
+        onOpenChange={(open) => { if (!open) setMatchSource(null); }}
       />
     </div>
   );

@@ -1209,6 +1209,45 @@
       "required": "必须",
       "preferred": "优先",
       "normal": "一般"
+    },
+    "runMatch": "匹配分析",
+    "match": {
+      "title": "JD 与事实匹配矩阵",
+      "description": "将已确认岗位要求与当前账号已批准事实进行确定性匹配，输出强匹配、部分匹配、缺口和冲突。",
+      "descriptionWithTitle": "分析「{title}」与已批准事实的匹配情况。",
+      "hint": "匹配结果可帮助你在生成定向简历前先看清证据覆盖与缺口；生成定向简历时也会自动参考该矩阵。",
+      "run": "运行匹配",
+      "rerun": "重新匹配",
+      "success": "匹配分析已完成",
+      "empty": "点击“运行匹配”生成矩阵。",
+      "forbidden": "禁止声明：{claim}",
+      "gapTitle": "发现 {count} 个缺口要求",
+      "gapHint": "缺口与冲突项不应在简历中写成已满足；定向生成会优先使用强匹配与部分匹配事实。",
+      "summary": {
+        "strong": "强匹配",
+        "partial": "部分匹配",
+        "gap": "缺口",
+        "conflict": "冲突",
+        "requiredGaps": "必须缺口"
+      },
+      "levels": {
+        "strong": "强匹配",
+        "partial": "部分匹配",
+        "gap": "缺口",
+        "conflict": "冲突"
+      },
+      "columns": {
+        "level": "级别",
+        "priority": "优先级",
+        "requirement": "岗位要求",
+        "facts": "支持事实",
+        "rationale": "说明"
+      },
+      "errors": {
+        "NO_APPROVED_FACTS": "事实库中还没有已批准事实，请先完成事实审核。",
+        "JD_SOURCE_NOT_CONFIRMED": "该 JD 尚未确认，请先审核并确认。",
+        "default": "匹配分析失败，请稍后重试。"
+      }
     }
   },
   "knowledge": {

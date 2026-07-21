@@ -1209,6 +1209,45 @@
       "required": "Required",
       "preferred": "Preferred",
       "normal": "Normal"
+    },
+    "runMatch": "Match analysis",
+    "match": {
+      "title": "JD–Fact Match Matrix",
+      "description": "Deterministically match confirmed JD requirements against approved career facts and surface strong, partial, gap, and conflict rows.",
+      "descriptionWithTitle": "Analyze matches between “{title}” and approved facts.",
+      "hint": "Use the matrix to inspect evidence coverage before generating a targeted resume. Targeted generation also consumes this matrix automatically.",
+      "run": "Run match",
+      "rerun": "Re-run match",
+      "success": "Match analysis completed",
+      "empty": "Click “Run match” to generate the matrix.",
+      "forbidden": "Forbidden claim: {claim}",
+      "gapTitle": "{count} gap requirements found",
+      "gapHint": "Gap and conflict items must not be claimed as satisfied. Targeted generation prioritizes strong and partial evidence.",
+      "summary": {
+        "strong": "Strong",
+        "partial": "Partial",
+        "gap": "Gap",
+        "conflict": "Conflict",
+        "requiredGaps": "Required gaps"
+      },
+      "levels": {
+        "strong": "Strong",
+        "partial": "Partial",
+        "gap": "Gap",
+        "conflict": "Conflict"
+      },
+      "columns": {
+        "level": "Level",
+        "priority": "Priority",
+        "requirement": "Requirement",
+        "facts": "Supporting facts",
+        "rationale": "Rationale"
+      },
+      "errors": {
+        "NO_APPROVED_FACTS": "No approved career facts yet. Review facts first.",
+        "JD_SOURCE_NOT_CONFIRMED": "This JD is not confirmed yet. Review and confirm first.",
+        "default": "Match analysis failed. Please try again."
+      }
     }
   },
   "knowledge": {

@@ -12,6 +12,12 @@ import {
 } from '@/lib/user/resume-personal-profile';
 import { loadResumePersonalProfile } from '@/lib/user/resume-personal-profile-service';
 
+import {
+  buildJdMatchReport,
+  formatMatchReportForPrompt,
+  selectFactsUsingMatchReport,
+} from '@/lib/jd/match';
+
 import { targetedDraftService } from './targeted-draft';
 
 const TEMPLATE_SET = new Set<string>(TEMPLATES);
@@ -319,7 +325,21 @@ export const targetedResumeService = {
       const resumeId = targetResumeId;
 
       const context = jdContext(source);
-      const targetedPolicy = selectTargetFactsForJd(policy, context);
+      const matchReport = buildJdMatchReport({
+        jdSourceId: source.id,
+        requirements: source.requirements.map((requirement) => ({
+          id: requirement.id,
+          requirementType: requirement.requirementType,
+          text: requirement.text,
+          normalizedTerm: requirement.normalizedTerm,
+          aliases: requirement.aliases,
+          priority: requirement.priority,
+          importance: requirement.importance,
+        })),
+        policy,
+      });
+      const matchSelectedPolicy = selectFactsUsingMatchReport(policy, matchReport, MAX_TARGETED_FACTS);
+      const targetedPolicy = selectTargetFactsForJd(matchSelectedPolicy, context);
       const allowedJdRequirementIds = new Set(
         source.requirements.map((requirement) => requirement.id),
       );
@@ -327,6 +347,7 @@ export const targetedResumeService = {
         language === 'en'
           ? 'Create a concise targeted resume draft for the confirmed job description. Use only approved career facts as proof. Prioritize the strongest supported matches, preserve relevant truthful content, and omit unsupported requirements instead of implying that the user meets them. Prefer a small set of high-signal summary, skill, and project blocks instead of mirroring every available fact.'
           : '请针对已确认的岗位 JD 生成一份精炼的定向简历草稿。只能使用已批准职业事实作为证明；优先呈现有充分证据的匹配项，保留相关且真实的内容，对缺少事实支持的岗位要求应省略而不是暗示用户已经满足。优先生成少量高价值的职业摘要、技能组和项目内容，不要机械复制全部事实。',
+        formatMatchReportForPrompt(matchReport, language),
         input.baseResumeId
           ? (language === 'en'
             ? 'This is an independent copy of a base resume. Reorder, rewrite, add, or remove only where it improves JD relevance; do not modify the base resume.'
@@ -359,6 +380,7 @@ export const targetedResumeService = {
         operationCount: changeSet.operations.length,
         baseResumeId: input.baseResumeId || null,
         jdSourceId: source.id,
+        matchSummary: matchReport.summary,
       };
     } catch (error) {
       if (targetResumeId) {

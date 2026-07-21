@@ -1791,21 +1791,55 @@ paths:
         '409':
           description: JD has no reviewed requirements
 
-  /api/jd-sources/{jdSourceId}/analyze:
+  /api/jd-sources/{jdSourceId}/match:
+    get:
+      tags: [JD]
+      operationId: getJdSourceMatch
+      x-requirement-id: JD-003
+      x-implementation-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/JdSourceId'
+      responses:
+        '200':
+          description: Deterministic match matrix for confirmed JD requirements and approved facts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JdMatchReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: JD is not confirmed or no approved facts exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
       tags: [JD]
       operationId: analyzeJdSource
       x-requirement-id: JD-003
-      x-implementation-status: planned
+      x-implementation-status: implemented
       parameters:
         - $ref: '#/components/parameters/JdSourceId'
       responses:
-        '202':
-          description: Analysis job accepted
+        '200':
+          description: Deterministic match matrix for confirmed JD requirements and approved facts
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Job'
+                $ref: '#/components/schemas/JdMatchReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: JD is not confirmed or no approved facts exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/jd-sources/{jdSourceId}/target-resume:
     post:
@@ -3382,6 +3416,88 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JdRequirement'
+
+
+    JdMatchReport:
+      type: object
+      additionalProperties: false
+      required: [jdSourceId, generatedAt, summary, rows, gaps, conflicts, recommendedFactIds]
+      properties:
+        jdSourceId:
+          type: string
+          format: uuid
+        generatedAt:
+          type: string
+          format: date-time
+        summary:
+          type: object
+          additionalProperties: false
+          required: [total, strong, partial, gap, conflict, requiredGaps]
+          properties:
+            total: { type: integer, minimum: 0 }
+            strong: { type: integer, minimum: 0 }
+            partial: { type: integer, minimum: 0 }
+            gap: { type: integer, minimum: 0 }
+            conflict: { type: integer, minimum: 0 }
+            requiredGaps: { type: integer, minimum: 0 }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [requirementId, requirementType, priority, text, normalizedTerm, level, score, supportingFacts, conflictClaims, rationale]
+            properties:
+              requirementId: { type: string }
+              requirementType: { type: string }
+              priority: { type: string }
+              text: { type: string }
+              normalizedTerm: { type: string }
+              level:
+                type: string
+                enum: [strong, partial, gap, conflict]
+              score: { type: number }
+              supportingFacts:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [factId, title, factType, score, reasons]
+                  properties:
+                    factId: { type: string }
+                    title: { type: string }
+                    factType: { type: string }
+                    score: { type: number }
+                    reasons:
+                      type: array
+                      items: { type: string }
+              conflictClaims:
+                type: array
+                items: { type: string }
+              rationale: { type: string }
+        gaps:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [requirementId, text, priority, requirementType]
+            properties:
+              requirementId: { type: string }
+              text: { type: string }
+              priority: { type: string }
+              requirementType: { type: string }
+        conflicts:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [requirementId, text, forbiddenClaim]
+            properties:
+              requirementId: { type: string }
+              text: { type: string }
+              forbiddenClaim: { type: string }
+        recommendedFactIds:
+          type: array
+          items: { type: string }
 
     Job:
       type: object

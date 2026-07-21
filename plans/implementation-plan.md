@@ -344,6 +344,12 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
   服务器 `pdftotext` 可抽取中文正文，字体 `emb=yes`。DOCX 中文继续使用 East Asia 字体 `Microsoft YaHei`。
 - 生产验收：`http://43.138.159.58:3000` 登录后导出定向简历 PDF/DOCX，中文正文可抽取。
 
+### 用户反馈闭环（2026-07-21 · JD-003）
+
+- [x] 新增确定性 JD↔事实匹配矩阵：`strong` / `partial` / `gap` / `conflict`，输出支持事实、缺口、禁止声明冲突与推荐事实。
+- [x] `GET/POST /api/jd-sources/{id}/match` 租户隔离同步返回矩阵；未确认 JD 与无批准事实 fail closed。
+- [x] `/zh/jd` 已确认卡片提供“匹配分析”入口；定向简历生成自动注入匹配矩阵摘要。
+
 ### Phase 6A 进展：文本 JD 结构化
 
 - [x] 新增租户隔离的 `jd_sources`、`jd_requirements` 及 SQLite/PostgreSQL 迁移。
@@ -356,7 +362,7 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - [ ] Phase 6B：PDF、DOCX 安全导入（图片 Phase 6B.1 已完成）。
 - [x] Phase 6C.1：Approved Fact + confirmed JD 约束定向 ResumePatch；支持从事实库新建或复制基准，
   生成独立 Targeted Resume 并进入 Change Set 审阅。
-- [ ] Phase 6C.2：strong/partial/gap/conflict 显式匹配矩阵、缺口分析和人工调整。
+- [x] Phase 6C.2：strong/partial/gap/conflict 显式匹配矩阵、缺口分析和人工调整。
 
 ### 用户反馈闭环（2026-07-18）
 
