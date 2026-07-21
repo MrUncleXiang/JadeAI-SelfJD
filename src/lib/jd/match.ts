@@ -215,15 +215,22 @@ function findForbiddenConflicts(
   ].join(' ')));
   if (reqTokens.size < 1) return [];
 
+  const distinctive = (token: string) => {
+    const cjk = (token.match(/[一-鿿]/g) || []).length;
+    if (cjk >= 4) return true;
+    if (cjk === 0 && token.length >= 6) return true;
+    return false;
+  };
+
   const conflicts: string[] = [];
   for (const claim of forbiddenClaims) {
     const claimNorm = normalize(claim);
     if (!claimNorm) continue;
     const claimTokens = extractMatchTokens(claim);
-    const overlap = claimTokens.filter((token) => reqTokens.has(token) && token.length >= 3);
-    // Require substantial overlap so generic short tokens do not false-positive.
-    if (overlap.length >= 2 || (overlap.length === 1 && overlap[0].length >= 5 && claimNorm.includes(overlap[0]))) {
-      // Only treat as conflict when the forbidden claim is about the same topic.
+    const overlap = claimTokens.filter((token) => reqTokens.has(token));
+    const strongOverlap = overlap.filter(distinctive);
+    // Avoid false positives from generic soft-skill tokens.
+    if (strongOverlap.length >= 1 || overlap.filter((token) => token.length >= 4).length >= 2) {
       conflicts.push(claim);
     }
   }
@@ -346,11 +353,13 @@ export function buildJdMatchReport(input: {
       priority: row.priority,
       requirementType: row.requirementType,
     }));
-  const conflicts = rows.flatMap((row) => row.conflictClaims.map((forbiddenClaim) => ({
-    requirementId: row.requirementId,
-    text: row.text,
-    forbiddenClaim,
-  })));
+  const conflicts = rows
+    .filter((row) => row.level === 'conflict')
+    .flatMap((row) => row.conflictClaims.map((forbiddenClaim) => ({
+      requirementId: row.requirementId,
+      text: row.text,
+      forbiddenClaim,
+    })));
 
   const recommendedFactIds = unique(
     rows
