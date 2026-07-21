@@ -292,7 +292,15 @@
         "07": "Jul",
         "08": "Aug",
         "09": "Sep"
-      }
+      },
+      "syncAccountProfile": "Sync account info",
+      "syncingAccountProfile": "Syncing...",
+      "syncAccountProfileHint": "Old resumes can reuse your default account personal info. Avatar and custom links are kept.",
+      "syncAccountProfileConfirm": "This will overwrite this resume’s personal info fields with your account defaults. Continue?",
+      "syncAccountProfileSuccess": "Account personal info synced",
+      "syncAccountProfileEmpty": "Account personal info is empty. Fill it in Account settings first.",
+      "syncAccountProfileFailed": "Failed to sync account personal info. Please try again.",
+      "syncAccountProfileSaveFailed": "Failed to save the current resume. Please save manually and try again."
     }
   },
   "ai": {
@@ -435,7 +443,7 @@
       "passwordPolicy": "The new password must contain 12 to 256 characters",
       "passwordMismatch": "The new passwords do not match",
       "resumeProfileTitle": "Default resume personal info",
-      "resumeProfileDescription": "Save once, and new template, knowledge-based, targeted, and AI-generated resumes will prefill these contact and profile fields.",
+      "resumeProfileDescription": "Save once, and new template, knowledge-based, targeted, and AI-generated resumes will prefill these contact and profile fields. Existing resumes can sync them from the Personal Info section in the editor.",
       "resumeProfileLoading": "Loading resume personal info…",
       "saveResumeProfile": "Save resume personal info",
       "resumeProfileSaved": "Resume personal info saved",

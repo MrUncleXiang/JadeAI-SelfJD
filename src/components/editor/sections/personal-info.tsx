@@ -1,13 +1,14 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Camera, X, Circle, RectangleVertical } from 'lucide-react';
+import { Camera, X, Circle, RectangleVertical, Loader2, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { EditableText } from '../fields/editable-text';
 import { EditableSelect } from '../fields/editable-select';
 import { FieldWrapper } from '../fields/field-wrapper';
 import { useResumeStore } from '@/stores/resume-store';
-import type { ResumeSection, PersonalInfoContent } from '@/types/resume';
+import type { Resume, ResumeSection, PersonalInfoContent } from '@/types/resume';
 
 interface Props {
   section: ResumeSection;
@@ -47,12 +48,50 @@ function resizeImage(file: File, maxSize: number): Promise<string> {
   });
 }
 
+function getFingerprint(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('jade_fingerprint');
+}
+
+function hasEditablePersonalContent(content: PersonalInfoContent) {
+  return [
+    content.fullName,
+    content.jobTitle,
+    content.age,
+    content.gender,
+    content.politicalStatus,
+    content.ethnicity,
+    content.hometown,
+    content.maritalStatus,
+    content.yearsOfExperience,
+    content.educationLevel,
+    content.email,
+    content.phone,
+    content.wechat,
+    content.location,
+    content.website,
+    content.linkedin,
+    content.github,
+  ].some((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
+function normalizeResumeForStore(resume: Resume): Resume {
+  return {
+    ...resume,
+    sections: resume.sections || [],
+    themeConfig: resume.themeConfig || {},
+    createdAt: resume.createdAt ? new Date(resume.createdAt) : new Date(),
+    updatedAt: resume.updatedAt ? new Date(resume.updatedAt) : new Date(),
+  };
+}
+
 export function PersonalInfoSection({ section, onUpdate }: Props) {
   const t = useTranslations('editor.fields');
   const tTheme = useTranslations('themeEditor');
   const content = section.content as PersonalInfoContent;
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { currentResume } = useResumeStore();
+  const { currentResume, setResume } = useResumeStore();
+  const [syncingProfile, setSyncingProfile] = useState(false);
   const avatarStyle = currentResume?.themeConfig?.avatarStyle || 'oneInch';
 
   const updateAvatarStyle = (style: 'circle' | 'oneInch') => {
@@ -75,8 +114,68 @@ export function PersonalInfoSection({ section, onUpdate }: Props) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const syncAccountProfile = async () => {
+    if (!currentResume || syncingProfile) return;
+    if (
+      hasEditablePersonalContent(content)
+      && !window.confirm(t('syncAccountProfileConfirm'))
+    ) {
+      return;
+    }
+
+    setSyncingProfile(true);
+    try {
+      const store = useResumeStore.getState();
+      if (store.isDirty) {
+        const saved = await store.save();
+        if (!saved) throw new Error(t('syncAccountProfileSaveFailed'));
+      }
+
+      const fingerprint = getFingerprint();
+      const response = await fetch(`/api/resume/${currentResume.id}/personal-info/apply-profile`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'content-type': 'application/json',
+          ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
+        },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { code?: string; error?: string } | null;
+        if (body?.code === 'RESUME_PROFILE_EMPTY') {
+          throw new Error(t('syncAccountProfileEmpty'));
+        }
+        throw new Error(body?.error || t('syncAccountProfileFailed'));
+      }
+      const updated = await response.json() as Resume;
+      setResume(normalizeResumeForStore(updated));
+      toast.success(t('syncAccountProfileSuccess'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('syncAccountProfileFailed'));
+    } finally {
+      setSyncingProfile(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
+      <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-700 dark:bg-zinc-900/60">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+            {t('syncAccountProfileHint')}
+          </p>
+          <button
+            type="button"
+            onClick={() => void syncAccountProfile()}
+            disabled={syncingProfile || !currentResume}
+            className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >
+            {syncingProfile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {syncingProfile ? t('syncingAccountProfile') : t('syncAccountProfile')}
+          </button>
+        </div>
+      </div>
+
       {/* Avatar upload + style toggle */}
       <div className="flex items-center gap-3">
         <button

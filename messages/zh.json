@@ -292,7 +292,15 @@
         "07": "7月",
         "08": "8月",
         "09": "9月"
-      }
+      },
+      "syncAccountProfile": "同步账号个人信息",
+      "syncingAccountProfile": "同步中...",
+      "syncAccountProfileHint": "旧简历可从账号设置同步默认个人信息；会保留头像和自定义链接。",
+      "syncAccountProfileConfirm": "将使用账号个人信息覆盖当前简历的个人信息字段，是否继续？",
+      "syncAccountProfileSuccess": "已同步账号个人信息",
+      "syncAccountProfileEmpty": "账号个人信息为空，请先在账号设置中填写",
+      "syncAccountProfileFailed": "同步账号个人信息失败，请重试",
+      "syncAccountProfileSaveFailed": "保存当前简历失败，请先手动保存后重试"
     }
   },
   "ai": {
@@ -435,7 +443,7 @@
       "passwordPolicy": "新密码需为 12 至 256 个字符",
       "passwordMismatch": "两次输入的新密码不一致",
       "resumeProfileTitle": "简历默认个人信息",
-      "resumeProfileDescription": "保存一次后，新建模板简历、知识库生成简历、定向简历和 AI 生成简历都会自动带入这些联系方式与基础信息。",
+      "resumeProfileDescription": "保存一次后，新建模板简历、知识库生成简历、定向简历和 AI 生成简历都会自动带入这些联系方式与基础信息；旧简历可在编辑器的“个人信息”模块点击“同步账号个人信息”。",
       "resumeProfileLoading": "正在加载简历个人信息…",
       "saveResumeProfile": "保存简历个人信息",
       "resumeProfileSaved": "简历个人信息已保存",
