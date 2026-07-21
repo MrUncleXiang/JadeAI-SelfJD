@@ -1,5 +1,6 @@
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
+import { buildSansFontStack } from '@/lib/pdf/export-fonts';
 import type {
   PersonalInfoContent,
   QrCodeItem,
@@ -171,7 +172,7 @@ export function buildExportThemeCSS(theme: typeof DEFAULT_THEME, template: strin
   const primaryIsDark = isDark(theme.primaryColor);
   return `
     ${sel} > div {
-      font-family: ${theme.fontFamily}, 'Noto Sans SC', sans-serif !important;
+      font-family: ${buildSansFontStack(theme.fontFamily)} !important;
       line-height: ${theme.lineSpacing} !important;
       ${needsPadding ? `padding-top: ${m.top}px !important; padding-right: ${m.right}px !important; padding-bottom: ${m.bottom}px !important; padding-left: ${m.left}px !important;` : ''}
       --base-body-size: ${fs.body};

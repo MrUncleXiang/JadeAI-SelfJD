@@ -30,6 +30,7 @@
 - [OpenAPI 活契约](api/openapi.yaml)
 - [Fine-grained PAT 私有仓库接入](operations/github-pat.md)
 - [GitHub App 部署与真实验收](operations/github-app.md)
+- [PDF/DOCX 导出字体运维](operations/export-fonts.md)
 
 ## 决策与执行
 

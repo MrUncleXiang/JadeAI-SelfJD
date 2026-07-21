@@ -159,7 +159,7 @@ function buildThemeCSS(scopeId: string, theme: ThemeConfig, template: string): s
 
   return `
     ${s} > div {
-      font-family: ${theme.fontFamily}, 'Noto Sans SC', sans-serif !important;
+      font-family: ${theme.fontFamily}, 'Noto Sans SC', 'Noto Sans CJK SC', 'Microsoft YaHei', 'PingFang SC', 'WenQuanYi Zen Hei', sans-serif !important;
       line-height: ${theme.lineSpacing} !important;
       ${needsPadding ? `padding-top: ${m.top}px !important; padding-right: ${m.right}px !important; padding-bottom: ${m.bottom}px !important; padding-left: ${m.left}px !important;` : ''}
       --base-body-size: ${fs.body};
@@ -246,8 +246,7 @@ export function ResumePreview({ resume }: ResumePreviewProps) {
 
   return (
     <>
-      {/* Load the same Google Fonts used in PDF/HTML export so preview renders
-          with identical font metrics (Inter for Latin, Noto Sans SC for CJK). */}
+      {/* Load Google Fonts for browser preview. Server-side PDF export uses local CJK font fallbacks and embeds glyphs. */}
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />

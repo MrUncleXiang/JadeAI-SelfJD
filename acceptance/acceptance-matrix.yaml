@@ -1,6 +1,6 @@
 version: 1
 product: JadeAI Career
-updatedAt: 2026-07-20
+updatedAt: 2026-07-21
 
 scope:
   deployment: self-hosted-single-instance
@@ -279,9 +279,12 @@ scenarios:
     title: PDF 和 DOCX 导出
     given: 包含中文、英文和多 Section 的简历
     when: 导出 PDF 和 DOCX
-    then: 文件可打开且文本抽取包含黄金内容
+    then: 文件可打开，Windows PDF 阅读器中文不显示方框，且文本抽取包含黄金内容
     layers: [integration, e2e, artifact]
-    automationStatus: planned
+    automationStatus: partial
+    automationEvidence:
+      - src/lib/pdf/export-fonts.test.ts
+      - docs/operations/export-fonts.md
 
   - id: ACC-RES-003
     requirement: RES-003
