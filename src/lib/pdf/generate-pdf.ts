@@ -1,5 +1,6 @@
 import puppeteer, { type Page } from 'puppeteer-core';
 import { accessSync } from 'fs';
+import { composeExportFontCSS } from '@/lib/pdf/export-fonts';
 
 // A4 dimensions in CSS pixels at 96 DPI
 const A4_WIDTH_PX = 794;   // 210mm
@@ -387,7 +388,14 @@ export async function generatePdf(html: string, options: PdfOptions = {}): Promi
     // Set viewport to A4 width before loading content for accurate layout
     await page.setViewport({ width: A4_WIDTH_PX, height: A4_HEIGHT_PX });
 
-    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    // Prefer concrete local OTF files so CJK glyphs embed without Google Fonts.
+    // File-backed faces must win over local() aliases and template Inter stacks.
+    const fontCss = composeExportFontCSS();
+    const htmlWithFonts = html.includes('</head>')
+      ? html.replace('</head>', `<style id="__jade-export-fonts">${fontCss}</style></head>`)
+      : `<style id="__jade-export-fonts">${fontCss}</style>${html}`;
+
+    await page.setContent(htmlWithFonts, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
     // Wait for web fonts (e.g. Noto Sans SC) to finish loading
     await page.evaluate(() => document.fonts.ready);

@@ -8,6 +8,10 @@
  * Windows/macOS machines that do not have the same Linux fonts.
  */
 
+import { accessSync, existsSync } from 'fs';
+import { join } from 'path';
+import { pathToFileURL } from 'url';
+
 export const EXPORT_CJK_SAMPLE = '中文字体导出检测';
 
 const CSS_UNSAFE_CHARS = /[;{}<>]/;
@@ -77,6 +81,109 @@ export const EXPORT_SERIF_FONT_STACK = buildSerifFontStack();
 export const EXPORT_MONO_FONT_STACK = buildMonoFontStack();
 
 /**
+ * Resolve self-hosted Noto Sans SC OTF files so Chromium can embed real CJK
+ * glyphs without depending on Google Fonts or OS fontconfig family aliases.
+ */
+export function resolveLocalCjkFontFiles(cwd: string = process.cwd()): {
+  regular?: string;
+  bold?: string;
+} {
+  const candidates = [
+    join(cwd, 'public', 'fonts'),
+    join(cwd, 'fonts'),
+    // Next standalone runtime often keeps public next to server.js
+    join(cwd, '..', 'public', 'fonts'),
+    join(cwd, '..', '..', 'public', 'fonts'),
+  ];
+
+  for (const dir of candidates) {
+    const regular = join(dir, 'NotoSansSC-Regular.otf');
+    const bold = join(dir, 'NotoSansSC-Bold.otf');
+    if (existsSync(regular) || existsSync(bold)) {
+      return {
+        regular: existsSync(regular) ? regular : undefined,
+        bold: existsSync(bold) ? bold : undefined,
+      };
+    }
+  }
+  return {};
+}
+
+function toCssUrl(filePath: string): string {
+  // Validate readability so missing files fail closed to local() fallbacks.
+  accessSync(filePath);
+  return pathToFileURL(filePath).href;
+}
+
+/**
+ * Build @font-face rules that point Chromium at concrete local OTF files.
+ * Prefer this for PDF export so Windows readers receive embedded CJK glyphs.
+ */
+export function buildFileBackedExportFontCSS(
+  files: { regular?: string; bold?: string } = resolveLocalCjkFontFiles(),
+): string {
+  const faces: string[] = [];
+
+  if (files.regular) {
+    const url = toCssUrl(files.regular);
+    faces.push(`
+  @font-face {
+    font-family: 'Noto Sans SC';
+    src: url('${url}') format('opentype');
+    font-style: normal;
+    font-weight: 100 500;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Inter';
+    src: url('${url}') format('opentype');
+    font-style: normal;
+    font-weight: 100 500;
+    font-display: swap;
+  }`);
+  }
+
+  if (files.bold) {
+    const url = toCssUrl(files.bold);
+    faces.push(`
+  @font-face {
+    font-family: 'Noto Sans SC';
+    src: url('${url}') format('opentype');
+    font-style: normal;
+    font-weight: 600 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Inter';
+    src: url('${url}') format('opentype');
+    font-style: normal;
+    font-weight: 600 900;
+    font-display: swap;
+  }`);
+  } else if (files.regular) {
+    // Reuse regular for bold when only one face is packaged.
+    const url = toCssUrl(files.regular);
+    faces.push(`
+  @font-face {
+    font-family: 'Noto Sans SC';
+    src: url('${url}') format('opentype');
+    font-style: normal;
+    font-weight: 600 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Inter';
+    src: url('${url}') format('opentype');
+    font-style: normal;
+    font-weight: 600 900;
+    font-display: swap;
+  }`);
+  }
+
+  return faces.join('\n');
+}
+
+/**
  * Local aliases normalize Google's web-font family names to fonts actually
  * installed on Linux (`fonts-noto-cjk` exposes `Noto Sans CJK SC`, not
  * `Noto Sans SC`).  No external network request is required for PDF export.
@@ -84,6 +191,13 @@ export const EXPORT_MONO_FONT_STACK = buildMonoFontStack();
 export const EXPORT_LOCAL_FONT_CSS = `
   @font-face {
     font-family: 'Noto Sans SC';
+    src: local('Noto Sans CJK SC'), local('Noto Sans CJK SC Regular'), local('Microsoft YaHei'), local('WenQuanYi Zen Hei');
+    font-style: normal;
+    font-weight: 300 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Inter';
     src: local('Noto Sans CJK SC'), local('Noto Sans CJK SC Regular'), local('Microsoft YaHei'), local('WenQuanYi Zen Hei');
     font-style: normal;
     font-weight: 300 900;
@@ -117,6 +231,17 @@ export const EXPORT_LOCAL_FONT_CSS = `
     -webkit-font-smoothing: antialiased;
     text-rendering: geometricPrecision;
   }
+  /* Template builders often hardcode Inter/sans-serif on outer wrappers.
+     Force a CJK-capable stack so Chromium embeds Chinese glyphs. */
+  .resume-export,
+  .resume-export > div,
+  .resume-export [style*="Inter"],
+  .resume-export [style*="sans-serif"],
+  .resume-export [style*="Arial"],
+  .resume-export [style*="Helvetica"],
+  .resume-export [style*="system-ui"] {
+    font-family: var(--jade-export-sans) !important;
+  }
   .resume-export code,
   .resume-export pre,
   .resume-export kbd,
@@ -133,3 +258,11 @@ export const EXPORT_LOCAL_FONT_CSS = `
     font-family: var(--jade-export-serif) !important;
   }
 `;
+
+/** Inject file-backed faces ahead of the local() aliases for PDF rendering. */
+export function composeExportFontCSS(
+  files: { regular?: string; bold?: string } = resolveLocalCjkFontFiles(),
+): string {
+  const fileFaces = buildFileBackedExportFontCSS(files);
+  return `${fileFaces}\n${EXPORT_LOCAL_FONT_CSS}`;
+}

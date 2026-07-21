@@ -28,6 +28,11 @@ fc-match 'WenQuanYi Zen Hei'
 
 ## 应用侧策略
 
+- 服务端 PDF 渲染优先把 `public/fonts/NotoSansSC-*.otf` 通过 `file://` 注入为 `@font-face`，
+  强制 Chromium 嵌入真实中文字形；若 OTF 缺失再回退到系统 `local(...)` 字体名。
+- 模板里硬编码的 `Inter` / `sans-serif` 内联样式会被导出 CSS 用 CJK 字体栈覆盖。
+
+
 - PDF/HTML 导出不再依赖 `fonts.googleapis.com`。
 - `src/lib/pdf/export-fonts.ts` 定义本机优先的字体栈：
   - Sans：`Noto Sans CJK SC`、`Microsoft YaHei`、`PingFang SC`、`WenQuanYi Zen Hei` 等；

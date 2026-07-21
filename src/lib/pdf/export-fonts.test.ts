@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { join } from 'path';
 
 import { generateHtml } from '@/app/api/resume/[id]/export/builders';
 import type { ResumeWithSections } from '@/app/api/resume/[id]/export/utils';
 
 import {
   EXPORT_LOCAL_FONT_CSS,
+  buildFileBackedExportFontCSS,
   buildMonoFontStack,
   buildSansFontStack,
   buildSerifFontStack,
+  composeExportFontCSS,
+  resolveLocalCjkFontFiles,
 } from './export-fonts';
 
 describe('export font fallbacks [RES-002]', () => {
@@ -21,6 +25,18 @@ describe('export font fallbacks [RES-002]', () => {
     const unsafe = buildSansFontStack('Inter; color:red');
     expect(unsafe).not.toContain('color:red');
     expect(unsafe).toContain("'Noto Sans CJK SC'");
+  });
+
+  it('resolves packaged Noto Sans SC OTF files for file-backed embedding', () => {
+    const files = resolveLocalCjkFontFiles(process.cwd());
+    expect(files.regular).toBe(join(process.cwd(), 'public', 'fonts', 'NotoSansSC-Regular.otf'));
+    expect(files.bold).toBe(join(process.cwd(), 'public', 'fonts', 'NotoSansSC-Bold.otf'));
+
+    const css = buildFileBackedExportFontCSS(files);
+    expect(css).toContain("font-family: 'Noto Sans SC'");
+    expect(css).toContain("font-family: 'Inter'");
+    expect(css).toContain('NotoSansSC-Regular.otf');
+    expect(css).toContain('format(\'opentype\')');
   });
 
   it('renders export HTML with local CJK font aliases instead of Google Fonts', async () => {
@@ -59,11 +75,13 @@ describe('export font fallbacks [RES-002]', () => {
     const html = await generateHtml(resume, true);
 
     expect(html).toContain('中文正文和 English text');
-    expect(html).toContain(EXPORT_LOCAL_FONT_CSS.trim().slice(0, 80));
     expect(html).toContain('--jade-export-sans');
     expect(html).toContain('Noto Sans CJK SC');
     expect(html).toContain('Microsoft YaHei');
+    expect(html).toContain('[style*="Inter"]');
+    expect(html).toContain('NotoSansSC-Regular.otf');
     expect(html).not.toContain('fonts.googleapis.com');
     expect(html).not.toContain('fonts.gstatic.com');
+    expect(composeExportFontCSS()).toContain(EXPORT_LOCAL_FONT_CSS.trim().slice(0, 40));
   });
 });

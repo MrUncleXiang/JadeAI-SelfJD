@@ -1,6 +1,6 @@
 import { esc, buildExportThemeCSS, DEFAULT_THEME, type ResumeWithSections } from './utils';
 import { EXPORT_TAILWIND_CSS } from '@/lib/pdf/export-tailwind-css';
-import { EXPORT_LOCAL_FONT_CSS } from '@/lib/pdf/export-fonts';
+import { composeExportFontCSS } from '@/lib/pdf/export-fonts';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import { generateQrSvg } from '@/lib/qrcode';
 import { buildClassicHtml } from './templates/classic';
@@ -245,7 +245,7 @@ export async function generateHtml(resume: ResumeWithSections, forPdf = false): 
   <title>${esc(resume.title)}</title>
   <style>${EXPORT_TAILWIND_CSS}</style>
   <style>
-    ${EXPORT_LOCAL_FONT_CSS}
+    ${composeExportFontCSS()}
     body { margin: 0; display: flex; justify-content: center; padding: 40px 20px; background: #f4f4f5; min-height: 100vh; font-family: var(--jade-export-sans); }
     @media print { body { padding: 0 !important; background: white !important; } .resume-export > div { box-shadow: none !important; } }
     ${themeCSS}

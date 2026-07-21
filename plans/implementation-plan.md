@@ -338,6 +338,12 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - 基准简历不变。
 - PDF/DOCX 可打开、文本正确、无内部证据。
 
+### 用户反馈闭环（2026-07-21）
+
+- [x] `RES-002`：PDF 导出改为优先嵌入 `public/fonts/NotoSansSC-*.otf`，并强制覆盖模板 `Inter` 内联字体；
+  服务器 `pdftotext` 可抽取中文正文，字体 `emb=yes`。DOCX 中文继续使用 East Asia 字体 `Microsoft YaHei`。
+- 生产验收：`http://43.138.159.58:3000` 登录后导出定向简历 PDF/DOCX，中文正文可抽取。
+
 ### Phase 6A 进展：文本 JD 结构化
 
 - [x] 新增租户隔离的 `jd_sources`、`jd_requirements` 及 SQLite/PostgreSQL 迁移。

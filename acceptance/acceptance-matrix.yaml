@@ -284,6 +284,8 @@ scenarios:
     automationStatus: partial
     automationEvidence:
       - src/lib/pdf/export-fonts.test.ts
+      - src/lib/pdf/export-fonts.ts
+      - src/lib/pdf/generate-pdf.ts
       - docs/operations/export-fonts.md
 
   - id: ACC-RES-003
