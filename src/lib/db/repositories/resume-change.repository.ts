@@ -451,6 +451,61 @@ export const resumeChangeRepository = {
     ));
   },
 
+  async rejectChangeSetOwned(userId: string, resumeId: string, changeSetId: string, note?: string) {
+    const loaded = await this.findChangeSetOwned(userId, resumeId, changeSetId);
+    if (!loaded) throw new ResumeChangeRepositoryError('CHANGE_SET_NOT_FOUND');
+    if (loaded.status !== 'validated' && loaded.status !== 'proposed') {
+      throw new ResumeChangeRepositoryError('CHANGE_SET_NOT_APPLICABLE');
+    }
+    const metadata = {
+      resumeId,
+      note: note || null,
+      operationCount: loaded.operations.length,
+    };
+    if (config.db.type === 'sqlite') {
+      db.transaction((tx: typeof db) => {
+        tx.update(resumeChangeSets).set({
+          status: 'rejected',
+          updatedAt: new Date(),
+        }).where(and(
+          eq(resumeChangeSets.id, changeSetId),
+          eq(resumeChangeSets.userId, userId),
+          eq(resumeChangeSets.resumeId, resumeId),
+        )).run();
+        tx.insert(auditEvents).values({
+          id: crypto.randomUUID(),
+          actorUserId: userId,
+          action: 'resume.change_set_rejected',
+          targetType: 'resume_change_set',
+          targetId: changeSetId,
+          outcome: 'success',
+          metadata,
+        }).run();
+      });
+    } else {
+      await db.transaction(async (tx: typeof db) => {
+        await tx.update(resumeChangeSets).set({
+          status: 'rejected',
+          updatedAt: new Date(),
+        }).where(and(
+          eq(resumeChangeSets.id, changeSetId),
+          eq(resumeChangeSets.userId, userId),
+          eq(resumeChangeSets.resumeId, resumeId),
+        ));
+        await tx.insert(auditEvents).values({
+          id: crypto.randomUUID(),
+          actorUserId: userId,
+          action: 'resume.change_set_rejected',
+          targetType: 'resume_change_set',
+          targetId: changeSetId,
+          outcome: 'success',
+          metadata,
+        });
+      });
+    }
+    return this.findChangeSetOwned(userId, resumeId, changeSetId);
+  },
+
   async applyChangeSetOwned(input: {
     userId: string;
     resumeId: string;

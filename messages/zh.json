@@ -366,7 +366,11 @@
         "ai-change-set": "AI 变更",
         "restore": "版本恢复",
         "import": "导入"
-      }
+      },
+      "rejectProposal": "拒绝提案",
+      "rejectConfirm": "确定拒绝该提案？拒绝后不可再应用，需要重新生成。",
+      "rejectSuccess": "提案已拒绝",
+      "rejectFailed": "拒绝提案失败"
     }
   },
   "pdf": {

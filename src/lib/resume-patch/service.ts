@@ -479,6 +479,34 @@ export const resumeChangeService = {
     });
   },
 
+  async reject(input: {
+    userId: string;
+    resumeId: string;
+    changeSetId: string;
+    note?: string;
+  }) {
+    try {
+      const note = (input.note || '').normalize('NFKC').trim();
+      if (note.length > 500) {
+        throw new ResumeChangeServiceError('INVALID_INPUT', 'Reject note must be at most 500 characters.', 400);
+      }
+      const changeSet = await resumeChangeRepository.rejectChangeSetOwned(
+        input.userId,
+        input.resumeId,
+        input.changeSetId,
+        note || undefined,
+      );
+      if (!changeSet) {
+        throw new ResumeChangeServiceError('CHANGE_SET_NOT_FOUND', 'Resource not found.', 404);
+      }
+      return changeSet;
+    } catch (error) {
+      if (error instanceof ResumeChangeServiceError) throw error;
+      if (error instanceof ResumeChangeRepositoryError) throw mapRepositoryError(error);
+      throw error;
+    }
+  },
+
   async apply(input: {
     userId: string;
     resumeId: string;

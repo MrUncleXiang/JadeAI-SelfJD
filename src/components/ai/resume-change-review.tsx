@@ -140,6 +140,7 @@ export function ResumeChangeReview({
   const [selectedOperationIds, setSelectedOperationIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [restoringVersionId, setRestoringVersionId] = useState<string>();
 
   const load = useCallback(async () => {
@@ -250,6 +251,31 @@ export function ResumeChangeReview({
       setIsApplying(false);
     }
   }, [activeChangeSet, load, reloadResume, resumeId, selectedOperationIds, t]);
+
+  const rejectChangeSet = useCallback(async () => {
+    if (!activeChangeSet || !isApplicable(activeChangeSet.status)) return;
+    if (!window.confirm(t('rejectConfirm'))) return;
+    setIsRejecting(true);
+    try {
+      const response = await fetch(
+        `/api/resumes/${resumeId}/change-sets/${activeChangeSet.id}/reject`,
+        {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({}),
+        },
+      );
+      if (!response.ok) throw new Error(await errorMessage(response));
+      await load();
+      toast.success(t('rejectSuccess'));
+    } catch (error) {
+      toast.error(t('rejectFailed'), {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setIsRejecting(false);
+    }
+  }, [activeChangeSet, load, resumeId, t]);
 
   const restoreVersion = useCallback(async (version: ResumeVersionSummary) => {
     if (!window.confirm(t('restoreConfirm', { version: version.versionNumber }))) return;
@@ -447,13 +473,23 @@ export function ResumeChangeReview({
                         <span className="text-xs text-zinc-500">
                           {t('selectedCount', { selected: selectedOperationIds.size, total: activeChangeSet.operations.length })}
                         </span>
-                        <Button
-                          onClick={() => void applySelected()}
-                          disabled={isApplying || selectedOperationIds.size === 0}
-                        >
-                          {isApplying && <RefreshCw className="animate-spin" />}
-                          {t('applySelected')}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => void rejectChangeSet()}
+                            disabled={isApplying || isRejecting}
+                          >
+                            {isRejecting && <RefreshCw className="animate-spin" />}
+                            {t('rejectProposal')}
+                          </Button>
+                          <Button
+                            onClick={() => void applySelected()}
+                            disabled={isApplying || isRejecting || selectedOperationIds.size === 0}
+                          >
+                            {isApplying && <RefreshCw className="animate-spin" />}
+                            {t('applySelected')}
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-500">

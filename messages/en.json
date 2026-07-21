@@ -366,7 +366,11 @@
         "ai-change-set": "AI Change",
         "restore": "Restore",
         "import": "Import"
-      }
+      },
+      "rejectProposal": "Reject proposal",
+      "rejectConfirm": "Reject this proposal? It cannot be applied afterwards; regenerate if needed.",
+      "rejectSuccess": "Proposal rejected",
+      "rejectFailed": "Failed to reject proposal"
     }
   },
   "pdf": {

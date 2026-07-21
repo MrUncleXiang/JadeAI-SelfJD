@@ -156,8 +156,8 @@ Gate：浏览器、日志、API 和数据库扫描无明文 Key。
 5. [x] 应用单项/全部、乐观并发、事务回滚和审计。
 6. [x] 恢复旧版本且保留完整历史。
 7. [x] 将现有 Chat Tool 改造成显式“提出变更”，普通对话禁止直接写库。
-8. [ ] 提案编辑后重校验及显式拒绝动作。
-9. [ ] 将旧翻译覆盖模式和 AI 初始简历生成迁移到 Change Set/受控导入边界。
+8. [x] 显式拒绝 Change Set；提案编辑后重校验仍待补齐。
+9. [~] AI 初始简历生成 `/api/ai/generate-resume` 已迁移到 Change Set/事实库边界；翻译覆盖模式仍待迁移。
 10. [x] 接入真实数据源：Phase 4 Approved Fact/Forbidden Claim 与 Phase 6A 已确认 JD Requirement
     共同约束定向 ResumePatch；显式匹配矩阵与缺口分析留在 Phase 6C.2。
 
@@ -349,6 +349,12 @@ Phase 5D Fine-grained PAT 自动化证据（2026-07-17）：
 - [x] 新增确定性 JD↔事实匹配矩阵：`strong` / `partial` / `gap` / `conflict`，输出支持事实、缺口、禁止声明冲突与推荐事实。
 - [x] `GET/POST /api/jd-sources/{id}/match` 租户隔离同步返回矩阵；未确认 JD 与无批准事实 fail closed。
 - [x] `/zh/jd` 已确认卡片提供“匹配分析”入口；定向简历生成自动注入匹配矩阵摘要。
+
+### 用户反馈闭环（2026-07-21 · Change Set / AI 入口）
+
+- [x] Change Set 支持显式拒绝：`POST /api/resumes/{id}/change-sets/{changeSetId}/reject`，审阅面板提供“拒绝提案”。
+- [x] 旧 `/api/ai/generate-resume` 不再直接写库；改为基于已批准事实生成 Change Set，返回 `reviewRequired`。
+- [ ] `/api/ai/translate` 覆盖模式迁移到 Change Set 仍待完成。
 
 ### Phase 6A 进展：文本 JD 结构化
 
