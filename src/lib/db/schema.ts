@@ -552,6 +552,8 @@ export const resumeChangeOperations = sqliteTable('resume_change_operations', {
       'move_section',
       'set_visibility',
       'set_template',
+      'set_section_title',
+      'set_language',
     ],
   }).notNull(),
   sectionId: text('section_id'),

@@ -84,6 +84,7 @@ function mapValidationError(error: ResumePatchValidationError): ResumeChangeServ
 function hashManifest(snapshot: ResumeSnapshot) {
   return {
     template: contentHash(snapshot.resume.template),
+    language: contentHash(snapshot.resume.language),
     sections: contentHash(snapshot.sections),
     sectionOrder: contentHash(snapshot.sections.map(({ id, sortOrder }) => ({ id, sortOrder }))),
     sectionTargets: snapshot.sections.map((section) => {
@@ -95,6 +96,7 @@ function hashManifest(snapshot: ResumeSnapshot) {
         sectionId: section.id,
         type: section.type,
         sectionHash: contentHash(section),
+        titleHash: contentHash(section.title),
         visibilityHash: contentHash(section.visible),
         fields: Object.fromEntries(Object.entries(section.content).map(([key, value]) => [key, contentHash(value)])),
         ...(list ? {
@@ -244,12 +246,14 @@ ${instruction}
 
 <response_contract>
 Return one object with schemaVersion=1, the exact resumeId/baseVersionId above, a concise summary,
-1-50 operations, and optional warnings. Every operation needs a unique operationId, one allowed type,
+1-80 operations, and optional warnings. Every operation needs a unique operationId, one allowed type,
 the exact expectedHash from hash_manifest, a reason, evidenceIds, jdRequirementIds, and confidence from 0 to 1.
 Allowed types: set_field, add_item, update_item, remove_item, add_section, remove_section,
-move_section, set_visibility, set_template. set_field value is {"field":"camelCase","value":...};
+move_section, set_visibility, set_template, set_section_title, set_language.
+set_field value is {"field":"camelCase","value":...};
 add_item/update_item value is an object; remove operations use null/omitted value; move_section value is
-{"sortOrder":number}; set_visibility value is boolean; set_template value is a template name.
+{"sortOrder":number}; set_visibility value is boolean; set_template value is a template name;
+set_section_title value is the title string; set_language value is a BCP-47-ish language code.
 </response_contract>`;
 }
 

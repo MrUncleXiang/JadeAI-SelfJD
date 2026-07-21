@@ -7,9 +7,16 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { translateInputSchema } from '@/lib/ai/translate-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { z } from 'zod/v4';
-import { resumeSections } from '@/lib/db/schema';
+import { resumeChangeService, ResumeChangeServiceError } from '@/lib/resume-patch/service';
+import { parseResumeSnapshot, type ResumeSnapshotSection } from '@/lib/resume-patch/snapshot';
+import { buildTranslationResumePatch, type TranslatedResumeSection } from '@/lib/resume-patch/translation';
 
-type ResumeSectionRow = typeof resumeSections.$inferSelect;
+type SectionForTranslation = {
+  sectionId: string;
+  type: string;
+  title: string;
+  content: unknown;
+};
 
 const LANGUAGE_NAMES: Record<string, string> = {
   zh: 'Simplified Chinese',
@@ -30,6 +37,7 @@ const STRIP_FIELDS: Record<string, string[]> = {
 };
 
 const MAX_CONCURRENCY = 4;
+const TRANSLATE_PROMPT_VERSION = 'resume-translate-v1-change-set';
 
 const singleSectionSchema = z.object({
   sectionId: z.string(),
@@ -49,17 +57,18 @@ Rules:
 - Dates remain in the same format (YYYY-MM)
 - Technical terms and programming languages stay in English (e.g., JavaScript, React, AWS)
 - Section titles should use standard resume headings in the target language
-- Preserve the exact JSON structure and all field names — only translate string values
-- Keep all IDs, URLs, emails, phone numbers unchanged
+- Preserve the exact JSON structure, item count, IDs, field names, arrays, and object nesting — only translate string values
+- Keep all IDs, URLs, emails, phone numbers, numeric values, programming languages, repository names, and GitHub metadata unchanged
+- Do not add, remove, reorder, summarize, embellish, or infer resume facts
 - CRITICAL: Return a single valid JSON object. No markdown, no code fences, no extra text.`;
 }
 
 async function translateSection(
-  section: { sectionId: string; type: string; title: string; content: unknown },
+  section: SectionForTranslation,
   targetLanguage: string,
   model: LanguageModel,
   aiConfig: AIConfig
-) {
+): Promise<TranslatedResumeSection> {
   const result = await generateText({
     model,
     maxOutputTokens: 4096,
@@ -99,6 +108,61 @@ async function runWithConcurrency<T, R>(
   return results;
 }
 
+function stripHeavyFields(section: ResumeSnapshotSection, strippedFields: Map<string, Record<string, unknown>>) {
+  const fieldsToStrip = STRIP_FIELDS[section.type];
+  let content: unknown = section.content;
+
+  if (fieldsToStrip && content && typeof content === 'object' && !Array.isArray(content)) {
+    const saved: Record<string, unknown> = {};
+    const contentRecord: Record<string, unknown> = { ...(content as Record<string, unknown>) };
+    for (const field of fieldsToStrip) {
+      if (field in contentRecord) {
+        saved[field] = contentRecord[field];
+        delete contentRecord[field];
+      }
+    }
+    if (Object.keys(saved).length > 0) {
+      strippedFields.set(section.id, saved);
+    }
+    content = contentRecord;
+  }
+
+  return {
+    sectionId: section.id,
+    type: section.type,
+    title: section.title,
+    content,
+  } satisfies SectionForTranslation;
+}
+
+function mergeStrippedFields(
+  translated: TranslatedResumeSection,
+  strippedFields: Map<string, Record<string, unknown>>,
+): TranslatedResumeSection {
+  const saved = strippedFields.get(translated.sectionId);
+  if (!saved) return translated;
+  const content = translated.content && typeof translated.content === 'object' && !Array.isArray(translated.content)
+    ? { ...(translated.content as Record<string, unknown>), ...saved }
+    : translated.content;
+  return { ...translated, content };
+}
+
+function streamError(error: unknown) {
+  if (error instanceof ResumeChangeServiceError) {
+    return { code: error.code, error: error.message };
+  }
+  if (error instanceof Error) {
+    if (error.message === 'NO_TRANSLATION_CHANGES') {
+      return { code: 'NO_TRANSLATION_CHANGES', error: 'No reviewable translation changes were produced.' };
+    }
+    if (error.message === 'TOO_MANY_TRANSLATION_CHANGES') {
+      return { code: 'TOO_MANY_TRANSLATION_CHANGES', error: 'The translation produced too many review operations. Please translate fewer sections.' };
+    }
+    return { error: error.message };
+  }
+  return { error: 'Failed to translate resume' };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
@@ -123,9 +187,14 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: 'Resume not found' }), { status: 404 });
     }
 
-    // In copy mode, duplicate the resume first and translate the copy
+    // Resolve the LLM profile before copy-mode duplication so configuration
+    // errors do not leave an unused duplicated resume behind.
+    const aiConfig = await resolveLlmConfig(user.id, 'resume');
+    const model = getModel(aiConfig);
+
+    // In copy mode, duplicate the resume first. The duplicate is not translated
+    // directly; translation is persisted as a reviewable Change Set on that copy.
     let targetResumeId = resumeId;
-    let workingSections = resume.sections;
     let newResumeId: string | undefined;
 
     if (mode === 'copy') {
@@ -135,52 +204,28 @@ export async function POST(request: NextRequest) {
         return new Response(JSON.stringify({ error: 'Failed to duplicate resume' }), { status: 500 });
       }
       targetResumeId = duplicated.id;
-      workingSections = duplicated.sections;
       newResumeId = duplicated.id;
     }
 
+    const latest = await resumeChangeService.getCurrentVersion(user.id, targetResumeId).catch(async (error) => {
+      if (newResumeId) await resumeRepository.deleteOwned(user.id, newResumeId).catch(() => undefined);
+      throw error;
+    });
+    const snapshot = parseResumeSnapshot(latest.snapshot);
     const allSections = sectionIds
-      ? workingSections.filter((section: ResumeSectionRow) => sectionIds.includes(section.id))
-      : workingSections;
+      ? snapshot.sections.filter((section) => sectionIds.includes(section.id))
+      : snapshot.sections;
 
     if (allSections.length === 0) {
+      if (newResumeId) await resumeRepository.deleteOwned(user.id, newResumeId).catch(() => undefined);
       return new Response(JSON.stringify({ error: 'No sections found to translate' }), { status: 400 });
     }
 
-    // Build section data for AI, stripping heavy non-translatable fields (e.g. base64 avatar)
-    // Save stripped fields so we can merge them back after translation
     const strippedFields = new Map<string, Record<string, unknown>>();
+    const sectionsData = allSections.map((section) => stripHeavyFields(section, strippedFields));
 
-    const sectionsData = allSections.map((section: ResumeSectionRow) => {
-      const fieldsToStrip = STRIP_FIELDS[section.type];
-      let content = section.content;
-
-      if (fieldsToStrip && content && typeof content === 'object' && !Array.isArray(content)) {
-        const saved: Record<string, unknown> = {};
-        const contentRecord: Record<string, unknown> = { ...content };
-        for (const field of fieldsToStrip) {
-          if (field in contentRecord) {
-            saved[field] = contentRecord[field];
-            delete contentRecord[field];
-          }
-        }
-        if (Object.keys(saved).length > 0) {
-          strippedFields.set(section.id, saved);
-        }
-        content = contentRecord;
-      }
-
-      return {
-        sectionId: section.id,
-        type: section.type,
-        title: section.title,
-        content,
-      };
-    });
-
-    const aiConfig = await resolveLlmConfig(user.id, 'resume');
-    const model = getModel(aiConfig);
     const encoder = new TextEncoder();
+    const setResumeLanguage = !sectionIds || allSections.length === snapshot.sections.length;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -197,7 +242,7 @@ export async function POST(request: NextRequest) {
         let failedCount = 0;
 
         try {
-          const results = await runWithConcurrency<typeof sectionsData[number], z.infer<typeof singleSectionSchema>>(
+          const results = await runWithConcurrency<typeof sectionsData[number], TranslatedResumeSection>(
             sectionsData,
             MAX_CONCURRENCY,
             async (section) => {
@@ -207,24 +252,7 @@ export async function POST(request: NextRequest) {
                 throw new Error('Translated section id does not match the requested section');
               }
 
-              // Merge back stripped fields (e.g. avatar)
-              const saved = strippedFields.get(translated.sectionId);
-              const content = saved
-                ? { ...translated.content, ...saved }
-                : translated.content;
-
-              const updated = await resumeRepository.updateSectionOwned(
-                user.id,
-                targetResumeId,
-                translated.sectionId,
-                {
-                  title: translated.title,
-                  content,
-                },
-              );
-              if (!updated) throw new Error('Translated section is no longer available');
-
-              return { ...translated, content };
+              return mergeStrippedFields(translated, strippedFields);
             },
             (_index, result) => {
               completed++;
@@ -232,8 +260,8 @@ export async function POST(request: NextRequest) {
                 failedCount++;
                 send({ type: 'progress', completed, total });
               } else {
-                const section = (result as PromiseFulfilledResult<z.infer<typeof singleSectionSchema>>).value;
-                send({ type: 'progress', completed, total, section });
+                const section = (result as PromiseFulfilledResult<TranslatedResumeSection>).value;
+                send({ type: 'progress', completed, total, sectionId: section.sectionId });
               }
             }
           );
@@ -247,30 +275,56 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // Update resume language
-          await resumeRepository.updateOwned(user.id, targetResumeId, { language: targetLanguage });
-        } catch (err) {
-          console.error('Unexpected error during translation:', err);
-        }
+          const translations = results
+            .filter((result): result is PromiseFulfilledResult<TranslatedResumeSection> => result.status === 'fulfilled')
+            .map((result) => result.value);
 
-        // Always send done and close — even if something above threw
-        try {
-          const updatedResume = await resumeRepository.findOwnedById(user.id, targetResumeId);
-          const updatedSections = sectionIds
-            ? updatedResume?.sections.filter((section: ResumeSectionRow) => sectionIds.includes(section.id))
-            : updatedResume?.sections;
+          if (translations.length === 0) {
+            throw new Error('No sections were translated successfully');
+          }
+
+          const patch = buildTranslationResumePatch({
+            snapshot,
+            baseVersionId: latest.id,
+            targetLanguage,
+            translations,
+            setResumeLanguage,
+          });
+          const candidate = failedCount > 0
+            ? {
+                ...patch,
+                warnings: [
+                  ...patch.warnings,
+                  `${failedCount} section(s) failed to translate and were omitted from this proposal.`,
+                ].slice(0, 20),
+              }
+            : patch;
+
+          const changeSet = await resumeChangeService.createFromCandidate({
+            userId: user.id,
+            resumeId: targetResumeId,
+            baseVersionId: latest.id,
+            candidate,
+            config: aiConfig,
+            rawModelOutput: JSON.stringify({ translations }),
+            promptVersion: TRANSLATE_PROMPT_VERSION,
+          });
+          if (!changeSet) throw new Error('Failed to create translation change set');
 
           send({
             type: 'done',
             resumeId: targetResumeId,
             language: targetLanguage,
-            sections: updatedSections || [],
             failedCount,
+            changeSetId: changeSet.id,
+            operationCount: changeSet.operations.length,
+            reviewRequired: true,
             ...(newResumeId ? { newResumeId } : {}),
           });
         } catch (err) {
-          console.error('Error fetching final data:', err);
-          send({ type: 'done', resumeId: targetResumeId, language: targetLanguage, sections: [], failedCount, ...(newResumeId ? { newResumeId } : {}) });
+          console.error('Unexpected error during translation:', err);
+          if (newResumeId) await resumeRepository.deleteOwned(user.id, newResumeId).catch(() => undefined);
+          send({ type: 'error', ...streamError(err), ...(newResumeId ? { rolledBackResumeId: newResumeId } : {}) });
         }
 
         try {

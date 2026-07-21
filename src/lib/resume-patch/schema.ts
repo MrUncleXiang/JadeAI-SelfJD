@@ -103,6 +103,22 @@ export const resumePatchOperationSchema = z.discriminatedUnion('type', [
     expectedHash: hashSchema,
     value: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/),
   }).strict(),
+  z.object({
+    ...commonOperation,
+    type: z.literal('set_section_title'),
+    sectionId: idSchema,
+    itemId: z.null().optional(),
+    expectedHash: hashSchema,
+    value: z.string().trim().min(1).max(200),
+  }).strict(),
+  z.object({
+    ...commonOperation,
+    type: z.literal('set_language'),
+    sectionId: z.null().optional(),
+    itemId: z.null().optional(),
+    expectedHash: hashSchema,
+    value: z.string().trim().min(2).max(16).regex(/^[a-z]{2}(-[A-Za-z]+)?$/),
+  }).strict(),
 ]);
 
 export const resumePatchSchema = z.object({
@@ -110,7 +126,7 @@ export const resumePatchSchema = z.object({
   resumeId: idSchema,
   baseVersionId: idSchema,
   summary: z.string().trim().min(1).max(2000),
-  operations: z.array(resumePatchOperationSchema).min(1).max(50),
+  operations: z.array(resumePatchOperationSchema).min(1).max(80),
   warnings: z.array(z.string().trim().min(1).max(1000)).max(20).default([]),
 }).strict().superRefine((patch, ctx) => {
   const ids = new Set<string>();

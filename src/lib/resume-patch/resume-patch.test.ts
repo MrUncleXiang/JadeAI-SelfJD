@@ -10,6 +10,7 @@ import {
 import { resumePatchSchema, type ResumePatchOperation } from './schema';
 import { buildResumePatchPrompt } from './service';
 import { canonicalJson, contentHash, type ResumeSnapshot } from './snapshot';
+import { buildTranslationResumePatch } from './translation';
 
 function snapshot(): ResumeSnapshot {
   return {
@@ -219,6 +220,58 @@ describe('ResumePatch v1', () => {
     expect(applied.sections[0].content).toMatchObject({
       fullName: 'Jade',
       jobTitle: 'Unity Client Developer',
+    });
+  });
+
+  it('represents resume translation as reviewable title/content/language operations', () => {
+    const base = snapshot();
+    const patch = buildTranslationResumePatch({
+      snapshot: base,
+      baseVersionId: 'version-1',
+      targetLanguage: 'en',
+      setResumeLanguage: true,
+      translations: [{
+        sectionId: 'personal',
+        title: 'Personal Information',
+        content: {
+          fullName: 'Jade',
+          jobTitle: 'Unity Client Developer',
+          email: '',
+          phone: '',
+          location: '',
+        },
+      }, {
+        sectionId: 'projects',
+        title: 'Projects',
+        content: {
+          items: [{
+            id: 'project-1',
+            name: 'Game',
+            description: 'Built a client application',
+            technologies: ['Unity'],
+            highlights: [],
+          }],
+        },
+      }],
+    });
+
+    expect(patch.operations.map((operation) => operation.type)).toEqual([
+      'set_section_title',
+      'set_field',
+      'set_section_title',
+      'update_item',
+      'set_language',
+    ]);
+    const prepared = prepareResumePatch(base, patch);
+    const applied = applyPreparedOperations(base, prepared);
+    expect(applied.resume.language).toBe('en');
+    expect(applied.sections[0]).toMatchObject({
+      title: 'Personal Information',
+      content: { jobTitle: 'Unity Client Developer' },
+    });
+    expect(applied.sections[1]).toMatchObject({
+      title: 'Projects',
+      content: { items: [expect.objectContaining({ description: 'Built a client application' })] },
     });
   });
 

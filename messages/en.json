@@ -536,13 +536,13 @@
   },
   "translate": {
     "title": "AI Resume Translation",
-    "description": "Translate your entire resume between Chinese and English with AI",
+    "description": "Generate a reviewable AI translation proposal and apply it only after approval",
     "targetLanguage": "Target Language",
     "translateAll": "Translate Entire Resume",
     "translating": "Translating your resume...",
     "progress": "Translated {completed}/{total} sections",
-    "partialSuccess": "Translation complete ({failed} sections failed)",
-    "success": "Translation complete!",
+    "partialSuccess": "Translation proposal created ({failed} sections failed and were omitted)",
+    "success": "Translation proposal created. Opening change review…",
     "error": "Translation failed. Please try again.",
     "chinese": "Chinese (中文)",
     "english": "English",
@@ -556,9 +556,10 @@
     "arabic": "Arabic (العربية)",
     "close": "Close",
     "modeOverwrite": "Overwrite",
-    "modeOverwriteDesc": "Replace current resume content",
+    "modeOverwriteDesc": "Create a translation proposal for this resume",
     "modeCopy": "New Copy",
-    "modeCopyDesc": "Keep original, translate into a copy"
+    "modeCopyDesc": "Keep original and propose translation on a new copy",
+    "saveFailed": "Failed to save the current resume. Please save manually and try again."
   },
   "generateResume": {
     "title": "Generate from Approved Knowledge",

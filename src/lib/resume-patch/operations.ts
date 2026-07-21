@@ -193,8 +193,14 @@ export function expectedHashForOperation(snapshot: ResumeSnapshot, operation: Re
       const section = getSection(snapshot, operation.sectionId, operation.operationId);
       return contentHash(section.visible);
     }
+    case 'set_section_title': {
+      const section = getSection(snapshot, operation.sectionId, operation.operationId);
+      return contentHash(section.title);
+    }
     case 'set_template':
       return contentHash(snapshot.resume.template);
+    case 'set_language':
+      return contentHash(snapshot.resume.language);
   }
 }
 
@@ -205,7 +211,9 @@ function operationTargetKey(operation: ResumePatchOperation): string {
     case 'remove_item': return `item:${operation.sectionId}:${operation.itemId}`;
     case 'remove_section': return `section:${operation.sectionId}`;
     case 'set_visibility': return `visibility:${operation.sectionId}`;
+    case 'set_section_title': return `section-title:${operation.sectionId}`;
     case 'set_template': return 'template';
+    case 'set_language': return 'language';
     default: return `${operation.type}:${operation.operationId}`;
   }
 }
@@ -368,6 +376,18 @@ function applyUnchecked(snapshot: ResumeSnapshot, operation: ResumePatchOperatio
         warnings: operation.value ? [] : ['This operation hides a section from the rendered resume.'],
       };
     }
+    case 'set_section_title': {
+      const section = getSection(snapshot, operation.sectionId, operation.operationId);
+      const before = section.title;
+      section.title = operation.value;
+      return {
+        path: `sections/${section.id}/title`,
+        before,
+        after: section.title,
+        risk: 'normal',
+        warnings: [],
+      };
+    }
     case 'set_template': {
       if (!TEMPLATE_SET.has(operation.value)) {
         throw new ResumePatchValidationError('TEMPLATE_NOT_ALLOWED', 'Template is not supported', operation.operationId);
@@ -378,6 +398,17 @@ function applyUnchecked(snapshot: ResumeSnapshot, operation: ResumePatchOperatio
         path: 'resume/template',
         before,
         after: operation.value,
+        risk: 'normal',
+        warnings: [],
+      };
+    }
+    case 'set_language': {
+      const before = snapshot.resume.language;
+      snapshot.resume.language = operation.value;
+      return {
+        path: 'resume/language',
+        before,
+        after: snapshot.resume.language,
         risk: 'normal',
         warnings: [],
       };

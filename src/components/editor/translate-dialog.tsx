@@ -102,6 +102,12 @@ export function TranslateDialog({ open, onOpenChange, resumeId }: TranslateDialo
     abortRef.current = controller;
 
     try {
+      const store = useResumeStore.getState();
+      if (store.isDirty) {
+        const saved = await store.save();
+        if (!saved) throw new Error(t('saveFailed'));
+      }
+
       const fingerprint = localStorage.getItem('jade_fingerprint');
       const res = await fetch('/api/ai/translate', {
         method: 'POST',
@@ -124,56 +130,26 @@ export function TranslateDialog({ open, onOpenChange, resumeId }: TranslateDialo
             completed: data.completed as number,
             total: data.total as number,
           });
-
-          // In overwrite mode, apply each translated section to the store in real-time
-          if (mode === 'overwrite') {
-            const section = data.section as { sectionId: string; title: string; content: any } | undefined;
-            if (section) {
-              const current = useResumeStore.getState().currentResume;
-              if (current) {
-                useResumeStore.getState().setResume({
-                  ...current,
-                  sections: current.sections.map((s: any) =>
-                    s.id === section.sectionId
-                      ? { ...s, title: section.title, content: section.content }
-                      : s
-                  ),
-                });
-              }
-            }
-          }
+        } else if (data.type === 'error') {
+          throw new Error((data.error as string) || t('error'));
         } else if (data.type === 'done') {
           const failed = (data.failedCount as number) || 0;
+          const changeSetId = data.changeSetId as string | undefined;
+          const nextResumeId = (data.newResumeId || data.resumeId || resumeId) as string;
+          if (!changeSetId) throw new Error(t('error'));
           setFailedCount(failed);
           setState('success');
 
-          if (mode === 'copy' && data.newResumeId) {
-            // Copy mode: navigate to the new resume
-            setTimeout(() => {
-              onOpenChange(false);
-              router.push(`/editor/${data.newResumeId}`);
-            }, 1500);
-          } else {
-            // Overwrite mode: sync store and close
-            const current = useResumeStore.getState().currentResume;
-            if (current) {
-              useResumeStore.getState().setResume({
-                ...current,
-                language: data.language as string,
-                sections: data.sections as any,
-              });
-            }
-
-            setTimeout(() => {
-              onOpenChange(false);
-            }, 1500);
-          }
+          setTimeout(() => {
+            onOpenChange(false);
+            router.push(`/editor/${nextResumeId}?reviewChanges=1&changeSetId=${encodeURIComponent(changeSetId)}`);
+          }, 1500);
         }
       });
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       setState('error');
-      setErrorMessage(err.message || t('error'));
+      setErrorMessage(err instanceof Error ? err.message : t('error'));
     }
   }, [resumeId, targetLanguage, mode, onOpenChange, t, router]);
 

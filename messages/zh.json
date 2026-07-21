@@ -536,13 +536,13 @@
   },
   "translate": {
     "title": "AI 简历翻译",
-    "description": "使用 AI 一键翻译简历中英文",
+    "description": "使用 AI 生成可审阅的简历翻译提案，通过后再应用到简历",
     "targetLanguage": "目标语言",
     "translateAll": "翻译整份简历",
     "translating": "正在翻译简历...",
     "progress": "已翻译 {completed}/{total} 个模块",
-    "partialSuccess": "翻译完成（{failed} 个模块失败）",
-    "success": "翻译完成！",
+    "partialSuccess": "翻译提案已生成（{failed} 个模块失败，未纳入提案）",
+    "success": "翻译提案已生成，即将打开变更审阅",
     "error": "翻译失败，请重试",
     "chinese": "中文",
     "english": "English (英文)",
@@ -556,9 +556,10 @@
     "arabic": "阿拉伯语 (العربية)",
     "close": "关闭",
     "modeOverwrite": "覆盖当前",
-    "modeOverwriteDesc": "翻译后替换当前简历内容",
+    "modeOverwriteDesc": "在当前简历上生成翻译变更提案",
     "modeCopy": "生成新简历",
-    "modeCopyDesc": "保留原简历，翻译到新副本"
+    "modeCopyDesc": "保留原简历，在新副本上生成翻译提案",
+    "saveFailed": "保存当前简历失败，请先手动保存后重试"
   },
   "generateResume": {
     "title": "从已批准知识生成简历",
