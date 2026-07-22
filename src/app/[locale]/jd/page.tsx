@@ -6,6 +6,7 @@ import {
   BadgeCheck,
   BriefcaseBusiness,
   CheckCircle2,
+  Copy,
   FileImage,
   FileSearch,
   Loader2,
@@ -192,6 +193,7 @@ export default function JdPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageInputKey, setImageInputKey] = useState(0);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [retrySourceId, setRetrySourceId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
   const [matchSource, setMatchSource] = useState<JdSource | null>(null);
@@ -302,10 +304,35 @@ export default function JdPage() {
   }
 
   function persistentImageErrorDescription(source: JdSource) {
-    const description = imageErrorMessage(source.errorCode || '', source.errorCode || undefined);
-    return source.lastRequestId
-      ? `${description} · ${t('requestId')}: ${source.lastRequestId}`
-      : description;
+    return imageErrorMessage(source.errorCode || '', source.errorCode || undefined);
+  }
+
+  async function copyRequestId(requestId: string) {
+    try {
+      await navigator.clipboard.writeText(requestId);
+      toast.success(t('requestIdCopied'));
+    } catch {
+      toast.message(`${t('requestId')}: ${requestId}`);
+    }
+  }
+
+  function startImageRetry(source: JdSource) {
+    setRetrySourceId(source.id);
+    setImageTitle(source.title || source.originalFilename || '');
+    setImageFile(null);
+    const input = document.getElementById('jd-image') as HTMLInputElement | null;
+    if (input) {
+      input.value = '';
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.focus();
+      input.click();
+    } else {
+      setImageInputKey((value) => value + 1);
+    }
+
+    toast.message(t('imageRetryReady'), {
+      description: t('imageRetryReadyDescription'),
+    });
   }
 
   async function createSource() {
@@ -340,6 +367,7 @@ export default function JdPage() {
         method: 'POST',
         body,
       });
+      setRetrySourceId(null);
       setImageTitle('');
       setImageFile(null);
       setImageInputKey((value) => value + 1);
@@ -553,6 +581,11 @@ export default function JdPage() {
               />
             </div>
           </div>
+          {retrySourceId && (
+            <div className="rounded-md border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-muted-foreground">
+              {t('imageRetrySelected')}
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-3">
             <div className="min-w-0 text-xs text-muted-foreground">
               <p>{t('imageLimits')}</p>
@@ -569,7 +602,7 @@ export default function JdPage() {
               {isUploadingImage
                 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 : <Upload className="mr-2 h-4 w-4" />}
-              {t('uploadAndExtract')}
+              {t(retrySourceId ? 'retryImageUpload' : 'uploadAndExtract')}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">{t('imagePrivacyNote')}</p>
@@ -620,24 +653,43 @@ export default function JdPage() {
                       <p className="pl-6 text-xs text-muted-foreground">{t('parsingPersistent')}</p>
                     )}
                     {source.status === 'failed' && (
-                      <div className="space-y-1 pl-6">
+                      <div className="space-y-2 pl-6">
                         <p className="break-words text-xs text-destructive">
                           {persistentImageErrorDescription(source)}
                         </p>
                         <p className="text-xs text-muted-foreground">{t('imageRetryHint')}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => startImageRetry(source)}
+                          disabled={isUploadingImage || !visionReady}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" /> {t('retryImage')}
+                        </Button>
                       </div>
                     )}
                     {source.status === 'needs_review' && source.requirements.length > 0 && (
-                      <div className="flex justify-end">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pl-6">
+                        <p className="text-xs text-muted-foreground">
+                          {t('imageResultSummary', { count: source.requirements.length })}
+                        </p>
                         <Button variant="outline" size="sm" onClick={() => setDraft(reviewDraft(source))}>
                           <PencilLine className="mr-2 h-4 w-4" /> {t('reviewResult')}
                         </Button>
                       </div>
                     )}
-                    {source.status !== 'failed' && source.lastRequestId && (
-                      <p className="break-all pl-6 text-[11px] text-muted-foreground">
-                        {t('requestId')}: {source.lastRequestId}
-                      </p>
+                    {source.lastRequestId && (
+                      <div className="flex flex-wrap items-center gap-2 pl-6 text-[11px] text-muted-foreground">
+                        <span className="break-all">{t('requestId')}: {source.lastRequestId}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => void copyRequestId(source.lastRequestId!)}
+                        >
+                          <Copy className="mr-1 h-3 w-3" /> {t('copyRequestId')}
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -714,6 +766,16 @@ export default function JdPage() {
                           ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           : <Sparkles className="mr-2 h-4 w-4" />}
                         {source.requirements.length > 0 ? t('extractAgain') : t('extract')}
+                      </Button>
+                    )}
+                    {source.inputType === 'image' && source.status === 'failed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startImageRetry(source)}
+                        disabled={isUploadingImage || !visionReady}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" /> {t('retryImage')}
                       </Button>
                     )}
                   </div>

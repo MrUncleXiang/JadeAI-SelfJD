@@ -1261,7 +1261,15 @@
         "JD_SOURCE_NOT_CONFIRMED": "This JD is not confirmed yet. Review and confirm first.",
         "default": "Match analysis failed. Please try again."
       }
-    }
+    },
+    "retryImage": "Retry extraction",
+    "retryImageUpload": "Re-upload and retry",
+    "imageRetryReady": "Select the same JD image",
+    "imageRetryReadyDescription": "The image hash will reuse the failed record and retry in place without creating a duplicate JD.",
+    "imageRetrySelected": "Retrying a failed record: select the same image, then click re-upload and retry.",
+    "imageResultSummary": "{count} requirements were recognized. Open review to confirm them.",
+    "copyRequestId": "Copy",
+    "requestIdCopied": "Request ID copied"
   },
   "knowledge": {
     "nav": "Knowledge",

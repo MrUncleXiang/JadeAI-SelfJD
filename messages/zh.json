@@ -1261,7 +1261,15 @@
         "JD_SOURCE_NOT_CONFIRMED": "该 JD 尚未确认，请先审核并确认。",
         "default": "匹配分析失败，请稍后重试。"
       }
-    }
+    },
+    "retryImage": "重试解析",
+    "retryImageUpload": "重新上传并重试",
+    "imageRetryReady": "请选择同一张 JD 图片",
+    "imageRetryReadyDescription": "系统会根据图片哈希复用失败记录并原地重试，不会创建重复 JD。",
+    "imageRetrySelected": "正在重试失败记录：请选择同一张图片后点击重新上传并重试。",
+    "imageResultSummary": "已识别 {count} 条要求，可打开审核后确认。",
+    "copyRequestId": "复制",
+    "requestIdCopied": "请求 ID 已复制"
   },
   "knowledge": {
     "nav": "事实库",
